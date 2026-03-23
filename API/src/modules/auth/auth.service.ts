@@ -1,0 +1,305 @@
+import {
+  Injectable,
+  UnauthorizedException,
+  ConflictException,
+  BadRequestException,
+} from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import * as bcrypt from 'bcrypt';
+import { Employee } from '../employees/entities/employee.entity';
+import { Enterprise } from '../enterprises/entities/enterprise.entity';
+import { MenuPermission } from '../employees/entities/menu-permission.entity';
+import {
+  EmployeeLoginDto,
+  EnterpriseLoginDto,
+  RegisterEnterpriseDto,
+  ResetPasswordDto,
+  VerifyEnterpriseEmailDto,
+  VerifyOtpDto,
+} from './dto';
+import { buildFullAccessPermissions, buildEmptyPermissions } from '../../common/constants/permissions';
+import { EmailService } from '../email/email.service';
+
+@Injectable()
+export class AuthService {
+  constructor(
+    @InjectRepository(Employee)
+    private employeeRepository: Repository<Employee>,
+    @InjectRepository(Enterprise)
+    private enterpriseRepository: Repository<Enterprise>,
+    @InjectRepository(MenuPermission)
+    private permissionRepository: Repository<MenuPermission>,
+    private jwtService: JwtService,
+    private emailService: EmailService,
+  ) {}
+
+  async employeeLogin(dto: EmployeeLoginDto) {
+    const employee = await this.employeeRepository.findOne({
+      where: { email: dto.email },
+      relations: ['enterprise'],
+    });
+
+    if (!employee) {
+      throw new UnauthorizedException('Invalid email or password');
+    }
+
+    if (employee.status !== 'active') {
+      throw new UnauthorizedException('Your account is inactive');
+    }
+
+    if (employee.enterprise?.status !== 'active') {
+      throw new UnauthorizedException('Your enterprise account is inactive');
+    }
+
+    const isPasswordValid = await bcrypt.compare(dto.password, employee.password);
+    if (!isPasswordValid) {
+      throw new UnauthorizedException('Invalid email or password');
+    }
+
+    const record = await this.permissionRepository.findOne({
+      where: { employeeId: employee.id },
+    });
+
+    const payload = {
+      sub: employee.id,
+      email: employee.email,
+      type: 'employee' as const,
+      enterpriseId: employee.enterpriseId,
+    };
+
+    return {
+      message: 'Login successful',
+      data: {
+        user: {
+          id: employee.id,
+          firstName: employee.firstName,
+          lastName: employee.lastName,
+          email: employee.email,
+          phoneNumber: employee.phoneNumber,
+          enterpriseId: employee.enterpriseId,
+          departmentId: employee.departmentId,
+          designationId: employee.designationId,
+          status: employee.status,
+        },
+        permissions: record?.permissions || buildEmptyPermissions(),
+        token: this.jwtService.sign(payload),
+        type: 'employee',
+      },
+    };
+  }
+
+  async verifyEnterpriseEmail(dto: VerifyEnterpriseEmailDto) {
+    const enterprise = await this.enterpriseRepository.findOne({
+      where: { email: dto.email },
+    });
+
+    if (!enterprise) {
+      throw new UnauthorizedException('Enterprise not found');
+    }
+
+    if (enterprise.status === 'blocked') {
+      throw new UnauthorizedException('Your enterprise account is blocked');
+    }
+
+    return {
+      message: 'Email verified successfully',
+      data: {
+        email: dto.email,
+        businessName: enterprise.businessName,
+      },
+    };
+  }
+
+  async verifyOtp(dto: VerifyOtpDto) {
+    const enterprise = await this.enterpriseRepository.findOne({
+      where: { email: dto.email },
+    });
+
+    if (!enterprise) {
+      throw new UnauthorizedException('Enterprise not found');
+    }
+
+    if (enterprise.emailOtp !== dto.otp) {
+      throw new BadRequestException('Invalid OTP');
+    }
+
+    // Clear OTP after verification
+    await this.enterpriseRepository.update(enterprise.id, {
+      emailOtp: null,
+      emailVerified: true,
+    });
+
+    return {
+      message: 'OTP verified successfully',
+      data: {
+        email: dto.email,
+        verified: true,
+      },
+    };
+  }
+
+  async enterpriseLogin(dto: EnterpriseLoginDto) {
+    const enterprise = await this.enterpriseRepository.findOne({
+      where: { email: dto.email },
+    });
+
+    if (!enterprise) {
+      throw new UnauthorizedException('Invalid email or password');
+    }
+
+    if (enterprise.status === 'blocked') {
+      throw new UnauthorizedException('Your enterprise account is blocked');
+    }
+
+    const isPasswordValid = await bcrypt.compare(dto.password, enterprise.password);
+    if (!isPasswordValid) {
+      throw new UnauthorizedException('Invalid email or password');
+    }
+
+    // Activate pending enterprises on successful login
+    if (enterprise.status === 'pending') {
+      await this.enterpriseRepository.update(enterprise.id, { status: 'active' });
+      enterprise.status = 'active';
+    }
+
+    const payload = {
+      sub: enterprise.id,
+      email: enterprise.email,
+      type: 'enterprise' as const,
+      enterpriseId: enterprise.id,
+    };
+
+    return {
+      message: 'Login successful',
+      data: {
+        user: {
+          id: enterprise.id,
+          businessName: enterprise.businessName,
+          email: enterprise.email,
+          mobile: enterprise.mobile,
+          city: enterprise.city,
+          state: enterprise.state,
+          status: enterprise.status,
+          expiryDate: enterprise.expiryDate,
+        },
+        permissions: buildFullAccessPermissions(),
+        token: this.jwtService.sign(payload),
+        type: 'enterprise',
+      },
+    };
+  }
+
+  async registerEnterprise(dto: RegisterEnterpriseDto) {
+    // Check if email already exists
+    const existingEmail = await this.enterpriseRepository.findOne({
+      where: { email: dto.businessEmail },
+    });
+
+    if (existingEmail) {
+      throw new ConflictException('Email already registered');
+    }
+
+    // Generate a temporary password (mobile number + first 3 chars of business name)
+    const tempPassword = dto.businessMobile.slice(-4) + dto.businessName.slice(0, 3).toLowerCase();
+    const hashedPassword = await bcrypt.hash(tempPassword, 10);
+
+    // Generate OTPs
+    const emailOtp = Math.floor(100000 + Math.random() * 900000).toString();
+    const mobileOtp = Math.floor(1000 + Math.random() * 9000).toString();
+
+    // Create enterprise
+    const enterprise = this.enterpriseRepository.create({
+      businessName: dto.businessName,
+      email: dto.businessEmail,
+      mobile: dto.businessMobile,
+      password: hashedPassword,
+      address: dto.businessAddress,
+      city: dto.businessCity,
+      state: dto.businessState,
+      pincode: dto.pincode,
+      gstNumber: dto.gstNumber,
+      cinNumber: dto.cinNumber,
+      status: 'active',
+      emailOtp,
+      mobileOtp,
+    });
+
+    await this.enterpriseRepository.save(enterprise);
+
+    // Send OTP and credentials via email
+    if (this.emailService.isConfigured()) {
+      await this.emailService.sendEmail({
+        to: dto.businessEmail,
+        subject: 'VAB Enterprise - Registration Successful',
+        body: `Welcome to VAB Enterprise!\n\nYour registration is complete.\n\nEmail OTP: ${emailOtp}\n\nTemporary Password: ${tempPassword}\n\nPlease login and change your password immediately.\n\nRegards,\nVAB Enterprise Team`,
+      });
+    }
+
+    return {
+      status: 'success',
+      message: 'Registration successful. Your login credentials have been sent to your email.',
+      data: {
+        email: dto.businessEmail,
+        mobile: dto.businessMobile,
+      },
+    };
+  }
+
+  async resetPassword(dto: ResetPasswordDto) {
+    // Try enterprise first
+    let enterprise = await this.enterpriseRepository.findOne({
+      where: { email: dto.emailId },
+    });
+
+    if (enterprise) {
+      const isOldPasswordValid = await bcrypt.compare(dto.oldpassword, enterprise.password);
+      if (!isOldPasswordValid) {
+        throw new UnauthorizedException('Current password is incorrect');
+      }
+
+      const hashedPassword = await bcrypt.hash(dto.confirmpassword, 10);
+      await this.enterpriseRepository.update(enterprise.id, { password: hashedPassword });
+
+      return {
+        status: 'success',
+        message: 'Password updated successfully',
+      };
+    }
+
+    // Try employee
+    const employee = await this.employeeRepository.findOne({
+      where: { email: dto.emailId },
+    });
+
+    if (employee) {
+      const isOldPasswordValid = await bcrypt.compare(dto.oldpassword, employee.password);
+      if (!isOldPasswordValid) {
+        throw new UnauthorizedException('Current password is incorrect');
+      }
+
+      const hashedPassword = await bcrypt.hash(dto.confirmpassword, 10);
+      await this.employeeRepository.update(employee.id, { password: hashedPassword });
+
+      return {
+        status: 'success',
+        message: 'Password updated successfully',
+      };
+    }
+
+    throw new UnauthorizedException('Account not found with this email');
+  }
+
+  async getPermissions(employeeId: number) {
+    const record = await this.permissionRepository.findOne({
+      where: { employeeId },
+    });
+
+    return {
+      message: 'Permissions fetched successfully',
+      data: record?.permissions || buildEmptyPermissions(),
+      dataStartDate: record?.dataStartDate ?? null,
+    };
+  }
+}

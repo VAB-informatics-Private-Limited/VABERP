@@ -1,0 +1,28 @@
+# Environment files — NEVER commit these
+.env
+.env.local
+.env.production
+.env*.local
+
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+.next/
+out/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# TypeScript build info
+*.tsbuildinfo

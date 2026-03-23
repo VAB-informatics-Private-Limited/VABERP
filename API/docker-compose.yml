@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: vab_postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: your_secure_password
+      POSTGRES_DB: vab_enterprise
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: vab_api
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USERNAME: postgres
+      DB_PASSWORD: your_secure_password
+      DB_DATABASE: vab_enterprise
+      JWT_SECRET: your_jwt_secret_key_here
+      JWT_EXPIRATION: 7d
+      PORT: 3001
+      NODE_ENV: production
+    ports:
+      - "3001:3001"
+    depends_on:
+      - postgres
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
