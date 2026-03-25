@@ -41,6 +41,11 @@ export class CreateEnquiryDto {
   @IsString()
   address?: string;
 
+  @ApiPropertyOptional({ example: 'India' })
+  @IsOptional()
+  @IsString()
+  country?: string;
+
   @ApiPropertyOptional({ example: 'Mumbai' })
   @IsOptional()
   @IsString()

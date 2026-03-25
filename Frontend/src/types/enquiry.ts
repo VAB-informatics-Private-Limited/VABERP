@@ -21,6 +21,7 @@ export interface Enquiry {
   business_name?: string;
   gst_number?: string;
   address?: string;
+  country?: string;
   state?: string;
   city?: string;
   pincode?: string;
@@ -42,6 +43,7 @@ export interface EnquiryFormData {
   business_name?: string;
   gst_number?: string;
   address?: string;
+  country?: string;
   state?: string;
   city?: string;
   pincode?: string;

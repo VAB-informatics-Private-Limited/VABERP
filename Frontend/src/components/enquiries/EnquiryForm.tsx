@@ -1,11 +1,13 @@
 'use client';
 
-import { Form, Input, Select, DatePicker, Button, Card, Row, Col } from 'antd';
+import { Form, Input, Select, DatePicker, Button, Card, Row, Col, AutoComplete } from 'antd';
 import { ArrowLeftOutlined } from '@ant-design/icons';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
+import { useState, useEffect } from 'react';
 import { EnquiryFormData, INTEREST_STATUS_OPTIONS, Enquiry } from '@/types/enquiry';
 import { getSources } from '@/lib/api/sources';
+import { getCountries, getStates, getCities, Country, State, City } from '@/lib/api/locations';
 import dayjs from 'dayjs';
 
 interface EnquiryFormProps {
@@ -20,6 +22,10 @@ export function EnquiryForm({ initialData, onSubmit, loading, submitText, isEdit
   const router = useRouter();
   const [form] = Form.useForm();
 
+  const [selectedCountryId, setSelectedCountryId] = useState<number | null>(null);
+  const [selectedStateId, setSelectedStateId] = useState<number | null>(null);
+  const [cityOptions, setCityOptions] = useState<{ value: string; label: string }[]>([]);
+
   const { data: sourcesData } = useQuery({
     queryKey: ['sources'],
     queryFn: () => getSources(),
@@ -27,6 +33,69 @@ export function EnquiryForm({ initialData, onSubmit, loading, submitText, isEdit
   const sourceOptions = (sourcesData?.data || [])
     .filter((s) => s.is_active)
     .map((s) => ({ value: s.source_name, label: s.source_name }));
+
+  const { data: countries = [] } = useQuery<Country[]>({
+    queryKey: ['countries'],
+    queryFn: getCountries,
+  });
+
+  const { data: states = [] } = useQuery<State[]>({
+    queryKey: ['states', selectedCountryId],
+    queryFn: () => getStates(selectedCountryId!),
+    enabled: !!selectedCountryId,
+  });
+
+  const { data: cities = [] } = useQuery<City[]>({
+    queryKey: ['cities', selectedStateId],
+    queryFn: () => getCities(selectedStateId!),
+    enabled: !!selectedStateId,
+  });
+
+  // Update city autocomplete options when cities load
+  useEffect(() => {
+    setCityOptions(cities.map((c) => ({ value: c.name, label: c.name })));
+  }, [cities]);
+
+  // Set India as default country once countries are loaded
+  useEffect(() => {
+    if (countries.length > 0 && !isEdit) {
+      const india = countries.find((c) => c.code === 'IN');
+      if (india) {
+        form.setFieldValue('country', india.name);
+        setSelectedCountryId(india.id);
+      }
+    }
+  }, [countries, isEdit, form]);
+
+  // On edit, resolve country and state IDs from names
+  useEffect(() => {
+    if (isEdit && initialData && countries.length > 0 && initialData.country) {
+      const country = countries.find((c) => c.name === initialData.country);
+      if (country) setSelectedCountryId(country.id);
+    }
+  }, [isEdit, initialData, countries]);
+
+  useEffect(() => {
+    if (isEdit && initialData && states.length > 0 && initialData.state) {
+      const state = states.find((s) => s.name === initialData.state);
+      if (state) setSelectedStateId(state.id);
+    }
+  }, [isEdit, initialData, states]);
+
+  const handleCountryChange = (value: string) => {
+    const country = countries.find((c) => c.name === value);
+    setSelectedCountryId(country?.id ?? null);
+    setSelectedStateId(null);
+    setCityOptions([]);
+    form.setFieldsValue({ state: undefined, city: undefined });
+  };
+
+  const handleStateChange = (value: string) => {
+    const state = states.find((s) => s.name === value);
+    setSelectedStateId(state?.id ?? null);
+    setCityOptions([]);
+    form.setFieldValue('city', undefined);
+  };
 
   const handleFinish = (values: EnquiryFormData & { next_followup_date?: dayjs.Dayjs }) => {
     const formData: EnquiryFormData = {
@@ -165,17 +234,51 @@ export function EnquiryForm({ initialData, onSubmit, loading, submitText, isEdit
         </Form.Item>
 
         <Row gutter={16}>
-          <Col xs={24} md={8}>
-            <Form.Item name="city" label="City">
-              <Input placeholder="Enter city" />
+          <Col xs={24} md={12}>
+            <Form.Item name="country" label="Country">
+              <Select
+                showSearch
+                placeholder="Select country"
+                allowClear
+                onChange={handleCountryChange}
+                filterOption={(input, option) =>
+                  (option?.label as string)?.toLowerCase().includes(input.toLowerCase())
+                }
+                options={countries.map((c) => ({ value: c.name, label: c.name }))}
+              />
             </Form.Item>
           </Col>
-          <Col xs={24} md={8}>
+          <Col xs={24} md={12}>
             <Form.Item name="state" label="State">
-              <Input placeholder="Enter state" />
+              <Select
+                showSearch
+                placeholder={selectedCountryId ? 'Select state' : 'Select country first'}
+                allowClear
+                disabled={!selectedCountryId}
+                onChange={handleStateChange}
+                filterOption={(input, option) =>
+                  (option?.label as string)?.toLowerCase().includes(input.toLowerCase())
+                }
+                options={states.map((s) => ({ value: s.name, label: s.name }))}
+              />
             </Form.Item>
           </Col>
-          <Col xs={24} md={8}>
+        </Row>
+
+        <Row gutter={16}>
+          <Col xs={24} md={12}>
+            <Form.Item name="city" label="City">
+              <AutoComplete
+                placeholder={selectedStateId ? 'Enter or select city' : 'Enter city'}
+                allowClear
+                options={cityOptions}
+                filterOption={(input, option) =>
+                  (option?.value as string)?.toLowerCase().includes(input.toLowerCase())
+                }
+              />
+            </Form.Item>
+          </Col>
+          <Col xs={24} md={12}>
             <Form.Item name="pincode" label="Pincode">
               <Input placeholder="Enter pincode" maxLength={6} />
             </Form.Item>

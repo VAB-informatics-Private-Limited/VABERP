@@ -86,7 +86,10 @@
       "Bash(cd /c/Users/UNITECH2/Desktop/enterprise/Frontend && npm run build 2>&1 | tail -40)",
       "Bash(find /c/Users/UNITECH2/Desktop/enterprise/API/src/modules/super-admin -type f 2>/dev/null; echo \"---\"; find /c/Users/UNITECH2/Desktop/enterprise/API/src/modules -maxdepth 2 -type f -name \"*.entity.ts\" 2>/dev/null | head -30)",
       "Bash(npm run:*)",
-      "Bash(npm install:*)"
+      "Bash(npm install:*)",
+      "Bash(git config:*)",
+      "Bash(git push:*)",
+      "Bash(find /c/Users/UNITECH2/Desktop/enterprise/API -type f -name *address*)"
     ]
   }
 }

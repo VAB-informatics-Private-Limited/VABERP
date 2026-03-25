@@ -59,6 +59,9 @@ export class Enquiry {
   address: string;
 
   @Column({ nullable: true })
+  country: string;
+
+  @Column({ nullable: true })
   city: string;
 
   @Column({ nullable: true })
