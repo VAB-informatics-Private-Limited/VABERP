@@ -4,7 +4,7 @@ import { Form, Input, Select, DatePicker, Button, Card, Row, Col, AutoComplete }
 import { ArrowLeftOutlined } from '@ant-design/icons';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { EnquiryFormData, INTEREST_STATUS_OPTIONS, Enquiry } from '@/types/enquiry';
 import { getSources } from '@/lib/api/sources';
 import { getCountries, getStates, getCities, Country, State, City } from '@/lib/api/locations';
@@ -18,13 +18,15 @@ interface EnquiryFormProps {
   isEdit?: boolean;
 }
 
+// Long stale time since location data never changes
+const LOCATION_STALE_TIME = 1000 * 60 * 60; // 1 hour
+
 export function EnquiryForm({ initialData, onSubmit, loading, submitText, isEdit }: EnquiryFormProps) {
   const router = useRouter();
   const [form] = Form.useForm();
 
   const [selectedCountryId, setSelectedCountryId] = useState<number | null>(null);
   const [selectedStateId, setSelectedStateId] = useState<number | null>(null);
-  const [cityOptions, setCityOptions] = useState<{ value: string; label: string }[]>([]);
 
   const { data: sourcesData } = useQuery({
     queryKey: ['sources'],
@@ -37,63 +39,67 @@ export function EnquiryForm({ initialData, onSubmit, loading, submitText, isEdit
   const { data: countries = [] } = useQuery<Country[]>({
     queryKey: ['countries'],
     queryFn: getCountries,
+    staleTime: LOCATION_STALE_TIME,
   });
 
-  const { data: states = [] } = useQuery<State[]>({
-    queryKey: ['states', selectedCountryId],
-    queryFn: () => getStates(selectedCountryId!),
-    enabled: !!selectedCountryId,
-  });
+  // Derive India's ID directly from countries data — no extra render/useEffect needed
+  const indiaId = useMemo(() => countries.find((c) => c.code === 'IN')?.id ?? null, [countries]);
 
-  const { data: cities = [] } = useQuery<City[]>({
-    queryKey: ['cities', selectedStateId],
-    queryFn: () => getCities(selectedStateId!),
-    enabled: !!selectedStateId,
-  });
-
-  // Update city autocomplete options when cities load
-  useEffect(() => {
-    setCityOptions(cities.map((c) => ({ value: c.name, label: c.name })));
-  }, [cities]);
-
-  // Set India as default country once countries are loaded
-  useEffect(() => {
-    if (countries.length > 0 && !isEdit) {
-      const india = countries.find((c) => c.code === 'IN');
-      if (india) {
-        form.setFieldValue('country', india.name);
-        setSelectedCountryId(india.id);
-      }
-    }
-  }, [countries, isEdit, form]);
-
-  // On edit, resolve country and state IDs from names
-  useEffect(() => {
-    if (isEdit && initialData && countries.length > 0 && initialData.country) {
-      const country = countries.find((c) => c.name === initialData.country);
-      if (country) setSelectedCountryId(country.id);
-    }
+  // For new enquiries default to India; for edit use the stored country
+  const editCountryId = useMemo(() => {
+    if (!isEdit || !initialData?.country || countries.length === 0) return null;
+    return countries.find((c) => c.name === initialData.country)?.id ?? null;
   }, [isEdit, initialData, countries]);
 
-  useEffect(() => {
-    if (isEdit && initialData && states.length > 0 && initialData.state) {
-      const state = states.find((s) => s.name === initialData.state);
-      if (state) setSelectedStateId(state.id);
-    }
+  // Effective country ID: user selection → edit value → India default
+  const effectiveCountryId = selectedCountryId ?? editCountryId ?? indiaId;
+
+  // States load as soon as effectiveCountryId is known (same render as countries response)
+  const { data: states = [] } = useQuery<State[]>({
+    queryKey: ['states', effectiveCountryId],
+    queryFn: () => getStates(effectiveCountryId!),
+    enabled: !!effectiveCountryId,
+    staleTime: LOCATION_STALE_TIME,
+  });
+
+  // Derive state ID from states data for edit mode
+  const editStateId = useMemo(() => {
+    if (!isEdit || !initialData?.state || states.length === 0) return null;
+    return states.find((s) => s.name === initialData.state)?.id ?? null;
   }, [isEdit, initialData, states]);
+
+  const effectiveStateId = selectedStateId ?? editStateId;
+
+  const { data: cities = [] } = useQuery<City[]>({
+    queryKey: ['cities', effectiveStateId],
+    queryFn: () => getCities(effectiveStateId!),
+    enabled: !!effectiveStateId,
+    staleTime: LOCATION_STALE_TIME,
+  });
+
+  const cityOptions = useMemo(
+    () => cities.map((c) => ({ value: c.name, label: c.name })),
+    [cities],
+  );
+
+  // Set India as default country field value once countries load (new form only)
+  useEffect(() => {
+    if (!isEdit && indiaId && !form.getFieldValue('country')) {
+      const india = countries.find((c) => c.id === indiaId);
+      if (india) form.setFieldValue('country', india.name);
+    }
+  }, [indiaId, isEdit, countries, form]);
 
   const handleCountryChange = (value: string) => {
     const country = countries.find((c) => c.name === value);
     setSelectedCountryId(country?.id ?? null);
     setSelectedStateId(null);
-    setCityOptions([]);
     form.setFieldsValue({ state: undefined, city: undefined });
   };
 
   const handleStateChange = (value: string) => {
     const state = states.find((s) => s.name === value);
     setSelectedStateId(state?.id ?? null);
-    setCityOptions([]);
     form.setFieldValue('city', undefined);
   };
 

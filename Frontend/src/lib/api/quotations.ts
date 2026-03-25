@@ -58,7 +58,7 @@ function mapQuotationFromBackend(data: any): Quotation {
     valid_until: data.validUntil,
     subtotal: Number(data.subTotal || 0),
     discount_amount: Number(data.discountAmount || 0),
-    tax_amount: data.totalTax,
+    tax_amount: data.taxAmount,
     total_amount: data.grandTotal,
     notes: data.notes,
     terms_conditions: data.termsConditions,
