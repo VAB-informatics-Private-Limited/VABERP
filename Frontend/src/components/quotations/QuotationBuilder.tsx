@@ -8,6 +8,7 @@ import { useQuery } from '@tanstack/react-query';
 import { QuotationFormData, QuotationItem, Quotation } from '@/types/quotation';
 import { getDropdownProductsList } from '@/lib/api/products';
 import { getCustomerList } from '@/lib/api/customers';
+import { checkQuotationMobile } from '@/lib/api/quotations';
 import { useAuthStore } from '@/stores/authStore';
 import dayjs from 'dayjs';
 import type { ColumnsType } from 'antd/es/table';
@@ -28,6 +29,7 @@ export function QuotationBuilder({ initialData, onSubmit, loading, submitText, i
 
   const [items, setItems] = useState<QuotationItem[]>(initialData?.items || []);
   const [selectedProduct, setSelectedProduct] = useState<number | undefined>();
+  const [mobileWarning, setMobileWarning] = useState<string | null>(null);
 
   const { data: products } = useQuery({
     queryKey: ['products-dropdown', enterpriseId],
@@ -125,6 +127,27 @@ export function QuotationBuilder({ initialData, onSubmit, loading, submitText, i
       items,
     };
     onSubmit(formData);
+  };
+
+  const handleMobileBlur = async (e: React.FocusEvent<HTMLInputElement>) => {
+    const mobile = e.target.value;
+    if (!mobile || !/^[6-9]\d{9}$/.test(mobile)) {
+      setMobileWarning(null);
+      return;
+    }
+    if (isEdit) return; // skip check on edit
+    try {
+      const result = await checkQuotationMobile(mobile);
+      if (result.exists) {
+        setMobileWarning(
+          `This mobile number already has quotation ${result.quotationNumber} (${result.customerName}).`
+        );
+      } else {
+        setMobileWarning(null);
+      }
+    } catch {
+      setMobileWarning(null);
+    }
   };
 
   const handleCustomerSelect = (customerId: number) => {
@@ -298,8 +321,15 @@ export function QuotationBuilder({ initialData, onSubmit, loading, submitText, i
                     { required: true, message: 'Required' },
                     { pattern: /^[6-9]\d{9}$/, message: 'Enter a valid 10-digit mobile number' },
                   ]}
+                  help={mobileWarning ? <span style={{ color: '#faad14' }}>⚠ {mobileWarning}</span> : undefined}
+                  validateStatus={mobileWarning ? 'warning' : undefined}
                 >
-                  <Input placeholder="Enter mobile" maxLength={10} />
+                  <Input
+                    placeholder="Enter mobile"
+                    maxLength={10}
+                    onBlur={handleMobileBlur}
+                    onChange={() => setMobileWarning(null)}
+                  />
                 </Form.Item>
               </Col>
             </Row>

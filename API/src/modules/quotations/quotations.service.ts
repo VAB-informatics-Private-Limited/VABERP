@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Quotation } from './entities/quotation.entity';
@@ -113,18 +113,22 @@ export class QuotationsService {
     };
   }
 
-  async create(enterpriseId: number, createDto: CreateQuotationDto, userId?: number) {
-    if (createDto.mobile) {
-      const existing = await this.quotationRepository.findOne({
-        where: { enterpriseId, mobile: createDto.mobile },
-      });
-      if (existing) {
-        throw new ConflictException(
-          `A quotation already exists for mobile number ${createDto.mobile} (${existing.quotationNumber})`,
-        );
-      }
+  async checkMobileExists(enterpriseId: number, mobile: string) {
+    const existing = await this.quotationRepository.findOne({
+      where: { enterpriseId, mobile },
+      select: ['id', 'quotationNumber', 'customerName', 'quotationDate'],
+    });
+    if (existing) {
+      return {
+        exists: true,
+        quotationNumber: existing.quotationNumber,
+        customerName: existing.customerName,
+      };
     }
+    return { exists: false };
+  }
 
+  async create(enterpriseId: number, createDto: CreateQuotationDto, userId?: number) {
     const count = await this.quotationRepository.count({ where: { enterpriseId } });
     const quotationNumber = `QTN-${String(count + 1).padStart(6, '0')}`;
 

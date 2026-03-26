@@ -21,6 +21,16 @@ import { CreateQuotationDto } from './dto';
 export class QuotationsController {
   constructor(private readonly quotationsService: QuotationsService) {}
 
+  @Get('check-mobile')
+  @ApiOperation({ summary: 'Check if a mobile number already has a quotation' })
+  @ApiQuery({ name: 'mobile', required: true })
+  async checkMobile(
+    @EnterpriseId() enterpriseId: number,
+    @Query('mobile') mobile: string,
+  ) {
+    return this.quotationsService.checkMobileExists(enterpriseId, mobile);
+  }
+
   @Get()
   @ApiOperation({ summary: 'Get all quotations' })
   @ApiQuery({ name: 'page', required: false })

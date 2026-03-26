@@ -113,6 +113,11 @@ export async function getQuotationById(id: number, _enterpriseId?: number): Prom
   };
 }
 
+export async function checkQuotationMobile(mobile: string): Promise<{ exists: boolean; quotationNumber?: string; customerName?: string }> {
+  const response = await apiClient.get('/quotations/check-mobile', { params: { mobile } });
+  return (response.data as any);
+}
+
 export async function addQuotation(
   data: QuotationFormData & { enterprise_id?: number; created_by?: number }
 ): Promise<ApiResponse<{ id: number; quotation_number: string }>> {
