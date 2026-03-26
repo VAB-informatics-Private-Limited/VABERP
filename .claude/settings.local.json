@@ -89,7 +89,13 @@
       "Bash(npm install:*)",
       "Bash(git config:*)",
       "Bash(git push:*)",
-      "Bash(find /c/Users/UNITECH2/Desktop/enterprise/API -type f -name *address*)"
+      "Bash(find /c/Users/UNITECH2/Desktop/enterprise/API -type f -name *address*)",
+      "Bash(find /c/Users/UNITECH2/Desktop/enterprise -type d -name procurement -o -type d -name purchase* -o -type d -name inventory)",
+      "Bash(find /c/Users/UNITECH2/Desktop/enterprise/Frontend/src -type f -name *purchase* -o -name *receive*)",
+      "Bash(find C:UsersUNITECH2DesktopenterpriseFrontendsrc -type d -name indent*)",
+      "Bash(scp \"C:/Users/UNITECH2/Desktop/enterprise/Frontend/src/app/\\(dashboard\\)/procurement/indents/[id]/page.tsx\" \"root@64.235.43.187:/var/www/html/enterprise/frontend/src/app/\\(dashboard\\)/procurement/indents/[id]/page.tsx\")",
+      "Bash(find \"C:\\\\Users\\\\UNITECH2\\\\Desktop\\\\enterprise/Frontend/src/app/\\(dashboard\\)/inventory\" -type f -name \"*.tsx\" -o -name \"*.ts\")",
+      "Bash(scp \"C:/Users/UNITECH2/Desktop/enterprise/Frontend/src/app/\\(dashboard\\)/inventory/goods-receipts/[id]/page.tsx\" \"root@64.235.43.187:/var/www/html/enterprise/frontend/src/app/\\(dashboard\\)/inventory/goods-receipts/[id]/page.tsx\")"
     ]
   }
 }

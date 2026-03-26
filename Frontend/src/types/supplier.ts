@@ -1,3 +1,9 @@
+export interface SupplierCategoryMapping {
+  id: number;
+  category: string;
+  subcategory?: string;
+}
+
 export interface Supplier {
   id: number;
   enterprise_id: number;
@@ -11,6 +17,7 @@ export interface Supplier {
   payment_terms?: string;
   status: string;
   notes?: string;
+  categories?: SupplierCategoryMapping[];
   created_date: string;
   modified_date: string;
 }

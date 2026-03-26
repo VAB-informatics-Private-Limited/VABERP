@@ -7,6 +7,8 @@ import { MaterialRequest } from '../material-requests/entities/material-request.
 import { MaterialRequestItem } from '../material-requests/entities/material-request-item.entity';
 import { RawMaterial } from '../raw-materials/entities/raw-material.entity';
 import { RawMaterialLedger } from '../raw-materials/entities/raw-material-ledger.entity';
+import { GoodsReceipt } from '../goods-receipts/entities/goods-receipt.entity';
+import { GoodsReceiptItem } from '../goods-receipts/entities/goods-receipt-item.entity';
 
 export interface InsufficientItem {
   mrItemId: number;
@@ -33,6 +35,10 @@ export class IndentsService {
     private rawMaterialRepository: Repository<RawMaterial>,
     @InjectRepository(RawMaterialLedger)
     private rawMaterialLedgerRepository: Repository<RawMaterialLedger>,
+    @InjectRepository(GoodsReceipt)
+    private grnRepository: Repository<GoodsReceipt>,
+    @InjectRepository(GoodsReceiptItem)
+    private grnItemRepository: Repository<GoodsReceiptItem>,
   ) {}
 
   async createFromInventory(
@@ -521,108 +527,44 @@ export class IndentsService {
       throw new BadRequestException('No items have been received yet');
     }
 
-    const releasedItems: string[] = [];
+    // Create a pending GRN for inventory team to confirm — stock is NOT updated here
+    const grnCount = await this.grnRepository.count({ where: { enterpriseId } });
+    const grnNumber = `GRN-${String(grnCount + 1).padStart(6, '0')}`;
 
+    const grn = await this.grnRepository.save(
+      this.grnRepository.create({
+        enterpriseId,
+        grnNumber,
+        indentId,
+        status: 'pending',
+        releasedBy: userId,
+      }),
+    );
+
+    const grnItems: Array<{ name: string; qty: number; unit?: string }> = [];
     for (const indentItem of receivedItems) {
-      if (!indentItem.materialRequestItemId) continue;
-
-      const mrItem = await this.mrItemRepository.findOne({
-        where: { id: indentItem.materialRequestItemId },
-      });
-      if (!mrItem) continue;
-
-      const qtyToApproveAndIssue = Number(mrItem.quantityRequested);
-
-      // Refresh available stock
-      let latestStock = 0;
-      if (indentItem.rawMaterialId) {
-        const rawMat = await this.rawMaterialRepository.findOne({
-          where: { id: indentItem.rawMaterialId, enterpriseId },
-        });
-        latestStock = rawMat ? Number(rawMat.availableStock) : 0;
-
-        if (rawMat && latestStock >= qtyToApproveAndIssue) {
-          // Deduct stock (approve + issue in one step)
-          const previousStock = Number(rawMat.currentStock);
-          const newStock = previousStock - qtyToApproveAndIssue;
-
-          await this.rawMaterialRepository.update(rawMat.id, {
-            currentStock: newStock,
-            availableStock: newStock - Number(rawMat.reservedStock),
-          });
-
-          // Create ledger entry
-          await this.rawMaterialLedgerRepository.save(
-            this.rawMaterialLedgerRepository.create({
-              enterpriseId,
-              rawMaterialId: rawMat.id,
-              transactionType: 'issue',
-              quantity: qtyToApproveAndIssue,
-              previousStock,
-              newStock,
-              referenceType: 'material_request',
-              referenceId: indent.materialRequestId,
-              remarks: `Auto-issued via Indent ${indent.indentNumber} — released to manufacturing`,
-              createdBy: userId,
-            }),
-          );
-        } else {
-          // Not enough stock — skip this item
-          continue;
-        }
-      }
-
-      // Update MR item: approved + issued in one step
-      await this.mrItemRepository.update(mrItem.id, {
-        availableStock: latestStock,
-        quantityApproved: qtyToApproveAndIssue,
-        quantityIssued: qtyToApproveAndIssue,
-        status: 'issued',
-        notes: `Released from Indent ${indent.indentNumber} — auto-approved and issued to manufacturing.`,
-      });
-
-      releasedItems.push(indentItem.itemName);
-    }
-
-    if (releasedItems.length === 0) {
-      throw new BadRequestException('Could not release any items — insufficient stock available');
-    }
-
-    // Update MR status to fulfilled if all items are issued
-    const allMrItems = await this.mrItemRepository.find({
-      where: { materialRequestId: indent.materialRequestId },
-    });
-    const allIssued = allMrItems.every(
-      (i) => i.status === 'issued' || i.status === 'rejected',
-    );
-    if (allIssued) {
-      await this.mrRepository.update(indent.materialRequestId, {
-        status: 'fulfilled',
-        approvedBy: userId,
-        approvedDate: new Date(),
-      });
-    } else {
-      await this.mrRepository.update(indent.materialRequestId, {
-        status: 'partially_fulfilled',
-        approvedBy: userId,
-        approvedDate: new Date(),
-      });
-    }
-
-    // Close indent
-    const allIndentReceived = indentItems.every(
-      (i) => Number(i.receivedQuantity) >= Number(i.shortageQuantity),
-    );
-    if (allIndentReceived) {
-      await this.indentRepository.update(indentId, { status: 'closed' });
+      await this.grnItemRepository.save(
+        this.grnItemRepository.create({
+          grnId: grn.id,
+          indentItemId: indentItem.id,
+          rawMaterialId: indentItem.rawMaterialId,
+          itemName: indentItem.itemName,
+          unitOfMeasure: indentItem.unitOfMeasure,
+          expectedQty: indentItem.receivedQuantity,
+        }),
+      );
+      grnItems.push({ name: indentItem.itemName, qty: Number(indentItem.receivedQuantity), unit: indentItem.unitOfMeasure });
     }
 
     const result = await this.findOne(indentId, enterpriseId);
     return {
       ...result,
-      releasedItems,
+      grnId: grn.id,
+      grnNumber: grn.grnNumber,
+      releasedItems: grnItems,
+      skippedItems: [],
       materialRequestId: indent.materialRequestId,
-      message: `Released ${releasedItems.length} items to inventory and issued to manufacturing. Materials are now available for production.`,
+      message: `${grnItems.length} item(s) released to inventory. GRN ${grnNumber} is pending confirmation by the inventory team.`,
     };
   }
 

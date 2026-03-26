@@ -17,6 +17,11 @@ function mapSupplierFromBackend(data: any): Supplier {
     payment_terms: data.paymentTerms,
     status: data.status,
     notes: data.notes,
+    categories: (data.categories || []).map((c: any) => ({
+      id: c.id,
+      category: c.category,
+      subcategory: c.subcategory,
+    })),
     created_date: data.createdDate,
     modified_date: data.modifiedDate,
   };
@@ -67,5 +72,23 @@ export async function updateSupplier(id: number, data: Partial<{
 
 export async function deleteSupplier(id: number): Promise<ApiResponse> {
   const response = await apiClient.delete(`/suppliers/${id}`);
+  return response.data;
+}
+
+export async function getSuppliersByCategory(categories: string[], subcategories?: string[]): Promise<PaginatedResponse<Supplier>> {
+  const params: Record<string, string> = { categories: categories.join(',') };
+  if (subcategories?.length) params.subcategories = subcategories.join(',');
+  const response = await apiClient.get('/suppliers/by-category', { params });
+  const d = response.data as any;
+  return { message: d.message, data: (d.data || []).map(mapSupplierFromBackend), totalRecords: d.totalRecords || 0, page: d.page || 1, limit: d.limit || 200 };
+}
+
+export async function addSupplierCategory(supplierId: number, data: { category: string; subcategory?: string }): Promise<ApiResponse> {
+  const response = await apiClient.post(`/suppliers/${supplierId}/categories`, data);
+  return response.data;
+}
+
+export async function removeSupplierCategory(categoryId: number): Promise<ApiResponse> {
+  const response = await apiClient.delete(`/suppliers/categories/${categoryId}`);
   return response.data;
 }

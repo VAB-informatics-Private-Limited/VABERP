@@ -8,10 +8,12 @@ import { MaterialRequest } from '../material-requests/entities/material-request.
 import { MaterialRequestItem } from '../material-requests/entities/material-request-item.entity';
 import { RawMaterial } from '../raw-materials/entities/raw-material.entity';
 import { RawMaterialLedger } from '../raw-materials/entities/raw-material-ledger.entity';
+import { GoodsReceipt } from '../goods-receipts/entities/goods-receipt.entity';
+import { GoodsReceiptItem } from '../goods-receipts/entities/goods-receipt-item.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Indent, IndentItem, MaterialRequest, MaterialRequestItem, RawMaterial, RawMaterialLedger]),
+    TypeOrmModule.forFeature([Indent, IndentItem, MaterialRequest, MaterialRequestItem, RawMaterial, RawMaterialLedger, GoodsReceipt, GoodsReceiptItem]),
   ],
   controllers: [IndentsController],
   providers: [IndentsService],

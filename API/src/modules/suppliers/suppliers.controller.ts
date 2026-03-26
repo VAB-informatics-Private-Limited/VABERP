@@ -27,11 +27,45 @@ export class SuppliersController {
     return this.service.findAll(enterpriseId, page, limit, status);
   }
 
+  @Get('by-category')
+  @ApiOperation({ summary: 'Get suppliers filtered by category/subcategory' })
+  @RequirePermission('procurement', 'suppliers', 'view')
+  async getByCategory(
+    @EnterpriseId() enterpriseId: number,
+    @Query('categories') categories?: string,
+    @Query('subcategories') subcategories?: string,
+  ) {
+    const cats = categories ? categories.split(',').filter(Boolean) : [];
+    const subs = subcategories ? subcategories.split(',').filter(Boolean) : [];
+    return this.service.getByCategory(enterpriseId, cats, subs);
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Get supplier by ID' })
   @RequirePermission('procurement', 'suppliers', 'view')
   async findOne(@Param('id', ParseIntPipe) id: number, @EnterpriseId() enterpriseId: number) {
     return this.service.findOne(id, enterpriseId);
+  }
+
+  @Post(':id/categories')
+  @ApiOperation({ summary: 'Add category mapping to a supplier' })
+  @RequirePermission('procurement', 'suppliers', 'edit')
+  async addCategory(
+    @EnterpriseId() enterpriseId: number,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: { category: string; subcategory?: string },
+  ) {
+    return this.service.addCategory(id, enterpriseId, dto);
+  }
+
+  @Delete('categories/:catId')
+  @ApiOperation({ summary: 'Remove category mapping from a supplier' })
+  @RequirePermission('procurement', 'suppliers', 'edit')
+  async removeCategory(
+    @EnterpriseId() enterpriseId: number,
+    @Param('catId', ParseIntPipe) catId: number,
+  ) {
+    return this.service.removeCategory(catId, enterpriseId);
   }
 
   @Post()

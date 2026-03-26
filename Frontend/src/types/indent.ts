@@ -5,6 +5,8 @@ export interface IndentItem {
   raw_material_id?: number;
   raw_material_name?: string;
   raw_material_code?: string;
+  raw_material_category?: string;
+  raw_material_subcategory?: string;
   item_name: string;
   required_quantity: number;
   available_quantity: number;

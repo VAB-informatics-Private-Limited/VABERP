@@ -38,6 +38,9 @@ export class RawMaterial {
   @Column({ nullable: true })
   category: string;
 
+  @Column({ nullable: true })
+  subcategory: string;
+
   @Column({ name: 'unit_of_measure', nullable: true })
   unitOfMeasure: string;
 

@@ -5,9 +5,11 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   ManyToOne,
+  OneToMany,
   JoinColumn,
 } from 'typeorm';
 import { Enterprise } from '../../enterprises/entities/enterprise.entity';
+import { SupplierCategory } from './supplier-category.entity';
 
 @Entity('suppliers')
 export class Supplier {
@@ -50,6 +52,9 @@ export class Supplier {
 
   @Column({ nullable: true, type: 'text' })
   notes: string;
+
+  @OneToMany(() => SupplierCategory, (c) => c.supplier, { cascade: true })
+  categories: SupplierCategory[];
 
   @CreateDateColumn({ name: 'created_date' })
   createdDate: Date;

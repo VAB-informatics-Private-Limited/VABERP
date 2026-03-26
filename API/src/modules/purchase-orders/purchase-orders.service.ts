@@ -366,6 +366,17 @@ export class PurchaseOrdersService {
     return this.findOne(id, enterpriseId);
   }
 
+  async updateETA(id: number, enterpriseId: number, expectedDelivery: string) {
+    const po = await this.poRepository.findOne({ where: { id, enterpriseId } });
+    if (!po) throw new NotFoundException('Purchase order not found');
+
+    await this.poRepository.update(id, {
+      expectedDelivery: expectedDelivery ? new Date(expectedDelivery) : null,
+    });
+
+    return this.findOne(id, enterpriseId);
+  }
+
   async delete(id: number, enterpriseId: number) {
     const po = await this.poRepository.findOne({ where: { id, enterpriseId } });
     if (!po) throw new NotFoundException('Purchase order not found');

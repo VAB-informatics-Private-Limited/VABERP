@@ -30,6 +30,7 @@ import { UnitMastersModule } from './modules/unit-masters/unit-masters.module';
 import { RawMaterialsModule } from './modules/raw-materials/raw-materials.module';
 import { SuppliersModule } from './modules/suppliers/suppliers.module';
 import { IndentsModule } from './modules/indents/indents.module';
+import { GoodsReceiptsModule } from './modules/goods-receipts/goods-receipts.module';
 import { SuperAdminModule } from './modules/super-admin/super-admin.module';
 import { LocationsModule } from './modules/locations/locations.module';
 import databaseConfig from './config/database.config';
@@ -97,6 +98,7 @@ import jwtConfig from './config/jwt.config';
     RawMaterialsModule,
     SuppliersModule,
     IndentsModule,
+    GoodsReceiptsModule,
     SuperAdminModule,
     LocationsModule,
   ],

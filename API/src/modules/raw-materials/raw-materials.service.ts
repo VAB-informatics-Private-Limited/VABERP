@@ -236,6 +236,18 @@ export class RawMaterialsService {
     return result.map((r) => r.category).filter(Boolean);
   }
 
+  async getSubcategories(enterpriseId: number, category: string) {
+    const result = await this.rawMaterialRepo
+      .createQueryBuilder('rm')
+      .select('DISTINCT rm.subcategory', 'subcategory')
+      .where('rm.enterprise_id = :enterpriseId', { enterpriseId })
+      .andWhere('rm.category = :category', { category })
+      .andWhere('rm.subcategory IS NOT NULL')
+      .getRawMany();
+
+    return result.map((r) => r.subcategory).filter(Boolean);
+  }
+
   async getLedger(
     enterpriseId: number,
     page: number = 1,

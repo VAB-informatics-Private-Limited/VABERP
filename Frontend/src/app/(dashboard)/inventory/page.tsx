@@ -123,6 +123,7 @@ export default function InventoryPage() {
       material_name: material.material_name,
       description: material.description,
       category: material.category,
+      subcategory: material.subcategory,
       unit_of_measure: material.unit_of_measure,
       min_stock_level: material.min_stock_level,
       cost_per_unit: material.cost_per_unit,
@@ -366,6 +367,11 @@ export default function InventoryPage() {
                   ))}
                 </Select>
               </Form.Item>
+              <Form.Item name="subcategory" label="Subcategory">
+                <Input placeholder="e.g. Steel, Copper Wire..." />
+              </Form.Item>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
               <Form.Item name="unit_of_measure" label="Unit of Measure">
                 <Select placeholder="Select unit" allowClear showSearch>
                   {['pcs', 'kg', 'grams', 'meters', 'liters', 'sets', 'rolls', 'sheets'].map((u) => (
@@ -500,14 +506,17 @@ export default function InventoryPage() {
                 ))}
               </Select>
             </Form.Item>
-            <Form.Item name="unit_of_measure" label="Unit of Measure">
-              <Select placeholder="Select unit" allowClear showSearch>
-                {['pcs', 'kg', 'grams', 'meters', 'liters', 'sets', 'rolls', 'sheets'].map((u) => (
-                  <Select.Option key={u} value={u}>{u}</Select.Option>
-                ))}
-              </Select>
+            <Form.Item name="subcategory" label="Subcategory">
+              <Input placeholder="e.g. Steel, Copper Wire..." />
             </Form.Item>
           </div>
+          <Form.Item name="unit_of_measure" label="Unit of Measure">
+            <Select placeholder="Select unit" allowClear showSearch>
+              {['pcs', 'kg', 'grams', 'meters', 'liters', 'sets', 'rolls', 'sheets'].map((u) => (
+                <Select.Option key={u} value={u}>{u}</Select.Option>
+              ))}
+            </Select>
+          </Form.Item>
           <div className="grid grid-cols-2 gap-4">
             <Form.Item name="min_stock_level" label="Min Stock Level">
               <InputNumber min={0} className="w-full" />

@@ -23,6 +23,7 @@ export const PERMISSION_STRUCTURE: Record<string, Record<string, string[]>> = {
     raw_materials: ['view', 'create', 'edit', 'delete'],
     stock_ledger: ['view', 'create', 'edit', 'delete'],
     material_requests: ['view', 'create', 'edit', 'delete', 'approve'],
+    goods_receipts: ['view', 'create', 'edit', 'delete'],
   },
   procurement: {
     indents: ['view', 'create', 'edit', 'delete'],

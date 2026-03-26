@@ -111,11 +111,13 @@ export function Sidebar({ collapsed, inDrawer, onMenuClick }: SidebarProps) {
       key: '/material-requests',
       label: <span>Material Requests {pendingMRCount > 0 && <Badge count={pendingMRCount} size="small" offset={[4, -2]} />}</span>,
     },
+    canView('inventory', 'goods_receipts') && { key: '/inventory/goods-receipts', label: 'Goods Receipts (GRN)' },
   ].filter(Boolean);
 
   const procurementChildren = [
     canView('procurement', 'indents') && { key: '/procurement/indents', label: 'Indents' },
     canView('procurement', 'suppliers') && { key: '/procurement/suppliers', label: 'Suppliers' },
+    canView('orders', 'purchase_orders') && { key: '/procurement/purchase-orders', label: 'Purchase Orders' },
   ].filter(Boolean);
 
   const manufacturingChildren = [

@@ -174,7 +174,7 @@ function mapFollowupFromBackend(data: any): Followup {
     followup_date: data.followupDate,
     followup_time: data.followupTime,
     interest_status: data.interestStatus,
-    remarks: data.remarks,
+    remarks: data.notes || data.remarks,
     next_followup_date: data.nextFollowupDate,
     created_date: data.createdDate,
   };

@@ -5,6 +5,7 @@ export interface RawMaterial {
   material_name: string;
   description: string | null;
   category: string | null;
+  subcategory: string | null;
   unit_of_measure: string | null;
   current_stock: number;
   reserved_stock: number;

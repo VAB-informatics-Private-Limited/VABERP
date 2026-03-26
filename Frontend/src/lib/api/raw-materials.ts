@@ -11,6 +11,7 @@ function mapRawMaterialFromBackend(data: any): RawMaterial {
     material_name: data.materialName,
     description: data.description,
     category: data.category,
+    subcategory: data.subcategory,
     unit_of_measure: data.unitOfMeasure,
     current_stock: Number(data.currentStock),
     reserved_stock: Number(data.reservedStock),
@@ -81,6 +82,7 @@ export async function createRawMaterial(data: {
   material_name: string;
   description?: string;
   category?: string;
+  subcategory?: string;
   unit_of_measure?: string;
   current_stock?: number;
   min_stock_level?: number;
@@ -90,6 +92,7 @@ export async function createRawMaterial(data: {
     materialName: data.material_name,
     description: data.description,
     category: data.category,
+    subcategory: data.subcategory,
     unitOfMeasure: data.unit_of_measure,
     currentStock: data.current_stock,
     minStockLevel: data.min_stock_level,
@@ -105,6 +108,7 @@ export async function bulkCreateRawMaterials(items: {
   material_name: string;
   description?: string;
   category?: string;
+  subcategory?: string;
   unit_of_measure?: string;
   current_stock?: number;
   min_stock_level?: number;
@@ -115,6 +119,7 @@ export async function bulkCreateRawMaterials(items: {
       materialName: d.material_name,
       description: d.description,
       category: d.category,
+      subcategory: d.subcategory,
       unitOfMeasure: d.unit_of_measure,
       currentStock: d.current_stock,
       minStockLevel: d.min_stock_level,
@@ -131,6 +136,7 @@ export async function updateRawMaterial(id: number, data: {
   material_name?: string;
   description?: string;
   category?: string;
+  subcategory?: string;
   unit_of_measure?: string;
   min_stock_level?: number;
   cost_per_unit?: number;
@@ -139,6 +145,7 @@ export async function updateRawMaterial(id: number, data: {
   if (data.material_name !== undefined) payload.materialName = data.material_name;
   if (data.description !== undefined) payload.description = data.description;
   if (data.category !== undefined) payload.category = data.category;
+  if (data.subcategory !== undefined) payload.subcategory = data.subcategory;
   if (data.unit_of_measure !== undefined) payload.unitOfMeasure = data.unit_of_measure;
   if (data.min_stock_level !== undefined) payload.minStockLevel = data.min_stock_level;
   if (data.cost_per_unit !== undefined) payload.costPerUnit = data.cost_per_unit;
@@ -166,6 +173,13 @@ export async function adjustStock(id: number, data: {
 
 export async function getRawMaterialCategories(): Promise<ApiResponse<string[]>> {
   const response = await apiClient.get('/raw-materials/categories');
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const d = response.data as any;
+  return { message: d.message, data: d.data };
+}
+
+export async function getRawMaterialSubcategories(category: string): Promise<ApiResponse<string[]>> {
+  const response = await apiClient.get('/raw-materials/subcategories', { params: { category } });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const d = response.data as any;
   return { message: d.message, data: d.data };

@@ -96,6 +96,17 @@ export class PurchaseOrdersController {
     return this.service.receive(id, enterpriseId, user?.id);
   }
 
+  @Patch(':id/eta')
+  @ApiOperation({ summary: 'Update expected delivery date of a purchase order' })
+  @RequirePermission('orders', 'purchase_orders', 'edit')
+  async updateETA(
+    @Param('id', ParseIntPipe) id: number,
+    @EnterpriseId() enterpriseId: number,
+    @Body('expectedDelivery') expectedDelivery: string,
+  ) {
+    return this.service.updateETA(id, enterpriseId, expectedDelivery);
+  }
+
   @Delete(':id')
   @ApiOperation({ summary: 'Delete a purchase order' })
   @RequirePermission('orders', 'purchase_orders', 'delete')

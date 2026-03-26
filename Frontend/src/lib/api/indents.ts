@@ -27,6 +27,8 @@ function mapIndentFromBackend(data: any): Indent {
       raw_material_id: i.rawMaterialId,
       raw_material_name: i.rawMaterial?.materialName,
       raw_material_code: i.rawMaterial?.materialCode,
+      raw_material_category: i.rawMaterial?.category,
+      raw_material_subcategory: i.rawMaterial?.subcategory,
       item_name: i.itemName || i.rawMaterial?.materialName,
       required_quantity: Number(i.requiredQuantity),
       available_quantity: Number(i.availableQuantity),
@@ -107,9 +109,20 @@ export async function releaseIndentToInventory(indentId: number): Promise<ApiRes
   return response.data;
 }
 
-export async function releaseAllIndentItems(indentId: number): Promise<ApiResponse> {
+export interface ReleaseAllResult {
+  message: string;
+  releasedItems: Array<{ name: string; qty: number; unit?: string }>;
+  skippedItems: Array<{ name: string; reason: string; shortageQty: number; receivedQty: number; stockAvailable: number }>;
+}
+
+export async function releaseAllIndentItems(indentId: number): Promise<ReleaseAllResult> {
   const response = await apiClient.post(`/indents/${indentId}/release-all`);
-  return response.data;
+  const d = response.data as any;
+  return {
+    message: d.message,
+    releasedItems: d.releasedItems || [],
+    skippedItems: d.skippedItems || [],
+  };
 }
 
 export async function cancelIndent(id: number): Promise<ApiResponse<Indent>> {

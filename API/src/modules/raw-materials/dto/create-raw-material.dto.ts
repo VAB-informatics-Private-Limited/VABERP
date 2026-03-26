@@ -19,6 +19,11 @@ export class CreateRawMaterialDto {
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
+  subcategory?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
   unitOfMeasure?: string;
 
   @ApiPropertyOptional()

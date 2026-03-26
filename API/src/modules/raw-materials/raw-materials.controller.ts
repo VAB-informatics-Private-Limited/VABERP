@@ -53,6 +53,17 @@ export class RawMaterialsController {
     return { message: 'Categories fetched', data: categories };
   }
 
+  @Get('subcategories')
+  @ApiOperation({ summary: 'List distinct subcategories for a given category' })
+  @RequirePermission('inventory', 'raw_materials', 'view')
+  async getSubcategories(
+    @EnterpriseId() enterpriseId: number,
+    @Query('category') category: string,
+  ) {
+    const subcategories = await this.rawMaterialsService.getSubcategories(enterpriseId, category || '');
+    return { message: 'Subcategories fetched', data: subcategories };
+  }
+
   @Get('ledger')
   @ApiOperation({ summary: 'Get raw material ledger' })
   @RequirePermission('inventory', 'stock_ledger', 'view')

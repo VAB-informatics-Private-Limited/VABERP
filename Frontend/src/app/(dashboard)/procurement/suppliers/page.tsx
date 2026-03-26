@@ -4,11 +4,12 @@ import { useState } from 'react';
 import {
   Table, Tag, Card, Button, Modal, Form, Input, Select, Space, Typography, message, Popconfirm,
 } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
+import { PlusOutlined, EditOutlined, DeleteOutlined, TagsOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getSupplierList, createSupplier, updateSupplier, deleteSupplier } from '@/lib/api/suppliers';
+import { getSupplierList, createSupplier, updateSupplier, deleteSupplier, addSupplierCategory, removeSupplierCategory } from '@/lib/api/suppliers';
+import { getRawMaterialCategories, getRawMaterialSubcategories } from '@/lib/api/raw-materials';
 import { SUPPLIER_STATUS_OPTIONS } from '@/types/supplier';
-import type { Supplier } from '@/types/supplier';
+import type { Supplier, SupplierCategoryMapping } from '@/types/supplier';
 import dayjs from 'dayjs';
 import ExportDropdown from '@/components/common/ExportDropdown';
 import { usePermissions } from '@/stores/authStore';
@@ -21,6 +22,26 @@ export default function SuppliersPage() {
   const [page, setPage] = useState(1);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null);
+  const [categoryModalSupplier, setCategoryModalSupplier] = useState<Supplier | null>(null);
+  const [newCategory, setNewCategory] = useState('');
+  const [newSubcategory, setNewSubcategory] = useState('');
+
+  const { data: categoriesRes } = useQuery({
+    queryKey: ['raw-material-categories'],
+    queryFn: getRawMaterialCategories,
+    enabled: !!categoryModalSupplier,
+    staleTime: 1000 * 60 * 5,
+  });
+
+  const { data: subcategoriesRes } = useQuery({
+    queryKey: ['raw-material-subcategories', newCategory],
+    queryFn: () => getRawMaterialSubcategories(newCategory),
+    enabled: !!categoryModalSupplier && !!newCategory,
+    staleTime: 1000 * 60 * 5,
+  });
+
+  const categoryOptions = (categoriesRes?.data || []).map((c) => ({ value: c, label: c }));
+  const subcategoryOptions = (subcategoriesRes?.data || []).map((s) => ({ value: s, label: s }));
   const [form] = Form.useForm();
 
   const { data, isLoading } = useQuery({
@@ -55,6 +76,27 @@ export default function SuppliersPage() {
     mutationFn: (id: number) => deleteSupplier(id),
     onSuccess: () => {
       message.success('Supplier deleted');
+      queryClient.invalidateQueries({ queryKey: ['suppliers'] });
+    },
+    onError: (err: any) => message.error(err?.response?.data?.message || 'Failed'),
+  });
+
+  const addCategoryMutation = useMutation({
+    mutationFn: ({ supplierId, category, subcategory }: { supplierId: number; category: string; subcategory?: string }) =>
+      addSupplierCategory(supplierId, { category, subcategory }),
+    onSuccess: () => {
+      message.success('Category added');
+      setNewCategory('');
+      setNewSubcategory('');
+      queryClient.invalidateQueries({ queryKey: ['suppliers'] });
+    },
+    onError: (err: any) => message.error(err?.response?.data?.message || 'Failed'),
+  });
+
+  const removeCategoryMutation = useMutation({
+    mutationFn: (categoryId: number) => removeSupplierCategory(categoryId),
+    onSuccess: () => {
+      message.success('Category removed');
       queryClient.invalidateQueries({ queryKey: ['suppliers'] });
     },
     onError: (err: any) => message.error(err?.response?.data?.message || 'Failed'),
@@ -98,6 +140,24 @@ export default function SuppliersPage() {
       render: (text: string) => text || '-',
     },
     {
+      title: 'Categories',
+      key: 'categories',
+      render: (_: unknown, record: Supplier) => {
+        const cats = record.categories || [];
+        if (cats.length === 0) return <Typography.Text type="secondary" style={{ fontSize: 12 }}>None</Typography.Text>;
+        return (
+          <Space size={4} wrap>
+            {cats.slice(0, 3).map((c) => (
+              <Tag key={c.id} style={{ fontSize: 11 }}>
+                {c.category}{c.subcategory ? ` / ${c.subcategory}` : ''}
+              </Tag>
+            ))}
+            {cats.length > 3 && <Tag style={{ fontSize: 11 }}>+{cats.length - 3}</Tag>}
+          </Space>
+        );
+      },
+    },
+    {
       title: 'Status',
       dataIndex: 'status',
       key: 'status',
@@ -117,6 +177,12 @@ export default function SuppliersPage() {
       key: 'actions',
       render: (_: unknown, record: Supplier) => (
         <Space>
+          <Button
+            type="link"
+            icon={<TagsOutlined />}
+            title="Manage Categories"
+            onClick={() => { setCategoryModalSupplier(record); setNewCategory(''); setNewSubcategory(''); }}
+          />
           <Button
             type="link"
             icon={<EditOutlined />}
@@ -194,6 +260,101 @@ export default function SuppliersPage() {
           }}
         />
       </Card>
+
+      {/* Category Management Modal */}
+      <Modal
+        title={`Manage Categories — ${categoryModalSupplier?.supplier_name}`}
+        open={!!categoryModalSupplier}
+        onCancel={() => setCategoryModalSupplier(null)}
+        footer={null}
+        width={520}
+      >
+        {categoryModalSupplier && (
+          <>
+            <div className="mb-4">
+              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                Categories control which vendors appear when creating a Purchase Order for items of that category.
+              </Typography.Text>
+            </div>
+            <Table
+              dataSource={
+                // Use latest data from the query cache for this supplier
+                (data?.data?.find((s) => s.id === categoryModalSupplier.id)?.categories || categoryModalSupplier.categories || []) as SupplierCategoryMapping[]
+              }
+              rowKey="id"
+              pagination={false}
+              size="small"
+              className="mb-4"
+              locale={{ emptyText: 'No categories mapped yet' }}
+              columns={[
+                { title: 'Category', dataIndex: 'category' },
+                { title: 'Subcategory', dataIndex: 'subcategory', render: (v: string) => v || '—' },
+                {
+                  title: '',
+                  key: 'remove',
+                  width: 60,
+                  render: (_: unknown, rec: SupplierCategoryMapping) => (
+                    <Popconfirm title="Remove this category?" onConfirm={() => removeCategoryMutation.mutate(rec.id)}>
+                      <Button type="link" danger size="small" icon={<DeleteOutlined />} />
+                    </Popconfirm>
+                  ),
+                },
+              ]}
+            />
+            <div className="flex gap-2 items-end">
+              <div className="flex-1">
+                <div className="text-xs text-gray-500 mb-1">Category *</div>
+                <Select
+                  placeholder="Select or type category"
+                  options={categoryOptions}
+                  value={newCategory || undefined}
+                  onChange={(v) => { setNewCategory(v || ''); setNewSubcategory(''); }}
+                  showSearch
+                  allowClear
+                  style={{ width: '100%' }}
+                />
+              </div>
+              <div className="flex-1">
+                <div className="text-xs text-gray-500 mb-1">Subcategory (optional)</div>
+                {subcategoryOptions.length > 0 ? (
+                  <Select
+                    placeholder="Select subcategory"
+                    options={subcategoryOptions}
+                    value={newSubcategory || undefined}
+                    onChange={(v) => setNewSubcategory(v || '')}
+                    showSearch
+                    allowClear
+                    disabled={!newCategory}
+                    style={{ width: '100%' }}
+                  />
+                ) : (
+                  <Input
+                    placeholder="e.g. Steel"
+                    value={newSubcategory}
+                    onChange={(e) => setNewSubcategory(e.target.value)}
+                    disabled={!newCategory}
+                  />
+                )}
+              </div>
+              <Button
+                type="primary"
+                icon={<PlusOutlined />}
+                loading={addCategoryMutation.isPending}
+                disabled={!newCategory.trim()}
+                onClick={() => {
+                  addCategoryMutation.mutate({
+                    supplierId: categoryModalSupplier.id,
+                    category: newCategory.trim(),
+                    subcategory: newSubcategory.trim() || undefined,
+                  });
+                }}
+              >
+                Add
+              </Button>
+            </div>
+          </>
+        )}
+      </Modal>
 
       <Modal
         title={editingSupplier ? 'Edit Supplier' : 'Add Supplier'}

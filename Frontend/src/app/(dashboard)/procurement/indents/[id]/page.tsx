@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import {
   Card, Table, Tag, Button, Typography, Descriptions, Space, Alert, Modal,
-  Form, InputNumber, Input, message, Spin, Progress, Divider, Popconfirm, Steps,
+  Form, InputNumber, Input, Select, message, Spin, Progress, Divider, Popconfirm, Steps,
 } from 'antd';
 import {
   ArrowLeftOutlined, ShoppingCartOutlined, LinkOutlined,
@@ -15,7 +15,9 @@ import { useRouter, useParams } from 'next/navigation';
 import {
   getIndentById, createPOFromIndent, updateIndentItem, removeIndentItem,
   cancelIndent, receiveIndentGoods, releaseIndentToInventory, releaseAllIndentItems,
+  ReleaseAllResult,
 } from '@/lib/api/indents';
+import { getSuppliersByCategory, getSupplierList } from '@/lib/api/suppliers';
 import { INDENT_STATUS_OPTIONS } from '@/types/indent';
 import type { IndentItem } from '@/types/indent';
 import dayjs from 'dayjs';
@@ -30,7 +32,11 @@ export default function IndentDetailPage() {
 
   const [createPOModalOpen, setCreatePOModalOpen] = useState(false);
   const [receiveModalOpen, setReceiveModalOpen] = useState(false);
+  const [releaseModalOpen, setReleaseModalOpen] = useState(false);
   const [editingItemId, setEditingItemId] = useState<number | null>(null);
+  const [selectedSupplierId, setSelectedSupplierId] = useState<number | undefined>(undefined);
+  const [poItemCategories, setPoItemCategories] = useState<string[]>([]);
+  const [poItemSubcategories, setPoItemSubcategories] = useState<string[]>([]);
   const [editQty, setEditQty] = useState<number>(0);
   const [editNotes, setEditNotes] = useState<string>('');
   const [receiveItems, setReceiveItems] = useState<{ indentItemId: number; itemName: string; maxQty: number; receivedQuantity: number }[]>([]);
@@ -40,6 +46,19 @@ export default function IndentDetailPage() {
     queryKey: ['indent', id],
     queryFn: () => getIndentById(id),
     enabled: !!id,
+  });
+
+  const { data: filteredSuppliersRes, isLoading: loadingSuppliers } = useQuery({
+    queryKey: ['suppliers-by-category', poItemCategories, poItemSubcategories],
+    queryFn: () => getSuppliersByCategory(poItemCategories, poItemSubcategories.length ? poItemSubcategories : undefined),
+    enabled: createPOModalOpen && poItemCategories.length > 0,
+  });
+
+  const { data: allSuppliersRes } = useQuery({
+    queryKey: ['suppliers-all-active'],
+    queryFn: () => getSupplierList({ pageSize: 200, status: 'active' }),
+    enabled: createPOModalOpen,
+    staleTime: 1000 * 60 * 5,
   });
 
   const indent = data?.data;
@@ -108,8 +127,9 @@ export default function IndentDetailPage() {
 
   const releaseAllMutation = useMutation({
     mutationFn: () => releaseAllIndentItems(id),
-    onSuccess: (res: any) => {
-      message.success(res?.message || 'All items released to inventory and issued to manufacturing!');
+    onSuccess: (res: ReleaseAllResult) => {
+      setReleaseModalOpen(false);
+      message.success(res.message);
       queryClient.invalidateQueries({ queryKey: ['indent', id] });
     },
     onError: (err: any) => message.error(err?.response?.data?.message || 'Failed to release items'),
@@ -131,6 +151,31 @@ export default function IndentDetailPage() {
   ) || [];
   const receivedItems = indent.items?.filter((i) => i.received_quantity > 0) || [];
   const allReceived = indent.items?.every((i) => i.received_quantity >= i.shortage_quantity) || false;
+
+  const releasePreview = (indent.items || [])
+    .filter((i) => i.received_quantity > 0)
+    .map((i) => ({
+      key: i.id,
+      itemName: i.item_name,
+      shortageQty: i.shortage_quantity,
+      receivedQty: i.received_quantity,
+      unit: i.unit_of_measure,
+      isPartial: i.received_quantity < i.shortage_quantity,
+      receivePercent: i.shortage_quantity > 0
+        ? Math.round((i.received_quantity / i.shortage_quantity) * 100)
+        : 100,
+    }));
+  const hasPartialItems = releasePreview.some((i) => i.isPartial);
+
+  const filteredSupplierOptions = (filteredSuppliersRes?.data || []).map((s) => ({
+    value: s.id,
+    label: `${s.supplier_name}${s.contact_person ? ` (${s.contact_person})` : ''}`,
+  }));
+  const allSupplierOptions = (allSuppliersRes?.data || []).map((s) => ({
+    value: s.id,
+    label: `${s.supplier_name}${s.contact_person ? ` (${s.contact_person})` : ''}`,
+  }));
+  const supplierOptions = filteredSupplierOptions.length > 0 ? filteredSupplierOptions : allSupplierOptions;
 
   const canCreatePO = pendingItems.length > 0 && indent.status !== 'cancelled' && indent.status !== 'closed';
   const canReceiveGoods = receivableItems.length > 0;
@@ -325,6 +370,11 @@ export default function IndentDetailPage() {
   ];
 
   const handleCreatePO = () => {
+    const cats = Array.from(new Set(pendingItems.map((i) => i.raw_material_category).filter(Boolean) as string[]));
+    const subs = Array.from(new Set(pendingItems.map((i) => i.raw_material_subcategory).filter(Boolean) as string[]));
+    setPoItemCategories(cats);
+    setPoItemSubcategories(subs);
+    setSelectedSupplierId(undefined);
     form.setFieldsValue({
       items: pendingItems.map((item) => ({
         indentItemId: item.id,
@@ -340,6 +390,7 @@ export default function IndentDetailPage() {
   const handleSubmitPO = async () => {
     const values = await form.validateFields();
     const payload = {
+      supplierId: selectedSupplierId,
       items: values.items
         .filter((item: any) => item.quantity > 0)
         .map((item: any) => ({
@@ -386,22 +437,16 @@ export default function IndentDetailPage() {
             </Button>
           )}
           {canReleaseToInventory && (
-            <Popconfirm
-              title="Release All Required Items to Inventory?"
-              description="This will auto-approve and issue all items to manufacturing. Stock will be deducted and manufacturing will see materials as fully issued."
-              onConfirm={() => releaseAllMutation.mutate()}
-              okText="Yes, Release All"
+            <Button
+              type="primary"
+              icon={<SendOutlined />}
+              loading={releaseAllMutation.isPending}
+              size="large"
+              style={{ backgroundColor: '#52c41a', borderColor: '#52c41a' }}
+              onClick={() => setReleaseModalOpen(true)}
             >
-              <Button
-                type="primary"
-                icon={<SendOutlined />}
-                loading={releaseAllMutation.isPending}
-                size="large"
-                style={{ backgroundColor: '#52c41a', borderColor: '#52c41a' }}
-              >
-                Release All Required Items to Inventory
-              </Button>
-            </Popconfirm>
+              Release All Required Items to Inventory
+            </Button>
           )}
           {isEditable && (
             <Popconfirm title="Cancel this indent?" onConfirm={() => cancelMutation.mutate()}>
@@ -531,6 +576,29 @@ export default function IndentDetailPage() {
         okText="Create Purchase Order"
       >
         <Form form={form} layout="vertical">
+          <Form.Item
+            label="Vendor / Supplier"
+            extra={
+              poItemCategories.length > 0 && filteredSupplierOptions.length > 0
+                ? `Showing suppliers matched to: ${poItemCategories.join(', ')}`
+                : poItemCategories.length > 0 && !loadingSuppliers && filteredSupplierOptions.length === 0
+                ? 'No category-matched suppliers found — showing all active suppliers'
+                : 'Showing all active suppliers'
+            }
+          >
+            <Select
+              placeholder="Select vendor (optional)"
+              options={supplierOptions}
+              loading={loadingSuppliers}
+              showSearch
+              allowClear
+              filterOption={(input, opt) =>
+                (opt?.label as string)?.toLowerCase().includes(input.toLowerCase())
+              }
+              value={selectedSupplierId}
+              onChange={setSelectedSupplierId}
+            />
+          </Form.Item>
           <Form.Item name="expectedDelivery" label="Expected Delivery">
             <Input type="date" />
           </Form.Item>
@@ -648,6 +716,76 @@ export default function IndentDetailPage() {
             },
           ]}
         />
+      </Modal>
+
+      {/* Release All — Pre-flight Confirmation Modal */}
+      <Modal
+        title="Release All Required Items to Inventory"
+        open={releaseModalOpen}
+        onCancel={() => setReleaseModalOpen(false)}
+        onOk={() => releaseAllMutation.mutate()}
+        confirmLoading={releaseAllMutation.isPending}
+        okText="Confirm Release"
+        okButtonProps={{ style: { backgroundColor: '#52c41a', borderColor: '#52c41a' } }}
+        width={700}
+      >
+        {hasPartialItems ? (
+          <Alert
+            type="warning"
+            showIcon
+            className="mb-4"
+            message="Some items are only partially received"
+            description="Items will be issued at their received quantity — not the full shortage amount. Manufacturing will see partial availability."
+          />
+        ) : (
+          <Alert
+            type="success"
+            showIcon
+            className="mb-4"
+            message="All items fully received — ready to release"
+          />
+        )}
+        <Table
+          dataSource={releasePreview}
+          rowKey="key"
+          pagination={false}
+          size="small"
+          columns={[
+            { title: 'Material', dataIndex: 'itemName' },
+            {
+              title: 'Shortage Qty',
+              dataIndex: 'shortageQty',
+              align: 'right' as const,
+              render: (val: number, rec: any) => `${val} ${rec.unit || ''}`.trim(),
+            },
+            {
+              title: 'Received Qty',
+              dataIndex: 'receivedQty',
+              align: 'right' as const,
+              render: (val: number, rec: any) => (
+                <Text type={rec.isPartial ? 'warning' : 'success'}>{val} {rec.unit || ''}</Text>
+              ),
+            },
+            {
+              title: 'Receipt %',
+              dataIndex: 'receivePercent',
+              align: 'center' as const,
+              render: (pct: number) => (
+                <Tag color={pct >= 100 ? 'green' : pct >= 50 ? 'orange' : 'red'}>{pct}%</Tag>
+              ),
+            },
+            {
+              title: 'Will Issue',
+              align: 'right' as const,
+              render: (_: unknown, rec: any) => (
+                <Text strong>{rec.receivedQty} {rec.unit || ''}</Text>
+              ),
+            },
+          ]}
+        />
+        <p className="mt-3 text-xs text-gray-500">
+          Stock will be deducted from inventory and manufacturing will see materials as issued.
+        </p>
       </Modal>
 
     </div>
