@@ -202,7 +202,7 @@ export async function getProductList(params: {
   };
 }
 
-export async function getDropdownProductsList(_enterpriseId?: number): Promise<ApiResponse<Product[]>> {
+export async function getDropdownProductsList(_enterpriseId?: number, _subcategoryId?: number): Promise<ApiResponse<Product[]>> {
   const response = await apiClient.get<ApiResponse<Product[]>>('/products/dropdown');
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const backendData = response.data as any;
