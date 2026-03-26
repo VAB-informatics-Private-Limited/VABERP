@@ -145,6 +145,14 @@ export class ProductsController {
 
   // ========== Products ==========
 
+  @Get('dropdown')
+  @ApiOperation({ summary: 'Get active products for dropdown use in forms (no catalog permission required)' })
+  async findDropdown(
+    @EnterpriseId() enterpriseId: number,
+  ) {
+    return this.productsService.findDropdown(enterpriseId);
+  }
+
   @Get()
   @ApiOperation({ summary: 'Get all products' })
   @RequirePermission('catalog', 'products', 'view')

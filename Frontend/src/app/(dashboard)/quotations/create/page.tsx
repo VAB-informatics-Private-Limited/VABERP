@@ -29,8 +29,9 @@ export default function CreateQuotationPage() {
       queryClient.invalidateQueries({ queryKey: ['quotations'] });
       router.push('/quotations');
     },
-    onError: () => {
-      message.error('Failed to create quotation');
+    onError: (error: any) => {
+      const msg = error?.response?.data?.message || 'Failed to create quotation';
+      message.error(msg);
     },
   });
 

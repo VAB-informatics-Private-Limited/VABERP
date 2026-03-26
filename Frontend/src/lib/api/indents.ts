@@ -20,6 +20,13 @@ function mapIndentFromBackend(data: any): Indent {
     source: data.source,
     status: data.status,
     notes: data.notes,
+    purchase_orders: data.purchaseOrders?.map((p: any) => ({
+      id: p.id,
+      po_number: p.poNumber,
+      status: p.status,
+      supplier_name: p.supplierName,
+      grand_total: p.grandTotal ? Number(p.grandTotal) : undefined,
+    })),
     items: data.items?.map((i: any) => ({
       id: i.id,
       indent_id: i.indentId,

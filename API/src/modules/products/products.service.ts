@@ -211,6 +211,15 @@ export class ProductsService {
 
   // ========== Products ==========
 
+  async findDropdown(enterpriseId: number) {
+    const data = await this.productRepository.find({
+      where: { enterpriseId, status: 'active' },
+      relations: ['category', 'subcategory'],
+      order: { productName: 'ASC' },
+    });
+    return { message: 'Products fetched successfully', data };
+  }
+
   async findAll(enterpriseId: number, categoryId?: number, subcategoryId?: number, page = 1, limit = 20, search?: string) {
     const pageNum = Number(page) || 1;
     const limitNum = Number(limit) || 20;

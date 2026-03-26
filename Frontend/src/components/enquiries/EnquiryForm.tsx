@@ -258,9 +258,9 @@ export function EnquiryForm({ initialData, onSubmit, loading, submitText, isEdit
             <Form.Item name="state" label="State">
               <Select
                 showSearch
-                placeholder={selectedCountryId ? 'Select state' : 'Select country first'}
+                placeholder={effectiveCountryId ? 'Select state' : 'Select country first'}
                 allowClear
-                disabled={!selectedCountryId}
+                disabled={!effectiveCountryId}
                 onChange={handleStateChange}
                 filterOption={(input, option) =>
                   (option?.label as string)?.toLowerCase().includes(input.toLowerCase())

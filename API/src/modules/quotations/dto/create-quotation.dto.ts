@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsNumber, IsDateString, IsArray, ValidateNested, IsEmail } from 'class-validator';
+import { IsString, IsOptional, IsNumber, IsDateString, IsArray, ValidateNested, IsEmail, Matches } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 
@@ -84,6 +84,7 @@ export class CreateQuotationDto {
   @ApiPropertyOptional({ example: '9876543210' })
   @IsOptional()
   @IsString()
+  @Matches(/^[6-9]\d{9}$/, { message: 'Mobile must be a valid 10-digit Indian number' })
   mobile?: string;
 
   @ApiPropertyOptional({ example: '123 Main Street, Mumbai 400001' })

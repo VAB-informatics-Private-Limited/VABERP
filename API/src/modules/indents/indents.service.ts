@@ -9,6 +9,7 @@ import { RawMaterial } from '../raw-materials/entities/raw-material.entity';
 import { RawMaterialLedger } from '../raw-materials/entities/raw-material-ledger.entity';
 import { GoodsReceipt } from '../goods-receipts/entities/goods-receipt.entity';
 import { GoodsReceiptItem } from '../goods-receipts/entities/goods-receipt-item.entity';
+import { PurchaseOrder } from '../purchase-orders/entities/purchase-order.entity';
 
 export interface InsufficientItem {
   mrItemId: number;
@@ -39,6 +40,8 @@ export class IndentsService {
     private grnRepository: Repository<GoodsReceipt>,
     @InjectRepository(GoodsReceiptItem)
     private grnItemRepository: Repository<GoodsReceiptItem>,
+    @InjectRepository(PurchaseOrder)
+    private poRepository: Repository<PurchaseOrder>,
   ) {}
 
   async createFromInventory(
@@ -163,14 +166,19 @@ export class IndentsService {
       .orderBy('indent.createdDate', 'DESC')
       .getManyAndCount();
 
-    // Load items for each indent
+    // Load items and purchase orders for each indent
     const dataWithItems = await Promise.all(
       data.map(async (indent) => {
         const items = await this.indentItemRepository.find({
           where: { indentId: indent.id },
           relations: ['rawMaterial'],
         });
-        return { ...indent, items };
+        const purchaseOrders = await this.poRepository.find({
+          where: { indentId: indent.id },
+          select: ['id', 'poNumber', 'status', 'supplierName', 'grandTotal'],
+          order: { id: 'ASC' },
+        });
+        return { ...indent, items, purchaseOrders };
       }),
     );
 
@@ -189,7 +197,13 @@ export class IndentsService {
       relations: ['rawMaterial'],
     });
 
-    return { message: 'Indent fetched successfully', data: { ...indent, items } };
+    const purchaseOrders = await this.poRepository.find({
+      where: { indentId: id },
+      select: ['id', 'poNumber', 'status', 'supplierName', 'grandTotal'],
+      order: { id: 'ASC' },
+    });
+
+    return { message: 'Indent fetched successfully', data: { ...indent, items, purchaseOrders } };
   }
 
   async getByMaterialRequest(mrId: number, enterpriseId: number) {

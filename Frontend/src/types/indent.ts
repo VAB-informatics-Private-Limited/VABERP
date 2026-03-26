@@ -1,3 +1,11 @@
+export interface IndentPO {
+  id: number;
+  po_number: string;
+  status: string;
+  supplier_name?: string;
+  grand_total?: number;
+}
+
 export interface IndentItem {
   id: number;
   indent_id: number;
@@ -33,6 +41,7 @@ export interface Indent {
   status: string;
   notes?: string;
   items?: IndentItem[];
+  purchase_orders?: IndentPO[];
   created_date: string;
 }
 

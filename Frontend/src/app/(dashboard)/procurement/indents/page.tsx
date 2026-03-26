@@ -1,13 +1,13 @@
 'use client';
 
 import { useState } from 'react';
-import { Table, Tag, Card, Button, Select, Space, Typography, Tabs } from 'antd';
-import { EyeOutlined, FileTextOutlined } from '@ant-design/icons';
+import { Table, Tag, Card, Button, Typography, Tabs, Space } from 'antd';
+import { EyeOutlined, FileTextOutlined, ShoppingCartOutlined, LinkOutlined } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { getIndentList } from '@/lib/api/indents';
 import { INDENT_STATUS_OPTIONS } from '@/types/indent';
-import type { Indent } from '@/types/indent';
+import type { Indent, IndentPO } from '@/types/indent';
 import dayjs from 'dayjs';
 import ExportDropdown from '@/components/common/ExportDropdown';
 
@@ -48,13 +48,40 @@ export default function IndentsListPage() {
       title: 'MR Number',
       dataIndex: 'material_request_number',
       key: 'mr_number',
-      render: (text: string) => text || '-',
+      render: (text: string) => text
+        ? <Tag color="blue" icon={<LinkOutlined />}>{text}</Tag>
+        : <span className="text-gray-400">-</span>,
     },
     {
       title: 'Sales Order',
       dataIndex: 'order_number',
       key: 'order_number',
-      render: (text: string) => text || '-',
+      render: (text: string) => text
+        ? <Tag color="purple">{text}</Tag>
+        : <span className="text-gray-400">-</span>,
+    },
+    {
+      title: 'Purchase Orders',
+      key: 'purchase_orders',
+      render: (_: unknown, record: Indent) => {
+        const pos = record.purchase_orders || [];
+        if (pos.length === 0) return <span className="text-gray-400">-</span>;
+        return (
+          <Space size={4} wrap>
+            {pos.map((po: IndentPO) => (
+              <Tag
+                key={po.id}
+                color={po.status === 'received' ? 'green' : po.status === 'approved' ? 'blue' : 'orange'}
+                icon={<ShoppingCartOutlined />}
+                style={{ cursor: 'pointer' }}
+                onClick={() => router.push(`/procurement/purchase-orders/${po.id}`)}
+              >
+                {po.po_number}
+              </Tag>
+            ))}
+          </Space>
+        );
+      },
     },
     {
       title: 'Date',

@@ -294,9 +294,12 @@ export function QuotationBuilder({ initialData, onSubmit, loading, submitText, i
                 <Form.Item
                   name="customer_mobile"
                   label="Mobile"
-                  rules={[{ required: true, message: 'Required' }]}
+                  rules={[
+                    { required: true, message: 'Required' },
+                    { pattern: /^[6-9]\d{9}$/, message: 'Enter a valid 10-digit mobile number' },
+                  ]}
                 >
-                  <Input placeholder="Enter mobile" />
+                  <Input placeholder="Enter mobile" maxLength={10} />
                 </Form.Item>
               </Col>
             </Row>

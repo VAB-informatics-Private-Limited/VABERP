@@ -17,9 +17,9 @@ import {
   cancelIndent, receiveIndentGoods, releaseIndentToInventory, releaseAllIndentItems,
   ReleaseAllResult,
 } from '@/lib/api/indents';
-import { getSuppliersByCategory, getSupplierList } from '@/lib/api/suppliers';
+import { getSupplierList } from '@/lib/api/suppliers';
 import { INDENT_STATUS_OPTIONS } from '@/types/indent';
-import type { IndentItem } from '@/types/indent';
+import type { IndentItem, IndentPO } from '@/types/indent';
 import dayjs from 'dayjs';
 
 const { Title, Text } = Typography;
@@ -34,9 +34,9 @@ export default function IndentDetailPage() {
   const [receiveModalOpen, setReceiveModalOpen] = useState(false);
   const [releaseModalOpen, setReleaseModalOpen] = useState(false);
   const [editingItemId, setEditingItemId] = useState<number | null>(null);
-  const [selectedSupplierId, setSelectedSupplierId] = useState<number | undefined>(undefined);
-  const [poItemCategories, setPoItemCategories] = useState<string[]>([]);
-  const [poItemSubcategories, setPoItemSubcategories] = useState<string[]>([]);
+  // Per-item vendor: indentItemId → supplierId
+  const [itemVendors, setItemVendors] = useState<Record<number, number | undefined>>({});
+  const [poSubmitting, setPoSubmitting] = useState(false);
   const [editQty, setEditQty] = useState<number>(0);
   const [editNotes, setEditNotes] = useState<string>('');
   const [receiveItems, setReceiveItems] = useState<{ indentItemId: number; itemName: string; maxQty: number; receivedQuantity: number }[]>([]);
@@ -48,33 +48,29 @@ export default function IndentDetailPage() {
     enabled: !!id,
   });
 
-  const { data: filteredSuppliersRes, isLoading: loadingSuppliers } = useQuery({
-    queryKey: ['suppliers-by-category', poItemCategories, poItemSubcategories],
-    queryFn: () => getSuppliersByCategory(poItemCategories, poItemSubcategories.length ? poItemSubcategories : undefined),
-    enabled: createPOModalOpen && poItemCategories.length > 0,
-  });
-
+  // Load all suppliers (with categories) once when modal opens; filter per-item client-side
   const { data: allSuppliersRes } = useQuery({
     queryKey: ['suppliers-all-active'],
     queryFn: () => getSupplierList({ pageSize: 200, status: 'active' }),
     enabled: createPOModalOpen,
     staleTime: 1000 * 60 * 5,
   });
+  const allSuppliers = allSuppliersRes?.data || [];
+
+  // Returns suppliers whose category mapping matches the given material category/subcategory.
+  // Falls back to all suppliers when none match.
+  const getSuppliersForItem = (category?: string, subcategory?: string) => {
+    if (!category || allSuppliers.length === 0) return allSuppliers;
+    const filtered = allSuppliers.filter((s) =>
+      (s.categories || []).some(
+        (c) => c.category === category && (!subcategory || c.subcategory === subcategory),
+      ),
+    );
+    return filtered.length > 0 ? filtered : allSuppliers;
+  };
 
   const indent = data?.data;
 
-  const createPOMutation = useMutation({
-    mutationFn: (values: any) => createPOFromIndent(id, values),
-    onSuccess: () => {
-      message.success('Purchase Order created successfully');
-      setCreatePOModalOpen(false);
-      form.resetFields();
-      queryClient.invalidateQueries({ queryKey: ['indent', id] });
-    },
-    onError: (err: any) => {
-      message.error(err?.response?.data?.message || 'Failed to create PO');
-    },
-  });
 
   const updateItemMutation = useMutation({
     mutationFn: ({ itemId, data }: { itemId: number; data: { shortageQuantity?: number; notes?: string } }) =>
@@ -167,15 +163,6 @@ export default function IndentDetailPage() {
     }));
   const hasPartialItems = releasePreview.some((i) => i.isPartial);
 
-  const filteredSupplierOptions = (filteredSuppliersRes?.data || []).map((s) => ({
-    value: s.id,
-    label: `${s.supplier_name}${s.contact_person ? ` (${s.contact_person})` : ''}`,
-  }));
-  const allSupplierOptions = (allSuppliersRes?.data || []).map((s) => ({
-    value: s.id,
-    label: `${s.supplier_name}${s.contact_person ? ` (${s.contact_person})` : ''}`,
-  }));
-  const supplierOptions = filteredSupplierOptions.length > 0 ? filteredSupplierOptions : allSupplierOptions;
 
   const canCreatePO = pendingItems.length > 0 && indent.status !== 'cancelled' && indent.status !== 'closed';
   const canReceiveGoods = receivableItems.length > 0;
@@ -370,11 +357,7 @@ export default function IndentDetailPage() {
   ];
 
   const handleCreatePO = () => {
-    const cats = Array.from(new Set(pendingItems.map((i) => i.raw_material_category).filter(Boolean) as string[]));
-    const subs = Array.from(new Set(pendingItems.map((i) => i.raw_material_subcategory).filter(Boolean) as string[]));
-    setPoItemCategories(cats);
-    setPoItemSubcategories(subs);
-    setSelectedSupplierId(undefined);
+    setItemVendors({});
     form.setFieldsValue({
       items: pendingItems.map((item) => ({
         indentItemId: item.id,
@@ -389,20 +372,45 @@ export default function IndentDetailPage() {
 
   const handleSubmitPO = async () => {
     const values = await form.validateFields();
-    const payload = {
-      supplierId: selectedSupplierId,
-      items: values.items
-        .filter((item: any) => item.quantity > 0)
-        .map((item: any) => ({
-          indentItemId: item.indentItemId,
-          quantity: item.quantity,
-          unitPrice: item.unitPrice || 0,
-          taxPercent: item.taxPercent || 0,
-        })),
-      expectedDelivery: values.expectedDelivery,
-      notes: values.notes,
-    };
-    createPOMutation.mutate(payload);
+    const activeItems = (values.items as any[]).filter((item) => Number(item.quantity) > 0);
+    if (activeItems.length === 0) { message.warning('Enter quantity for at least one item'); return; }
+
+    // Group items by their assigned vendor (supplierId); items with no vendor go into group 'none'
+    const groups = new Map<string, typeof activeItems>();
+    for (const item of activeItems) {
+      const key = String(itemVendors[item.indentItemId] ?? 'none');
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key)!.push(item);
+    }
+
+    setPoSubmitting(true);
+    try {
+      await Promise.all(
+        Array.from(groups.entries()).map(([vendorKey, items]) =>
+          createPOFromIndent(id, {
+            supplierId: vendorKey !== 'none' ? Number(vendorKey) : undefined,
+            items: items.map((item: any) => ({
+              indentItemId: item.indentItemId,
+              quantity: Number(item.quantity),
+              unitPrice: Number(item.unitPrice) || 0,
+              taxPercent: Number(item.taxPercent) || 0,
+            })),
+            expectedDelivery: values.expectedDelivery || undefined,
+            notes: values.notes || undefined,
+          }),
+        ),
+      );
+      const count = groups.size;
+      message.success(`${count} Purchase Order${count > 1 ? 's' : ''} created successfully`);
+      setCreatePOModalOpen(false);
+      form.resetFields();
+      setItemVendors({});
+      queryClient.invalidateQueries({ queryKey: ['indent', id] });
+    } catch (err: any) {
+      message.error(err?.response?.data?.message || 'Failed to create purchase order');
+    } finally {
+      setPoSubmitting(false);
+    }
   };
 
   return (
@@ -549,6 +557,29 @@ export default function IndentDetailPage() {
             ) : '-'}
           </Descriptions.Item>
           <Descriptions.Item label="Requested By">{indent.requested_by_name || '-'}</Descriptions.Item>
+          {(indent.purchase_orders?.length ?? 0) > 0 && (
+            <Descriptions.Item label="Purchase Orders" span={3}>
+              <Space wrap>
+                {indent.purchase_orders!.map((po) => (
+                  <Button
+                    key={po.id}
+                    size="small"
+                    type="link"
+                    icon={<ShoppingCartOutlined />}
+                    onClick={() => router.push(`/procurement/purchase-orders/${po.id}`)}
+                  >
+                    {po.po_number}
+                    <Tag
+                      color={po.status === 'received' ? 'green' : po.status === 'approved' ? 'blue' : 'orange'}
+                      style={{ marginLeft: 4 }}
+                    >
+                      {po.status}
+                    </Tag>
+                  </Button>
+                ))}
+              </Space>
+            </Descriptions.Item>
+          )}
           {indent.notes && <Descriptions.Item label="Notes" span={3}>{indent.notes}</Descriptions.Item>}
         </Descriptions>
       </Card>
@@ -569,41 +600,28 @@ export default function IndentDetailPage() {
       <Modal
         title="Create Purchase Order from Indent"
         open={createPOModalOpen}
-        onCancel={() => { setCreatePOModalOpen(false); form.resetFields(); }}
+        onCancel={() => { setCreatePOModalOpen(false); form.resetFields(); setItemVendors({}); }}
         onOk={handleSubmitPO}
-        confirmLoading={createPOMutation.isPending}
-        width={800}
+        confirmLoading={poSubmitting}
+        width={1000}
         okText="Create Purchase Order"
       >
-        <Form form={form} layout="vertical">
-          <Form.Item
-            label="Vendor / Supplier"
-            extra={
-              poItemCategories.length > 0 && filteredSupplierOptions.length > 0
-                ? `Showing suppliers matched to: ${poItemCategories.join(', ')}`
-                : poItemCategories.length > 0 && !loadingSuppliers && filteredSupplierOptions.length === 0
-                ? 'No category-matched suppliers found — showing all active suppliers'
-                : 'Showing all active suppliers'
-            }
-          >
-            <Select
-              placeholder="Select vendor (optional)"
-              options={supplierOptions}
-              loading={loadingSuppliers}
-              showSearch
-              allowClear
-              filterOption={(input, opt) =>
-                (opt?.label as string)?.toLowerCase().includes(input.toLowerCase())
-              }
-              value={selectedSupplierId}
-              onChange={setSelectedSupplierId}
-            />
-          </Form.Item>
-          <Form.Item name="expectedDelivery" label="Expected Delivery">
-            <Input type="date" />
-          </Form.Item>
+        <div className="mb-3 p-3 bg-blue-50 rounded text-sm text-blue-700">
+          Select a vendor for each material. Vendors are filtered by the material&apos;s category.
+          If items have different vendors, separate Purchase Orders will be created automatically.
+        </div>
 
-          <Divider>Items</Divider>
+        <Form form={form} layout="vertical">
+          <div className="flex gap-4">
+            <Form.Item name="expectedDelivery" label="Expected Delivery" className="flex-1">
+              <Input type="date" />
+            </Form.Item>
+            <Form.Item name="notes" label="Notes" className="flex-1">
+              <Input placeholder="Additional notes..." />
+            </Form.Item>
+          </div>
+
+          <Divider className="my-3">Materials &amp; Vendor Assignment</Divider>
 
           <Form.List name="items">
             {(fields) => (
@@ -612,21 +630,74 @@ export default function IndentDetailPage() {
                 rowKey="key"
                 pagination={false}
                 size="small"
+                scroll={{ x: 800 }}
                 columns={[
                   {
                     title: 'Material',
-                    render: (_, __, idx) => (
-                      <>
-                        <Form.Item name={[idx, 'indentItemId']} hidden><Input /></Form.Item>
-                        <Form.Item name={[idx, 'itemName']} noStyle>
-                          <Input disabled bordered={false} />
-                        </Form.Item>
-                      </>
-                    ),
+                    width: 200,
+                    render: (_, __, idx) => {
+                      const item = pendingItems[idx];
+                      return (
+                        <>
+                          <Form.Item name={[idx, 'indentItemId']} hidden><Input /></Form.Item>
+                          <Form.Item name={[idx, 'itemName']} noStyle>
+                            <Input disabled variant="borderless" style={{ padding: 0, fontWeight: 500 }} />
+                          </Form.Item>
+                          {item?.raw_material_category && (
+                            <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>
+                              {item.raw_material_category}
+                              {item.raw_material_subcategory ? ` › ${item.raw_material_subcategory}` : ''}
+                            </div>
+                          )}
+                        </>
+                      );
+                    },
                   },
                   {
-                    title: 'Quantity',
-                    width: 120,
+                    title: 'Vendor',
+                    width: 220,
+                    render: (_, __, idx) => {
+                      const item = pendingItems[idx];
+                      const suppliers = getSuppliersForItem(item?.raw_material_category, item?.raw_material_subcategory);
+                      const isFiltered = item?.raw_material_category &&
+                        allSuppliers.filter((s) =>
+                          (s.categories || []).some((c) => c.category === item.raw_material_category),
+                        ).length > 0;
+                      return (
+                        <div>
+                          <Select
+                            placeholder="Select vendor"
+                            style={{ width: '100%' }}
+                            showSearch
+                            allowClear
+                            size="small"
+                            loading={!allSuppliersRes}
+                            filterOption={(input, opt) =>
+                              (opt?.label as string)?.toLowerCase().includes(input.toLowerCase())
+                            }
+                            value={itemVendors[item?.id]}
+                            onChange={(val) =>
+                              setItemVendors((prev) => ({ ...prev, [item!.id]: val }))
+                            }
+                            options={suppliers.map((s) => ({
+                              value: s.id,
+                              label: s.supplier_name,
+                            }))}
+                          />
+                          {item?.raw_material_category && (
+                            <div style={{ fontSize: 10, color: isFiltered ? '#52c41a' : '#faad14', marginTop: 2 }}>
+                              {isFiltered
+                                ? `Filtered by: ${item.raw_material_category}`
+                                : 'No mapped vendors — showing all'}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    },
+                  },
+                  {
+                    title: 'Qty',
+                    width: 110,
                     render: (_, __, idx) => (
                       <Form.Item name={[idx, 'quantity']} noStyle rules={[{ required: true }]}>
                         <InputNumber min={0} style={{ width: '100%' }} />
@@ -644,7 +715,7 @@ export default function IndentDetailPage() {
                   },
                   {
                     title: 'Tax %',
-                    width: 100,
+                    width: 90,
                     render: (_, __, idx) => (
                       <Form.Item name={[idx, 'taxPercent']} noStyle>
                         <InputNumber min={0} max={100} style={{ width: '100%' }} />
@@ -655,10 +726,6 @@ export default function IndentDetailPage() {
               />
             )}
           </Form.List>
-
-          <Form.Item name="notes" label="Notes" className="mt-4">
-            <Input.TextArea rows={2} placeholder="Additional notes..." />
-          </Form.Item>
         </Form>
       </Modal>
 
