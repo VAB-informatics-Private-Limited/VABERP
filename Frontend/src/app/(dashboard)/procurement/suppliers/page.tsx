@@ -27,7 +27,7 @@ interface CategoryRow {
   subcategory?: string;
 }
 
-export default function SuppliersPage() {
+export default function VendorsPage() {
   const { hasPermission } = usePermissions();
   const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
@@ -82,30 +82,30 @@ export default function SuppliersPage() {
           } catch {}
         }
       }
-      message.success('Supplier created');
+      message.success('Vendor created');
       closeModal();
       queryClient.invalidateQueries({ queryKey: ['suppliers'] });
     },
-    onError: (err: any) => message.error(err?.response?.data?.message || 'Failed to create supplier'),
+    onError: (err: any) => message.error(err?.response?.data?.message || 'Failed to create vendor'),
   });
 
   const updateMutation = useMutation({
     mutationFn: ({ id, values }: { id: number; values: any }) => updateSupplier(id, values),
     onSuccess: () => {
-      message.success('Supplier updated');
+      message.success('Vendor updated');
       closeModal();
       queryClient.invalidateQueries({ queryKey: ['suppliers'] });
     },
-    onError: (err: any) => message.error(err?.response?.data?.message || 'Failed to update supplier'),
+    onError: (err: any) => message.error(err?.response?.data?.message || 'Failed to update vendor'),
   });
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => deleteSupplier(id),
     onSuccess: () => {
-      message.success('Supplier deleted');
+      message.success('Vendor deleted');
       queryClient.invalidateQueries({ queryKey: ['suppliers'] });
     },
-    onError: (err: any) => message.error(err?.response?.data?.message || 'Failed to delete supplier'),
+    onError: (err: any) => message.error(err?.response?.data?.message || 'Failed to delete vendor'),
   });
 
   const addCategoryMutation = useMutation({
@@ -224,7 +224,7 @@ export default function SuppliersPage() {
       render: (text: string) => <span className="font-medium">{text}</span>,
     },
     {
-      title: 'Supplier Name',
+      title: 'Vendor Name',
       dataIndex: 'supplier_name',
       key: 'name',
       render: (text: string) => <span className="font-semibold">{text}</span>,
@@ -286,7 +286,7 @@ export default function SuppliersPage() {
       render: (_: unknown, record: Supplier) => (
         <Space>
           <Button type="link" icon={<EditOutlined />} onClick={() => openEdit(record)} />
-          <Popconfirm title="Delete this supplier?" onConfirm={() => deleteMutation.mutate(record.id)}>
+          <Popconfirm title="Delete this vendor?" onConfirm={() => deleteMutation.mutate(record.id)}>
             <Button type="link" danger icon={<DeleteOutlined />} />
           </Popconfirm>
         </Space>
@@ -299,16 +299,16 @@ export default function SuppliersPage() {
   return (
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
-        <Title level={3} className="!mb-0">Suppliers</Title>
+        <Title level={3} className="!mb-0">Vendors</Title>
         <Space>
           <ExportDropdown
             data={data?.data || []}
             disabled={!data?.data?.length}
-            filename="suppliers"
-            title="Suppliers"
+            filename="vendors"
+            title="Vendors"
             columns={[
               { key: 'supplier_code', title: 'Code' },
-              { key: 'supplier_name', title: 'Supplier Name' },
+              { key: 'supplier_name', title: 'Vendor Name' },
               { key: 'contact_person', title: 'Contact' },
               { key: 'phone', title: 'Phone' },
               { key: 'email', title: 'Email' },
@@ -316,9 +316,9 @@ export default function SuppliersPage() {
               { key: 'status', title: 'Status' },
             ]}
           />
-          {hasPermission('procurement', 'create') && (
+          {hasPermission('procurement', 'suppliers', 'create') && (
             <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
-              Add Supplier
+              Add Vendor
             </Button>
           )}
         </Space>
@@ -339,11 +339,11 @@ export default function SuppliersPage() {
         />
       </Card>
 
-      {/* ── Add / Edit Supplier Modal ── */}
+      {/* ── Add / Edit Vendor Modal ── */}
       <Modal
         title={
           <div>
-            <div className="text-base font-semibold">{editingSupplier ? 'Edit Supplier' : 'Add Supplier'}</div>
+            <div className="text-base font-semibold">{editingSupplier ? 'Edit Vendor' : 'Add Vendor'}</div>
             {editingSupplier && (
               <div className="text-xs text-gray-400 font-normal mt-0.5">{editingSupplier.supplier_code}</div>
             )}
@@ -354,13 +354,13 @@ export default function SuppliersPage() {
         onOk={handleSubmit}
         confirmLoading={createMutation.isPending || updateMutation.isPending}
         width={680}
-        okText={editingSupplier ? 'Save Changes' : 'Create Supplier'}
+        okText={editingSupplier ? 'Save Changes' : 'Create Vendor'}
         styles={{ body: { maxHeight: '75vh', overflowY: 'auto', paddingRight: 4 } }}
       >
         <Form form={form} layout="vertical" className="mt-2">
 
           {/* ── Basic Info ── */}
-          <Form.Item name="supplierName" label="Supplier Name" rules={[{ required: true, message: 'Required' }]}>
+          <Form.Item name="supplierName" label="Vendor Name" rules={[{ required: true, message: 'Required' }]}>
             <Input placeholder="e.g. ABC Metals Pvt. Ltd." size="large" />
           </Form.Item>
 

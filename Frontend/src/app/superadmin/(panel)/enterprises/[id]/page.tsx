@@ -30,7 +30,11 @@ import {
   FileTextOutlined,
   ShoppingCartOutlined,
   ShopOutlined,
+  TeamOutlined,
+  LockOutlined,
+  UnlockOutlined,
 } from '@ant-design/icons';
+import { Modal, Select as AntSelect } from 'antd';
 import { useRouter, useParams } from 'next/navigation';
 import dayjs, { Dayjs } from 'dayjs';
 import dynamic from 'next/dynamic';
@@ -42,6 +46,10 @@ import {
   getEnterprisePayment,
   approveEnterprise,
   rejectEnterprise,
+  reassignReseller,
+  getAllResellersList,
+  lockEnterprise,
+  unlockEnterprise,
 } from '@/lib/api/super-admin';
 
 const { Title, Text } = Typography;
@@ -73,6 +81,7 @@ interface Enterprise {
   status: string;
   expiryDate: string | null;
   createdDate: string;
+  isLocked?: boolean;
 }
 
 interface DailyDataPoint {
@@ -484,7 +493,14 @@ export default function EnterpriseDetailPage() {
   const [savingExpiry, setSavingExpiry] = useState(false);
   const [savingStatus, setSavingStatus] = useState(false);
   const [approvingOrRejecting, setApprovingOrRejecting] = useState(false);
+  const [lockingProfile, setLockingProfile] = useState(false);
   const [activeTab, setActiveTab] = useState('overview');
+  const [reassignOpen, setReassignOpen] = useState(false);
+  const [resellersList, setResellersList] = useState<Array<{ id: number; name: string; email: string }>>([]);
+  const [selectedResellerId, setSelectedResellerId] = useState<number | null>(null);
+  const [reassigning, setReassigning] = useState(false);
+  const [currentResellerId, setCurrentResellerId] = useState<number | null>(null);
+  const [currentResellerName, setCurrentResellerName] = useState<string | null>(null);
 
   async function loadData() {
     setLoading(true);
@@ -494,12 +510,41 @@ export default function EnterpriseDetailPage() {
         getEnterprisePayment(id).catch(() => null),
       ]);
       setEnterprise(entRes.data);
+      setCurrentResellerId((entRes.data as any).resellerId ?? null);
+      setCurrentResellerName((entRes.data as any).resellerName ?? null);
       if (entRes.data.expiryDate) {
         setExpiryDate(dayjs(entRes.data.expiryDate));
       }
       setPayment(payRes?.data ?? null);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function openReassignModal() {
+    try {
+      const res = await getAllResellersList();
+      setResellersList(res.data ?? []);
+      setSelectedResellerId(currentResellerId);
+      setReassignOpen(true);
+    } catch {
+      message.error('Failed to load resellers list');
+    }
+  }
+
+  async function handleReassign() {
+    setReassigning(true);
+    try {
+      await reassignReseller(id, selectedResellerId);
+      setCurrentResellerId(selectedResellerId);
+      const found = resellersList.find((r) => r.id === selectedResellerId);
+      setCurrentResellerName(found?.name ?? null);
+      message.success('Reseller reassigned successfully');
+      setReassignOpen(false);
+    } catch (err: any) {
+      message.error(err?.response?.data?.message || 'Failed to reassign reseller');
+    } finally {
+      setReassigning(false);
     }
   }
 
@@ -547,6 +592,26 @@ export default function EnterpriseDetailPage() {
       message.error('Failed to update expiry date');
     } finally {
       setSavingExpiry(false);
+    }
+  }
+
+  async function handleToggleLock() {
+    if (!enterprise) return;
+    setLockingProfile(true);
+    try {
+      if (enterprise.isLocked) {
+        await unlockEnterprise(id);
+        message.success('Enterprise profile unlocked — full access restored');
+        setEnterprise((prev) => (prev ? { ...prev, isLocked: false } : prev));
+      } else {
+        await lockEnterprise(id);
+        message.success('Enterprise profile locked — read-only access only');
+        setEnterprise((prev) => (prev ? { ...prev, isLocked: true } : prev));
+      }
+    } catch {
+      message.error('Failed to update lock status');
+    } finally {
+      setLockingProfile(false);
     }
   }
 
@@ -635,30 +700,69 @@ export default function EnterpriseDetailPage() {
         </Card>
 
         <Card title="Account Status">
-          <p className="text-sm text-gray-500 mb-3">
-            Status: <Tag color={statusColors[enterprise.status] ?? 'default'}>{enterprise.status}</Tag>
-          </p>
-          <Popconfirm
-            title={`${enterprise.status === 'blocked' ? 'Unblock' : 'Block'} this enterprise?`}
-            description={
-              enterprise.status === 'blocked'
-                ? 'This will allow the enterprise to log in again.'
-                : 'This will prevent the enterprise from logging in.'
-            }
-            onConfirm={handleToggleStatus}
-            okText="Confirm"
-            cancelText="Cancel"
-            okButtonProps={{ danger: enterprise.status !== 'blocked' }}
-          >
-            <Button
-              icon={enterprise.status === 'blocked' ? <CheckOutlined /> : <StopOutlined />}
-              danger={enterprise.status !== 'blocked'}
-              loading={savingStatus}
-              block
+          <div className="flex flex-wrap gap-2 mb-3">
+            <Tag color={statusColors[enterprise.status] ?? 'default'}>{enterprise.status}</Tag>
+            {enterprise.isLocked && <Tag color="orange" icon={<LockOutlined />}>Profile Locked</Tag>}
+          </div>
+          <Space direction="vertical" className="w-full">
+            <Popconfirm
+              title={`${enterprise.status === 'blocked' ? 'Unblock' : 'Block'} this enterprise?`}
+              description={
+                enterprise.status === 'blocked'
+                  ? 'This will allow the enterprise to log in again.'
+                  : 'This will prevent the enterprise from logging in.'
+              }
+              onConfirm={handleToggleStatus}
+              okText="Confirm"
+              cancelText="Cancel"
+              okButtonProps={{ danger: enterprise.status !== 'blocked' }}
             >
-              {enterprise.status === 'blocked' ? 'Unblock Enterprise' : 'Block Enterprise'}
-            </Button>
-          </Popconfirm>
+              <Button
+                icon={enterprise.status === 'blocked' ? <CheckOutlined /> : <StopOutlined />}
+                danger={enterprise.status !== 'blocked'}
+                loading={savingStatus}
+                block
+              >
+                {enterprise.status === 'blocked' ? 'Unblock Enterprise' : 'Block Enterprise'}
+              </Button>
+            </Popconfirm>
+            <Popconfirm
+              title={enterprise.isLocked ? 'Unlock this profile?' : 'Lock this profile?'}
+              description={
+                enterprise.isLocked
+                  ? 'This will restore full access for the enterprise.'
+                  : 'The enterprise will be able to view the platform but cannot perform any actions.'
+              }
+              onConfirm={handleToggleLock}
+              okText="Confirm"
+              cancelText="Cancel"
+              okButtonProps={{ danger: !enterprise.isLocked }}
+            >
+              <Button
+                icon={enterprise.isLocked ? <UnlockOutlined /> : <LockOutlined />}
+                type={enterprise.isLocked ? 'primary' : 'default'}
+                danger={!enterprise.isLocked}
+                loading={lockingProfile}
+                block
+              >
+                {enterprise.isLocked ? 'Unlock Profile' : 'Lock Profile'}
+              </Button>
+            </Popconfirm>
+          </Space>
+        </Card>
+
+        <Card title="Reseller">
+          <p className="text-sm text-gray-500 mb-3">
+            Assigned:{' '}
+            <strong>
+              {currentResellerId
+                ? (currentResellerName ?? `Reseller #${currentResellerId}`)
+                : 'Direct Sale'}
+            </strong>
+          </p>
+          <Button icon={<TeamOutlined />} onClick={openReassignModal} block>
+            Reassign Reseller
+          </Button>
         </Card>
 
         {payment && (
@@ -764,6 +868,32 @@ export default function EnterpriseDetailPage() {
           },
         ]}
       />
+
+      <Modal
+        title="Reassign Reseller"
+        open={reassignOpen}
+        onCancel={() => setReassignOpen(false)}
+        onOk={handleReassign}
+        okText="Reassign"
+        confirmLoading={reassigning}
+        okButtonProps={{ disabled: selectedResellerId === currentResellerId }}
+      >
+        <p className="text-sm text-gray-500 mb-3">Select a reseller to assign to this enterprise, or choose &quot;None&quot; for direct sale.</p>
+        <AntSelect
+          className="w-full"
+          placeholder="Select reseller"
+          value={selectedResellerId}
+          onChange={setSelectedResellerId}
+          allowClear
+          options={[
+            { value: null, label: 'None (Direct Sale)' },
+            ...resellersList.map((r) => ({
+              value: r.id,
+              label: `${r.name} — ${r.email}`,
+            })),
+          ]}
+        />
+      </Modal>
     </div>
   );
 }

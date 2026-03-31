@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import { Indent } from './entities/indent.entity';
 import { IndentItem } from './entities/indent-item.entity';
 import { MaterialRequest } from '../material-requests/entities/material-request.entity';
@@ -42,6 +43,7 @@ export class IndentsService {
     private grnItemRepository: Repository<GoodsReceiptItem>,
     @InjectRepository(PurchaseOrder)
     private poRepository: Repository<PurchaseOrder>,
+    private auditLogsService: AuditLogsService,
   ) {}
 
   async createFromInventory(
@@ -93,7 +95,18 @@ export class IndentsService {
       await this.indentItemRepository.save(indentItem);
     }
 
-    return this.findOne(savedIndent.id, enterpriseId);
+    const created = await this.findOne(savedIndent.id, enterpriseId);
+
+    this.auditLogsService.log({
+      enterpriseId,
+      userId,
+      entityType: 'indent',
+      entityId: savedIndent.id,
+      action: 'create',
+      description: `Indent ${indentNumber} created from inventory`,
+    }).catch(() => {});
+
+    return created;
   }
 
   async createFromMaterialRequest(
@@ -143,7 +156,18 @@ export class IndentsService {
     // Link indent back to material request
     await this.mrRepository.update(mrId, { indentId: savedIndent.id });
 
-    return this.findOne(savedIndent.id, enterpriseId);
+    const created = await this.findOne(savedIndent.id, enterpriseId);
+
+    this.auditLogsService.log({
+      enterpriseId,
+      userId,
+      entityType: 'indent',
+      entityId: savedIndent.id,
+      action: 'create',
+      description: `Indent ${indentNumber} created from material request #${mrId}`,
+    }).catch(() => {});
+
+    return created;
   }
 
   async findAll(enterpriseId: number, page = 1, limit = 20, status?: string, source?: string) {
@@ -154,7 +178,30 @@ export class IndentsService {
       .leftJoinAndSelect('indent.requestedByEmployee', 'requestedBy')
       .where('indent.enterpriseId = :enterpriseId', { enterpriseId });
 
-    if (status) query.andWhere('indent.status = :status', { status });
+    if (status === 'grn_rejected') {
+      // Catch: entire GRN rejected OR confirmed GRNs that have items with rejected_qty > 0
+      query.andWhere(`(
+        EXISTS (
+          SELECT 1 FROM goods_receipts g
+          WHERE g.indent_id = indent.id
+            AND g.status = 'rejected'
+        )
+        OR EXISTS (
+          SELECT 1 FROM goods_receipts g
+          JOIN goods_receipt_items gi ON gi.grn_id = g.id
+          WHERE g.indent_id = indent.id
+            AND g.status IN ('confirmed', 'partially_confirmed')
+            AND gi.rejected_qty > 0
+        )
+        OR EXISTS (
+          SELECT 1 FROM indent_items ii
+          WHERE ii.indent_id = indent.id
+            AND ii.status = 'grn_rejected'
+        )
+      )`);
+    } else if (status) {
+      query.andWhere('indent.status = :status', { status });
+    }
     if (source) query.andWhere('indent.source = :source', { source });
 
     const pageNum = Number(page) || 1;
@@ -185,6 +232,15 @@ export class IndentsService {
     return { message: 'Indents fetched successfully', data: dataWithItems, totalRecords: total, page: pageNum, limit: limitNum };
   }
 
+  async updateETA(id: number, enterpriseId: number, expectedDelivery: string) {
+    const indent = await this.indentRepository.findOne({ where: { id, enterpriseId } });
+    if (!indent) throw new NotFoundException('Indent not found');
+    await this.indentRepository.update(id, {
+      expectedDelivery: expectedDelivery ? new Date(expectedDelivery) : null,
+    });
+    return this.findOne(id, enterpriseId);
+  }
+
   async findOne(id: number, enterpriseId: number) {
     const indent = await this.indentRepository.findOne({
       where: { id, enterpriseId },
@@ -203,7 +259,64 @@ export class IndentsService {
       order: { id: 'ASC' },
     });
 
-    return { message: 'Indent fetched successfully', data: { ...indent, items, purchaseOrders } };
+    const grn = await this.grnRepository.findOne({
+      where: { indentId: id },
+      select: ['id', 'grnNumber', 'status', 'releasedBy', 'receivedBy', 'receivedDate'],
+      order: { id: 'DESC' },
+    });
+
+    // Attach latest GRN item info to each indent item (look across ALL GRNs, not just the latest)
+    // This ensures returned/rejected info survives even after a new GRN is created
+    const enrichedItems: any[] = await Promise.all(
+      items.map(async (item) => {
+        const latestGrnItem = await this.grnItemRepository.findOne({
+          where: { indentItemId: item.id },
+          order: { id: 'DESC' },
+        });
+        if (latestGrnItem) {
+          return {
+            ...item,
+            grnRejectionReason: latestGrnItem.rejectionReason,
+            grnRejectedQty: Number(latestGrnItem.rejectedQty) > 0 ? Number(latestGrnItem.rejectedQty) : undefined,
+            grnRejectionNotes: latestGrnItem.notes,
+            grnRtvStatus: latestGrnItem.rtvStatus,    // null | 'pending' | 'returned'
+            grnItemStatus: latestGrnItem.status,       // 'pending' | 'confirmed' | 'partial' | 'rejected'
+          };
+        }
+        return item;
+      }),
+    );
+
+    // Parent indent info (when this is a replacement)
+    let parentIndent: { id: number; indentNumber: string; status: string } | null = null;
+    if (indent.parentIndentId) {
+      const p = await this.indentRepository.findOne({ where: { id: indent.parentIndentId } });
+      if (p) parentIndent = { id: p.id, indentNumber: p.indentNumber, status: p.status };
+    }
+
+    // Child replacement indents
+    const replacementIndents = await this.indentRepository.find({
+      where: { parentIndentId: id, enterpriseId } as any,
+      select: ['id', 'indentNumber', 'status', 'createdDate'] as any,
+      order: { id: 'ASC' },
+    });
+
+    return {
+      message: 'Indent fetched successfully',
+      data: {
+        ...indent,
+        items: enrichedItems,
+        purchaseOrders,
+        grn: grn || null,
+        parentIndent,
+        replacementIndents: replacementIndents.map((r) => ({
+          id: r.id,
+          indentNumber: r.indentNumber,
+          status: r.status,
+          createdDate: r.createdDate,
+        })),
+      },
+    };
   }
 
   async getByMaterialRequest(mrId: number, enterpriseId: number) {
@@ -311,6 +424,16 @@ export class IndentsService {
     if (dto.notes !== undefined) updateData.notes = dto.notes;
 
     await this.indentItemRepository.update(itemId, updateData);
+
+    this.auditLogsService.log({
+      enterpriseId,
+      entityType: 'indent',
+      entityId: indentId,
+      action: 'update',
+      description: `Indent item #${itemId} updated`,
+      newValues: updateData,
+    }).catch(() => {});
+
     return this.findOne(indentId, enterpriseId);
   }
 
@@ -329,14 +452,33 @@ export class IndentsService {
       await this.indentRepository.update(indentId, { status: 'cancelled' });
     }
 
+    this.auditLogsService.log({
+      enterpriseId,
+      entityType: 'indent',
+      entityId: indentId,
+      action: 'delete',
+      description: `Indent item #${itemId} removed`,
+    }).catch(() => {});
+
     return this.findOne(indentId, enterpriseId);
   }
 
-  async cancel(id: number, enterpriseId: number) {
+  async cancel(id: number, enterpriseId: number, userId?: number) {
     const indent = await this.indentRepository.findOne({ where: { id, enterpriseId } });
     if (!indent) throw new NotFoundException('Indent not found');
 
     await this.indentRepository.update(id, { status: 'cancelled' });
+
+    this.auditLogsService.log({
+      enterpriseId,
+      userId,
+      entityType: 'indent',
+      entityId: id,
+      action: 'status_change',
+      description: `Indent ${indent.indentNumber} cancelled`,
+      newValues: { status: 'cancelled' },
+    }).catch(() => {});
+
     return this.findOne(id, enterpriseId);
   }
 
@@ -369,38 +511,7 @@ export class IndentsService {
       const qtyToReceive = Math.min(input.receivedQuantity, maxReceivable);
       if (qtyToReceive <= 0) continue;
 
-      // Update raw material stock
-      if (item.rawMaterialId) {
-        const rawMat = await this.rawMaterialRepository.findOne({
-          where: { id: item.rawMaterialId, enterpriseId },
-        });
-        if (rawMat) {
-          const previousStock = Number(rawMat.currentStock);
-          const newStock = previousStock + qtyToReceive;
-
-          await this.rawMaterialRepository.update(rawMat.id, {
-            currentStock: newStock,
-            availableStock: newStock - Number(rawMat.reservedStock),
-          });
-
-          await this.rawMaterialLedgerRepository.save(
-            this.rawMaterialLedgerRepository.create({
-              enterpriseId,
-              rawMaterialId: rawMat.id,
-              transactionType: 'purchase_receive',
-              quantity: qtyToReceive,
-              previousStock,
-              newStock,
-              referenceType: 'indent',
-              referenceId: indentId,
-              remarks: `Received via Indent ${indent.indentNumber}`,
-              createdBy: userId,
-            }),
-          );
-        }
-      }
-
-      // Update indent item received quantity
+      // Only record received quantity on the indent item — stock update happens on GRN confirmation
       const newReceivedQty = alreadyReceived + qtyToReceive;
       await this.indentItemRepository.update(item.id, {
         receivedQuantity: newReceivedQty,
@@ -429,6 +540,17 @@ export class IndentsService {
     }
 
     const result = await this.findOne(indentId, enterpriseId);
+
+    this.auditLogsService.log({
+      enterpriseId,
+      userId,
+      entityType: 'indent',
+      entityId: indentId,
+      action: 'receive',
+      description: `Goods received for indent: ${receivedItems.map((i) => `${i.itemName} x${i.quantity}`).join(', ')}`,
+      newValues: { receivedItems },
+    }).catch(() => {});
+
     return {
       ...result,
       receivedItems,
@@ -513,6 +635,17 @@ export class IndentsService {
     }
 
     const result = await this.findOne(indentId, enterpriseId);
+
+    this.auditLogsService.log({
+      enterpriseId,
+      userId,
+      entityType: 'indent',
+      entityId: indentId,
+      action: 'release',
+      description: `Indent released to inventory: ${updatedMrItems.join(', ')}`,
+      newValues: { releasedItems: updatedMrItems },
+    }).catch(() => {});
+
     return {
       ...result,
       releasedItems: updatedMrItems,
@@ -529,16 +662,18 @@ export class IndentsService {
     const indent = await this.indentRepository.findOne({ where: { id: indentId, enterpriseId } });
     if (!indent) throw new NotFoundException('Indent not found');
 
-    if (!indent.materialRequestId) {
-      throw new BadRequestException('No material request linked to this indent');
-    }
-
     // Get all indent items
     const indentItems = await this.indentItemRepository.find({ where: { indentId } });
     const receivedItems = indentItems.filter((i) => Number(i.receivedQuantity) > 0);
 
     if (receivedItems.length === 0) {
       throw new BadRequestException('No items have been received yet');
+    }
+
+    // Block only if the latest GRN is still pending confirmation
+    const existingGrn = await this.grnRepository.findOne({ where: { indentId }, order: { id: 'DESC' } });
+    if (existingGrn && existingGrn.status === 'pending') {
+      throw new BadRequestException(`GRN ${existingGrn.grnNumber} is pending confirmation by inventory. Wait for them to confirm before re-releasing.`);
     }
 
     // Create a pending GRN for inventory team to confirm — stock is NOT updated here
@@ -557,6 +692,15 @@ export class IndentsService {
 
     const grnItems: Array<{ name: string; qty: number; unit?: string }> = [];
     for (const indentItem of receivedItems) {
+      // Skip items already successfully confirmed in a previous GRN (accepted qty > 0)
+      const prevGrnItem = await this.grnItemRepository.findOne({
+        where: { indentItemId: indentItem.id },
+        order: { id: 'DESC' },
+      });
+      if (prevGrnItem && prevGrnItem.status !== 'rejected') {
+        continue; // already accepted — don't create duplicate GRN entry
+      }
+
       await this.grnItemRepository.save(
         this.grnItemRepository.create({
           grnId: grn.id,
@@ -571,6 +715,17 @@ export class IndentsService {
     }
 
     const result = await this.findOne(indentId, enterpriseId);
+
+    this.auditLogsService.log({
+      enterpriseId,
+      userId,
+      entityType: 'indent',
+      entityId: indentId,
+      action: 'release',
+      description: `Indent released — GRN ${grnNumber} created with ${grnItems.length} item(s)`,
+      newValues: { grnId: grn.id, grnNumber, releasedItems: grnItems },
+    }).catch(() => {});
+
     return {
       ...result,
       grnId: grn.id,
@@ -582,12 +737,196 @@ export class IndentsService {
     };
   }
 
+  async createReplacementIndent(
+    parentIndentId: number,
+    enterpriseId: number,
+    rejectionReason?: string,
+    userId?: number,
+  ) {
+    const parent = await this.indentRepository.findOne({
+      where: { id: parentIndentId, enterpriseId },
+    });
+    if (!parent) throw new NotFoundException('Indent not found');
+
+    const allItems = await this.indentItemRepository.find({ where: { indentId: parentIndentId } });
+    // Items that were rejected: grn_rejected status OR received less than shortage
+    const rejectedItems = allItems.filter(
+      (i) => i.status === 'grn_rejected' || Number(i.receivedQuantity) < Number(i.shortageQuantity),
+    );
+
+    if (rejectedItems.length === 0) {
+      throw new BadRequestException('No rejected items found in this indent to create a replacement');
+    }
+
+    const count = await this.indentRepository.count({ where: { enterpriseId } });
+    const indentNumber = `IND-${String(count + 1).padStart(6, '0')}`;
+
+    const replacement = this.indentRepository.create({
+      enterpriseId,
+      indentNumber,
+      materialRequestId: parent.materialRequestId || undefined,
+      salesOrderId: parent.salesOrderId || undefined,
+      requestedBy: userId,
+      requestDate: new Date(),
+      source: 'replacement',
+      status: 'pending',
+      parentIndentId: parentIndentId,
+      isReplacement: true,
+      rejectionReason: rejectionReason || null,
+      notes: `Replacement for rejected items from ${parent.indentNumber}${rejectionReason ? `. Reason: ${rejectionReason}` : ''}`,
+    } as any);
+
+    const saved = await this.indentRepository.save(replacement);
+    const savedIndent = Array.isArray(saved) ? saved[0] : saved;
+
+    for (const item of rejectedItems) {
+      const alreadyReceived = Number(item.receivedQuantity);
+      const shortage = Number(item.shortageQuantity);
+      const qtyNeeded = shortage - alreadyReceived > 0 ? shortage - alreadyReceived : shortage;
+
+      await this.indentItemRepository.save(
+        this.indentItemRepository.create({
+          indentId: savedIndent.id,
+          rawMaterialId: item.rawMaterialId || undefined,
+          materialRequestItemId: item.materialRequestItemId || undefined,
+          itemName: item.itemName,
+          requiredQuantity: qtyNeeded,
+          availableQuantity: 0,
+          shortageQuantity: qtyNeeded,
+          unitOfMeasure: item.unitOfMeasure,
+          status: 'pending',
+          notes: `Replacement for rejected item from ${parent.indentNumber}`,
+        }),
+      );
+    }
+
+    const created = await this.findOne(savedIndent.id, enterpriseId);
+
+    this.auditLogsService.log({
+      enterpriseId,
+      userId,
+      entityType: 'indent',
+      entityId: savedIndent.id,
+      action: 'create',
+      description: `Replacement indent ${indentNumber} created for parent indent #${parentIndentId}`,
+      newValues: { parentIndentId, rejectionReason },
+    }).catch(() => {});
+
+    return created;
+  }
+
+  async reissueRejectedToInventory(indentId: number, enterpriseId: number, userId?: number) {
+    const indent = await this.indentRepository.findOne({ where: { id: indentId, enterpriseId } });
+    if (!indent) throw new NotFoundException('Indent not found');
+
+    const allItems = await this.indentItemRepository.find({ where: { indentId } });
+    const rejectedItems = allItems.filter((i) => i.status === 'grn_rejected');
+
+    if (rejectedItems.length === 0) {
+      throw new BadRequestException('No GRN-rejected items found to re-issue');
+    }
+
+    // Mark rejected items as received at their shortage quantity
+    // The supplier has re-delivered; procurement is releasing them to inventory for fresh confirmation
+    for (const item of rejectedItems) {
+      await this.indentItemRepository.update(item.id, {
+        receivedQuantity: item.shortageQuantity,
+        orderedQuantity: item.shortageQuantity,
+        status: 'received',
+      });
+    }
+
+    await this.recalcIndentStatus(indentId);
+
+    // Create a new pending GRN for inventory team to confirm
+    return this.releaseAllItems(indentId, enterpriseId, userId);
+  }
+
+  async reorderRejectedItems(indentId: number, enterpriseId: number) {
+    const indent = await this.indentRepository.findOne({ where: { id: indentId, enterpriseId } });
+    if (!indent) throw new NotFoundException('Indent not found');
+
+    const allItems = await this.indentItemRepository.find({ where: { indentId } });
+
+    // Items that need re-ordering: received less than what was required
+    // This covers both full rejections (grn_rejected) and partial rejections (received < shortage)
+    const itemsToReset = allItems.filter(
+      (i) => Number(i.receivedQuantity) < Number(i.shortageQuantity),
+    );
+
+    if (itemsToReset.length === 0) {
+      throw new BadRequestException('All items have been fully received — nothing to re-order');
+    }
+
+    const mrItemIdsToReset: number[] = [];
+    for (const item of itemsToReset) {
+      const alreadyReceived = Number(item.receivedQuantity);
+      const remaining = Number(item.shortageQuantity) - alreadyReceived;
+      await this.indentItemRepository.update(item.id, {
+        // For partial deliveries: reduce shortage to only what's still needed
+        // For full rejections (receivedQty=0): shortage stays the same
+        shortageQuantity: remaining > 0 ? remaining : Number(item.shortageQuantity),
+        receivedQuantity: 0,
+        orderedQuantity: 0,
+        status: 'pending',
+      });
+      if (item.materialRequestItemId) {
+        mrItemIdsToReset.push(item.materialRequestItemId);
+      }
+    }
+
+    // Reset linked MR items so they can be re-issued when fresh stock arrives
+    for (const mrItemId of mrItemIdsToReset) {
+      await this.mrItemRepository.update(mrItemId, {
+        quantityApproved: 0,
+        quantityIssued: 0,
+        status: 'pending',
+        notes: 'Reset for re-order — previous delivery rejected or short',
+      });
+    }
+
+    // Recalculate MR overall status if there's a linked MR
+    const indentRecord = await this.indentRepository.findOne({ where: { id: indentId } });
+    if (indentRecord?.materialRequestId) {
+      const allMrItems = await this.mrItemRepository.find({
+        where: { materialRequestId: indentRecord.materialRequestId },
+      });
+      const allDone = allMrItems.every((i) => i.status === 'issued' || i.status === 'rejected');
+      await this.mrRepository.update(indentRecord.materialRequestId, {
+        status: allDone ? 'fulfilled' : 'partially_fulfilled',
+      });
+    }
+
+    await this.recalcIndentStatus(indentId);
+
+    const result = await this.findOne(indentId, enterpriseId);
+
+    this.auditLogsService.log({
+      enterpriseId,
+      entityType: 'indent',
+      entityId: indentId,
+      action: 'status_change',
+      description: `${itemsToReset.length} item(s) reset for re-ordering`,
+      newValues: { reorderedCount: itemsToReset.length },
+    }).catch(() => {});
+
+    return {
+      ...result,
+      message: `${itemsToReset.length} item(s) reset for re-ordering. Receive fresh stock from the supplier, then release to inventory again.`,
+      reorderedCount: itemsToReset.length,
+    };
+  }
+
   private async recalcIndentStatus(indentId: number) {
     const items = await this.indentItemRepository.find({ where: { indentId } });
+    const active = items.filter((i) => i.status !== 'cancelled');
 
-    const allReceived = items.every((i) => i.status === 'received');
-    const allOrdered = items.every((i) => i.status === 'ordered' || i.status === 'received');
-    const someOrdered = items.some((i) => i.status === 'ordered' || i.status === 'received');
+    // grn_rejected items need re-ordering — treated as pending for status calc
+    const allReceived = active.every((i) => i.status === 'received');
+    const allOrdered = active.every(
+      (i) => i.status === 'ordered' || i.status === 'received' || i.status === 'grn_rejected',
+    );
+    const someOrdered = active.some((i) => i.status === 'ordered' || i.status === 'received');
 
     let status = 'pending';
     if (allReceived) {

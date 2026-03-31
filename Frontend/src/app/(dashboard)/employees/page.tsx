@@ -61,7 +61,7 @@ export default function EmployeesPage() {
             title="Employees"
             disabled={!data?.data?.length}
           />
-          {hasPermission('employees', 'create') && (
+          {hasPermission('employees', 'all_employees', 'create') && (
             <Button type="primary" icon={<PlusOutlined />} onClick={() => router.push('/employees/add')}>
               Add Employee
             </Button>
@@ -79,12 +79,16 @@ export default function EmployeesPage() {
             style={{ width: 250 }}
             allowClear
           />
-          <Button icon={<TeamOutlined />} onClick={() => router.push('/employees/departments')}>
-            Manage Departments
-          </Button>
-          <Button icon={<IdcardOutlined />} onClick={() => router.push('/employees/designations')}>
-            Manage Designations
-          </Button>
+          {hasPermission('employees', 'departments', 'view') && (
+            <Button icon={<TeamOutlined />} onClick={() => router.push('/employees/departments')}>
+              Manage Departments
+            </Button>
+          )}
+          {hasPermission('employees', 'designations', 'view') && (
+            <Button icon={<IdcardOutlined />} onClick={() => router.push('/employees/designations')}>
+              Manage Designations
+            </Button>
+          )}
         </Space>
       </div>
 

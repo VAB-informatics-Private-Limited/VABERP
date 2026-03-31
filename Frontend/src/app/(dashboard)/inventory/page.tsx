@@ -222,18 +222,22 @@ export default function InventoryPage() {
           <Tooltip title="Adjust Stock">
             <Button size="small" icon={<SwapOutlined />} onClick={() => { setAdjustModal({ open: true, material: record }); adjustForm.resetFields(); }} />
           </Tooltip>
-          <Tooltip title="Edit">
-            <Button size="small" icon={<EditOutlined />} onClick={() => openEditModal(record)} />
-          </Tooltip>
-          <Tooltip title="Deactivate">
-            <Button size="small" icon={<DeleteOutlined />} danger onClick={() => {
-              Modal.confirm({
-                title: 'Deactivate raw material?',
-                content: `This will set "${record.material_name}" as inactive.`,
-                onOk: () => deleteMutation.mutate(record.id),
-              });
-            }} />
-          </Tooltip>
+          {hasPermission('inventory', 'raw_materials', 'edit') && (
+            <Tooltip title="Edit">
+              <Button size="small" icon={<EditOutlined />} onClick={() => openEditModal(record)} />
+            </Tooltip>
+          )}
+          {hasPermission('inventory', 'raw_materials', 'delete') && (
+            <Tooltip title="Deactivate">
+              <Button size="small" icon={<DeleteOutlined />} danger onClick={() => {
+                Modal.confirm({
+                  title: 'Deactivate raw material?',
+                  content: `This will set "${record.material_name}" as inactive.`,
+                  onOk: () => deleteMutation.mutate(record.id),
+                });
+              }} />
+            </Tooltip>
+          )}
         </Space>
       ),
     },
@@ -268,10 +272,10 @@ export default function InventoryPage() {
             title="Raw Materials Inventory"
             disabled={!data?.data?.length}
           />
-          {hasPermission('inventory', 'create') && (
+          {hasPermission('inventory', 'raw_materials', 'create') && (
             <Button icon={<ShoppingCartOutlined />} onClick={() => { setOrderModalOpen(true); orderForm.resetFields(); setOrderMode('single'); setBulkOrderSelected({}); }}>Order Material</Button>
           )}
-          {hasPermission('inventory', 'create') && (
+          {hasPermission('inventory', 'raw_materials', 'create') && (
             <Button type="primary" icon={<PlusOutlined />} onClick={() => { setCreateModalOpen(true); createForm.resetFields(); bulkForm.resetFields(); setAddMode('single'); }}>Add Raw Material</Button>
           )}
         </div>

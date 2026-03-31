@@ -16,7 +16,6 @@ export default function AddEnquiryPage() {
   const { getEnterpriseId, getEmployeeId } = useAuthStore();
   const enterpriseId = getEnterpriseId();
   const employeeId = getEmployeeId();
-
   const mutation = useMutation({
     mutationFn: (data: EnquiryFormData) =>
       addEnquiry({
@@ -29,8 +28,9 @@ export default function AddEnquiryPage() {
       queryClient.invalidateQueries({ queryKey: ['enquiries'] });
       router.push('/enquiries');
     },
-    onError: () => {
-      message.error('Failed to add enquiry');
+    onError: (err: any) => {
+      const msg = err?.response?.data?.message || 'Failed to add enquiry';
+      message.error(msg);
     },
   });
 

@@ -19,6 +19,8 @@ import {
   message,
   Tabs,
   Badge,
+  Checkbox,
+  Divider,
 } from 'antd';
 import {
   PlusOutlined,
@@ -33,6 +35,7 @@ import {
   deleteSubscriptionPlan,
   getEnterpriseSubscriptions,
   assignSubscriptionPlan,
+  getServices,
 } from '@/lib/api/super-admin';
 
 const { Title, Text } = Typography;
@@ -49,6 +52,13 @@ interface Plan {
   features: string | null;
   isActive: boolean;
   createdDate: string;
+  services?: Array<{ id: number; serviceName: string }>;
+}
+
+interface ServiceOption {
+  id: number;
+  serviceName: string;
+  status: string;
 }
 
 interface EnterpriseSubscription {
@@ -86,6 +96,7 @@ function formatCurrency(amount: number) {
 export default function SubscriptionsPage() {
   const [plans, setPlans] = useState<Plan[]>([]);
   const [enterprises, setEnterprises] = useState<EnterpriseSubscription[]>([]);
+  const [serviceOptions, setServiceOptions] = useState<ServiceOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [planModalOpen, setPlanModalOpen] = useState(false);
   const [assignModalOpen, setAssignModalOpen] = useState(false);
@@ -99,12 +110,14 @@ export default function SubscriptionsPage() {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [plansRes, entRes] = await Promise.all([
+      const [plansRes, entRes, servicesRes] = await Promise.all([
         getSubscriptionPlans(),
         getEnterpriseSubscriptions(),
+        getServices(),
       ]);
       setPlans(plansRes.data);
       setEnterprises(entRes.data);
+      setServiceOptions(servicesRes.data ?? []);
     } finally {
       setLoading(false);
     }
@@ -136,6 +149,7 @@ export default function SubscriptionsPage() {
       durationDays: plan.durationDays,
       maxEmployees: plan.maxEmployees,
       featuresText: featuresArr.join('\n'),
+      serviceIds: plan.services?.map((s) => s.id) ?? [],
     });
     setPlanModalOpen(true);
   }
@@ -147,6 +161,7 @@ export default function SubscriptionsPage() {
     durationDays: number;
     maxEmployees: number;
     featuresText?: string;
+    serviceIds?: number[];
   }) {
     setSubmitting(true);
     try {
@@ -162,6 +177,7 @@ export default function SubscriptionsPage() {
         durationDays: values.durationDays,
         maxEmployees: values.maxEmployees,
         features: featuresJson,
+        serviceIds: values.serviceIds ?? [],
       };
 
       if (editingPlan) {
@@ -461,11 +477,30 @@ export default function SubscriptionsPage() {
             <InputNumber min={0} style={{ width: '100%' }} />
           </Form.Item>
 
+          {serviceOptions.length > 0 && (
+            <>
+              <Divider orientation="left" plain>
+                <span className="text-sm font-medium text-slate-600">Services Included</span>
+              </Divider>
+              <Form.Item name="serviceIds" label={null}>
+                <Checkbox.Group className="w-full">
+                  <Row gutter={[8, 8]}>
+                    {serviceOptions.filter((s) => s.status === 'active').map((svc) => (
+                      <Col xs={12} sm={8} key={svc.id}>
+                        <Checkbox value={svc.id}>{svc.serviceName}</Checkbox>
+                      </Col>
+                    ))}
+                  </Row>
+                </Checkbox.Group>
+              </Form.Item>
+            </>
+          )}
+
           <Form.Item
             name="featuresText"
-            label="Features (one per line)"
+            label="Additional Features (one per line)"
           >
-            <TextArea rows={5} placeholder={'Feature 1\nFeature 2\nFeature 3'} />
+            <TextArea rows={3} placeholder={'Feature 1\nFeature 2\nFeature 3'} />
           </Form.Item>
 
           <div className="flex justify-end gap-2 pt-2">

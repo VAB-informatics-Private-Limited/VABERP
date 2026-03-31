@@ -39,10 +39,10 @@ export class BomItem {
   @Column({ name: 'item_name' })
   itemName: string;
 
-  @Column('decimal', { name: 'required_quantity', precision: 10, scale: 2 })
+  @Column('decimal', { name: 'required_quantity', precision: 15, scale: 2 })
   requiredQuantity: number;
 
-  @Column('decimal', { name: 'available_quantity', precision: 10, scale: 2, default: 0 })
+  @Column('decimal', { name: 'available_quantity', precision: 15, scale: 2, default: 0 })
   availableQuantity: number;
 
   @Column({ name: 'unit_of_measure', nullable: true })

@@ -87,7 +87,7 @@ export default function QuotationsPage() {
             title="Quotations"
             disabled={!data?.data?.length}
           />
-          {hasPermission('sales', 'create') && (
+          {hasPermission('sales', 'quotations', 'create') && (
             <Button type="primary" icon={<PlusOutlined />} onClick={() => router.push('/quotations/create')}>
               Create Quotation
             </Button>

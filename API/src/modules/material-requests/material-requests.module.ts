@@ -10,10 +10,11 @@ import { SalesOrder } from '../sales-orders/entities/sales-order.entity';
 import { RawMaterial } from '../raw-materials/entities/raw-material.entity';
 import { RawMaterialLedger } from '../raw-materials/entities/raw-material-ledger.entity';
 import { IndentsModule } from '../indents/indents.module';
+import { JobCard } from '../manufacturing/entities/job-card.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([MaterialRequest, MaterialRequestItem, Inventory, InventoryLedger, SalesOrder, RawMaterial, RawMaterialLedger]),
+    TypeOrmModule.forFeature([MaterialRequest, MaterialRequestItem, Inventory, InventoryLedger, SalesOrder, RawMaterial, RawMaterialLedger, JobCard]),
     forwardRef(() => IndentsModule),
   ],
   controllers: [MaterialRequestsController],

@@ -4,7 +4,10 @@ import {
   Column,
   CreateDateColumn,
   UpdateDateColumn,
+  ManyToMany,
+  JoinTable,
 } from 'typeorm';
+import { ServiceMaster } from '../../services-master/entities/service-master.entity';
 
 @Entity('subscription_plans')
 export class SubscriptionPlan {
@@ -31,6 +34,20 @@ export class SubscriptionPlan {
 
   @Column({ name: 'is_active', default: true })
   isActive: boolean;
+
+  @Column({ name: 'duration_type', default: 'days' })
+  durationType: string;
+
+  @Column({ name: 'number_of_services_allowed', default: 0 })
+  numberOfServicesAllowed: number;
+
+  @ManyToMany(() => ServiceMaster)
+  @JoinTable({
+    name: 'plan_services',
+    joinColumn: { name: 'plan_id' },
+    inverseJoinColumn: { name: 'service_id' },
+  })
+  services: ServiceMaster[];
 
   @CreateDateColumn({ name: 'created_date' })
   createdDate: Date;

@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, DataSource } from 'typeorm';
 import { JobCard } from './entities/job-card.entity';
 import { JobCardProgress } from './entities/job-card-progress.entity';
 import { JobCardStageHistory } from './entities/job-card-stage-history.entity';
@@ -78,6 +78,7 @@ export class ManufacturingService {
     private rawMaterialLedgerRepository: Repository<RawMaterialLedger>,
     private auditLogsService: AuditLogsService,
     private emailService: EmailService,
+    private dataSource: DataSource,
   ) {}
 
   // ========== Job Cards ==========
@@ -1549,6 +1550,10 @@ export class ManufacturingService {
       throw new NotFoundException('Purchase order not found');
     }
 
+    if (!createDto.items || createDto.items.length === 0) {
+      throw new BadRequestException('BOM requires raw material items. Add the raw materials needed to manufacture this product.');
+    }
+
     // Fetch PO items separately
     const poItems = await this.salesOrderItemRepository.find({
       where: { salesOrderId: po.id },
@@ -1556,68 +1561,75 @@ export class ManufacturingService {
       order: { sortOrder: 'ASC' },
     });
 
-    // Check if BOM already exists for this PO
+    // Check if BOM already exists for this PO (including empty/orphaned ones)
     const existingBom = await this.bomRepository.findOne({
       where: { purchaseOrderId: po.id, enterpriseId },
     });
     if (existingBom) {
-      throw new BadRequestException('BOM already exists for this purchase order');
+      // If orphaned (no items), delete and recreate
+      const existingItems = await this.bomItemRepository.find({ where: { bomId: existingBom.id } });
+      if (existingItems.length === 0) {
+        await this.bomRepository.delete(existingBom.id);
+      } else {
+        throw new BadRequestException('BOM already exists for this purchase order');
+      }
     }
 
     // Generate BOM number
     const count = await this.bomRepository.count({ where: { enterpriseId } });
     const bomNumber = `BOM-${String(count + 1).padStart(6, '0')}`;
 
-    const bom = this.bomRepository.create({
-      enterpriseId,
-      purchaseOrderId: po.id,
-      productId: createDto.productId || poItems[0]?.productId,
-      bomNumber,
-      quantity: createDto.quantity || poItems.reduce((sum: number, i: SalesOrderItem) => sum + Number(i.quantity), 0),
-      status: 'pending',
-      notes: createDto.notes,
+    const bomQty = parseFloat(
+      Math.min(
+        Number(createDto.quantity || poItems.reduce((sum: number, i: SalesOrderItem) => sum + Number(i.quantity), 0)),
+        99999999,
+      ).toFixed(2),
+    );
+
+    // Pre-fetch all raw material stocks needed
+    const rawMaterialIds = createDto.items.map((i) => i.rawMaterialId).filter(Boolean) as number[];
+    const rawMaterials = rawMaterialIds.length
+      ? await this.rawMaterialRepository.findByIds(rawMaterialIds)
+      : [];
+    const rawMatMap = new Map(rawMaterials.map((r) => [r.id, r]));
+
+    const savedBomId = await this.dataSource.transaction(async (manager) => {
+      const bom = manager.create(Bom, {
+        enterpriseId,
+        purchaseOrderId: po.id,
+        productId: createDto.productId || poItems[0]?.productId,
+        bomNumber,
+        quantity: bomQty,
+        status: 'pending',
+        notes: createDto.notes,
+      });
+
+      const savedBom = await manager.save(Bom, bom);
+
+      const bomItems: Partial<BomItem>[] = createDto.items!.map((item, index) => {
+        const rawMat = item.rawMaterialId ? rawMatMap.get(item.rawMaterialId) : undefined;
+        const availableQuantity = parseFloat(Math.min(Number(rawMat?.availableStock ?? 0), 9999999999999).toFixed(2));
+        const requiredQuantity = parseFloat(Math.min(Number(item.requiredQuantity), 9999999999999).toFixed(2));
+
+        return {
+          bomId: savedBom.id,
+          rawMaterialId: item.rawMaterialId,
+          itemName: item.itemName,
+          requiredQuantity,
+          availableQuantity,
+          unitOfMeasure: item.unitOfMeasure,
+          status: availableQuantity >= requiredQuantity ? 'available' : 'shortage',
+          notes: item.notes,
+          sortOrder: item.sortOrder ?? index,
+        };
+      });
+
+      await manager.save(BomItem, bomItems);
+
+      return savedBom.id;
     });
 
-    const savedBom = await this.bomRepository.save(bom);
-
-    // BOM must contain raw materials, not finished products from PO
-    if (!createDto.items || createDto.items.length === 0) {
-      throw new BadRequestException('BOM requires raw material items. Add the raw materials needed to manufacture this product.');
-    }
-
-    const itemsToCreate = createDto.items;
-
-    // Create BOM items — look up raw material stock if rawMaterialId provided
-    const bomItems: BomItem[] = [];
-    for (let index = 0; index < itemsToCreate.length; index++) {
-      const item = itemsToCreate[index];
-      let availableQuantity = 0;
-
-      if (item.rawMaterialId) {
-        const rawMat = await this.rawMaterialRepository.findOne({
-          where: { id: item.rawMaterialId },
-        });
-        if (rawMat) {
-          availableQuantity = Number(rawMat.availableStock);
-        }
-      }
-
-      bomItems.push(this.bomItemRepository.create({
-        bomId: savedBom.id,
-        rawMaterialId: item.rawMaterialId,
-        itemName: item.itemName,
-        requiredQuantity: Number(item.requiredQuantity),
-        availableQuantity,
-        unitOfMeasure: item.unitOfMeasure,
-        status: availableQuantity >= Number(item.requiredQuantity) ? 'available' : 'shortage',
-        notes: item.notes,
-        sortOrder: item.sortOrder ?? index,
-      }));
-    }
-
-    await this.bomItemRepository.save(bomItems);
-
-    return this.getBomById(savedBom.id, enterpriseId);
+    return this.getBomById(savedBomId, enterpriseId);
   }
 
   async getBomById(id: number, enterpriseId: number) {
@@ -1832,6 +1844,7 @@ export class ManufacturingService {
     itemId: number,
     enterpriseId: number,
     userId?: number,
+    force?: boolean,
   ) {
     const po = await this.salesOrderRepository.findOne({
       where: { id: poId, enterpriseId, sentToManufacturing: true },
@@ -1858,7 +1871,7 @@ export class ManufacturingService {
       (mi) => Number(mi.quantityIssued) >= Number(mi.quantityRequested) && Number(mi.quantityRequested) > 0,
     );
 
-    if (!allFullyIssued) {
+    if (!allFullyIssued && !force) {
       const notIssued = allMrItems.filter(
         (mi) => Number(mi.quantityIssued) < Number(mi.quantityRequested),
       );
@@ -1978,6 +1991,121 @@ export class ManufacturingService {
       message: `Inventory re-request sent for ${poItem.itemName}`,
       data: { itemId, productId: poItem.productId, status: 'pending' },
     };
+  }
+
+  async recheckMaterialStatus(jobCardId: number, enterpriseId: number, userId?: number) {
+    const jobCard = await this.jobCardRepository.findOne({ where: { id: jobCardId, enterpriseId } });
+    if (!jobCard) throw new NotFoundException('Job card not found');
+
+    // Find the linked MR
+    let mr = await this.materialRequestRepository.findOne({ where: { jobCardId } });
+    if (!mr && jobCard.purchaseOrderId) {
+      const po = await this.salesOrderRepository.findOne({ where: { id: jobCard.purchaseOrderId } });
+      if (po?.materialRequestId) {
+        mr = await this.materialRequestRepository.findOne({ where: { id: po.materialRequestId } });
+      }
+    }
+
+    if (!mr) {
+      // No MR — just recompute from existing data
+      return this.findOne(jobCardId, enterpriseId);
+    }
+
+    // Find insufficient items and try to auto-issue them if stock is now available
+    const insufficientItems = await this.materialRequestItemRepository.find({
+      where: { materialRequestId: mr.id, status: 'insufficient' },
+    });
+
+    let autoIssuedCount = 0;
+
+    for (const item of insufficientItems) {
+      const qtyNeeded = Number(item.quantityRequested) - Number(item.quantityIssued);
+      if (qtyNeeded <= 0) continue;
+
+      // Check current stock
+      let available = 0;
+      if (item.rawMaterialId) {
+        const rawMat = await this.rawMaterialRepository.findOne({ where: { id: item.rawMaterialId, enterpriseId } });
+        available = rawMat ? Number(rawMat.availableStock) : 0;
+      } else if (item.productId) {
+        const inventory = await this.inventoryRepository.findOne({ where: { productId: item.productId, enterpriseId } });
+        available = inventory ? Number(inventory.availableStock) : 0;
+      }
+
+      if (available >= qtyNeeded) {
+        // Deduct stock and mark as issued
+        if (item.rawMaterialId) {
+          const rawMat = await this.rawMaterialRepository.findOne({ where: { id: item.rawMaterialId, enterpriseId } });
+          if (rawMat) {
+            const previousStock = Number(rawMat.currentStock);
+            const newStock = previousStock - qtyNeeded;
+            await this.rawMaterialRepository.update(rawMat.id, {
+              currentStock: newStock,
+              availableStock: newStock - Number(rawMat.reservedStock),
+            });
+            await this.rawMaterialLedgerRepository.save(
+              this.rawMaterialLedgerRepository.create({
+                enterpriseId,
+                rawMaterialId: rawMat.id,
+                transactionType: 'issue',
+                quantity: qtyNeeded,
+                previousStock,
+                newStock,
+                referenceType: 'material_request',
+                referenceId: mr.id,
+                remarks: `Auto-issued on material recheck for MR ${mr.requestNumber} — ${item.itemName}`,
+                createdBy: userId,
+              }),
+            );
+          }
+        } else if (item.productId) {
+          const inventory = await this.inventoryRepository.findOne({ where: { productId: item.productId, enterpriseId } });
+          if (inventory) {
+            const previousStock = Number(inventory.currentStock);
+            const newStock = previousStock - qtyNeeded;
+            const ledger = this.ledgerRepository.create({
+              enterpriseId,
+              inventoryId: inventory.id,
+              productId: item.productId,
+              transactionType: 'OUT',
+              quantity: qtyNeeded,
+              previousStock,
+              newStock,
+              referenceType: 'MANUFACTURING',
+              referenceId: mr.id,
+              remarks: `Auto-issued on material recheck for MR ${mr.requestNumber} — ${item.itemName}`,
+              createdBy: userId,
+            });
+            await this.ledgerRepository.save(ledger);
+            await this.inventoryRepository.update(inventory.id, { currentStock: newStock, availableStock: inventory.availableStock - qtyNeeded });
+          }
+        }
+
+        await this.materialRequestItemRepository.update(item.id, {
+          quantityApproved: qtyNeeded,
+          quantityIssued: Number(item.quantityIssued) + qtyNeeded,
+          status: 'issued',
+        });
+        autoIssuedCount++;
+      }
+    }
+
+    // Update MR status if any items were issued
+    if (autoIssuedCount > 0) {
+      const allItems = await this.materialRequestItemRepository.find({ where: { materialRequestId: mr.id } });
+      const allIssuedOrRejected = allItems.every((i) => i.status === 'issued' || i.status === 'rejected');
+      if (allIssuedOrRejected) {
+        await this.materialRequestRepository.update(mr.id, { status: 'fulfilled' });
+      } else {
+        const hasIssued = allItems.some((i) => i.status === 'issued');
+        if (hasIssued) {
+          await this.materialRequestRepository.update(mr.id, { status: 'partially_fulfilled' });
+        }
+      }
+    }
+
+    // Recompute and return the updated job card
+    return this.findOne(jobCardId, enterpriseId);
   }
 
   async deleteBom(id: number, enterpriseId: number) {

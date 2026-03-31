@@ -44,6 +44,31 @@ export async function getDashboard() {
   return res.data;
 }
 
+export async function getAnalytics() {
+  const res = await superAdminClient.get('/super-admin/analytics');
+  return res.data;
+}
+
+export async function lockEnterprise(id: number) {
+  const res = await superAdminClient.patch(`/super-admin/enterprises/${id}/lock`);
+  return res.data;
+}
+
+export async function unlockEnterprise(id: number) {
+  const res = await superAdminClient.patch(`/super-admin/enterprises/${id}/unlock`);
+  return res.data;
+}
+
+export async function lockReseller(id: number) {
+  const res = await superAdminClient.patch(`/super-admin/resellers/${id}/lock`);
+  return res.data;
+}
+
+export async function unlockReseller(id: number) {
+  const res = await superAdminClient.patch(`/super-admin/resellers/${id}/unlock`);
+  return res.data;
+}
+
 export async function getAllEnterprises() {
   const res = await superAdminClient.get('/super-admin/enterprises');
   return res.data;
@@ -142,9 +167,13 @@ export async function createSubscriptionPlan(body: {
   name: string;
   description?: string;
   price: number;
-  durationDays: number;
+  durationDays?: number;
+  durationType?: string;
+  durationValue?: number;
   maxEmployees: number;
   features?: string;
+  numberOfServicesAllowed?: number;
+  serviceIds?: number[];
 }) {
   const res = await superAdminClient.post('/super-admin/subscriptions/plans', body);
   return res.data;
@@ -157,8 +186,12 @@ export async function updateSubscriptionPlan(
     description?: string;
     price?: number;
     durationDays?: number;
+    durationType?: string;
+    durationValue?: number;
     maxEmployees?: number;
     features?: string;
+    numberOfServicesAllowed?: number;
+    serviceIds?: number[];
   }
 ) {
   const res = await superAdminClient.patch(`/super-admin/subscriptions/plans/${id}`, body);
@@ -175,7 +208,186 @@ export async function getEnterpriseSubscriptions() {
   return res.data;
 }
 
-export async function assignSubscriptionPlan(enterpriseId: number, planId: number) {
-  const res = await superAdminClient.post('/super-admin/subscriptions/assign', { enterpriseId, planId });
+export async function assignSubscriptionPlan(enterpriseId: number, planId: number, couponCode?: string) {
+  const res = await superAdminClient.post('/super-admin/subscriptions/assign', { enterpriseId, planId, couponCode });
+  return res.data;
+}
+
+// ─── Services Master ──────────────────────────────────────────────────────────
+
+export async function getServices() {
+  const res = await superAdminClient.get('/super-admin/services');
+  return res.data;
+}
+
+export async function createService(body: { serviceName: string; status?: string }) {
+  const res = await superAdminClient.post('/super-admin/services', body);
+  return res.data;
+}
+
+export async function updateService(id: number, body: { serviceName?: string; status?: string }) {
+  const res = await superAdminClient.patch(`/super-admin/services/${id}`, body);
+  return res.data;
+}
+
+export async function deleteService(id: number) {
+  const res = await superAdminClient.delete(`/super-admin/services/${id}`);
+  return res.data;
+}
+
+// ─── Coupons ──────────────────────────────────────────────────────────────────
+
+export async function getCoupons() {
+  const res = await superAdminClient.get('/super-admin/coupons');
+  return res.data;
+}
+
+export async function createCoupon(body: {
+  couponCode: string;
+  discountType: string;
+  discountValue: number;
+  expiryDate: string;
+  status?: string;
+  maxUses?: number;
+}) {
+  const res = await superAdminClient.post('/super-admin/coupons', body);
+  return res.data;
+}
+
+export async function updateCoupon(id: number, body: {
+  discountType?: string;
+  discountValue?: number;
+  expiryDate?: string;
+  status?: string;
+  maxUses?: number;
+}) {
+  const res = await superAdminClient.patch(`/super-admin/coupons/${id}`, body);
+  return res.data;
+}
+
+export async function deleteCoupon(id: number) {
+  const res = await superAdminClient.delete(`/super-admin/coupons/${id}`);
+  return res.data;
+}
+
+export async function validateCoupon(couponCode: string, amount: number) {
+  const res = await superAdminClient.post('/super-admin/coupons/validate', { couponCode, amount });
+  return res.data;
+}
+
+// ─── Resellers ────────────────────────────────────────────────────────────────
+
+export async function getResellers() {
+  const res = await superAdminClient.get('/super-admin/resellers');
+  return res.data;
+}
+
+export async function createReseller(body: {
+  name: string;
+  email: string;
+  password: string;
+  mobile: string;
+  companyName?: string;
+}) {
+  const res = await superAdminClient.post('/super-admin/resellers', body);
+  return res.data;
+}
+
+export async function getResellerDetail(id: number) {
+  const res = await superAdminClient.get(`/super-admin/resellers/${id}`);
+  return res.data;
+}
+
+export async function updateResellerStatus(id: number, status: string) {
+  const res = await superAdminClient.patch(`/super-admin/resellers/${id}/status`, { status });
+  return res.data;
+}
+
+export async function setResellerPlanPricing(resellerId: number, data: { planId: number; resellerPrice: number }) {
+  const res = await superAdminClient.post(`/super-admin/resellers/${resellerId}/plan-pricing`, data);
+  return res.data;
+}
+
+export async function getResellerPlanPricing(resellerId: number) {
+  const res = await superAdminClient.get(`/super-admin/resellers/${resellerId}/plan-pricing`);
+  return res.data;
+}
+
+export async function getResellerReport(resellerId: number) {
+  const res = await superAdminClient.get(`/super-admin/resellers/${resellerId}/report`);
+  return res.data;
+}
+
+export async function getResellerWallet(resellerId: number) {
+  const res = await superAdminClient.get(`/super-admin/resellers/${resellerId}/wallet`);
+  return res.data;
+}
+
+export async function creditResellerWallet(resellerId: number, data: { amount: number; description?: string }) {
+  const res = await superAdminClient.post(`/super-admin/resellers/${resellerId}/wallet/credit`, data);
+  return res.data;
+}
+
+export async function assignPlanToReseller(resellerId: number, planId: number) {
+  const res = await superAdminClient.post(`/super-admin/resellers/${resellerId}/assign-plan`, { planId });
+  return res.data;
+}
+
+export async function reassignReseller(enterpriseId: number, resellerId: number | null) {
+  const res = await superAdminClient.patch(`/super-admin/enterprises/${enterpriseId}/reseller`, { resellerId });
+  return res.data;
+}
+
+export async function getAllResellersList() {
+  const res = await superAdminClient.get('/super-admin/resellers-list');
+  return res.data;
+}
+
+export async function getResellersSubscriptionsOverview() {
+  const res = await superAdminClient.get('/super-admin/reseller-subscriptions-overview');
+  return res.data;
+}
+
+export async function getResellersWalletsOverview() {
+  const res = await superAdminClient.get('/super-admin/reseller-wallets-overview');
+  return res.data;
+}
+
+// ─── Reseller Plans CRUD ──────────────────────────────────────────────────
+
+export async function getResellerPlans() {
+  const res = await superAdminClient.get('/super-admin/reseller-plans');
+  return res.data;
+}
+
+export async function createResellerPlan(body: {
+  name: string;
+  description?: string;
+  price: number;
+  durationDays: number;
+  commissionPercentage: number;
+  maxTenants?: number;
+  features?: string;
+}) {
+  const res = await superAdminClient.post('/super-admin/reseller-plans', body);
+  return res.data;
+}
+
+export async function updateResellerPlan(id: number, body: {
+  name?: string;
+  description?: string;
+  price?: number;
+  durationDays?: number;
+  commissionPercentage?: number;
+  maxTenants?: number;
+  features?: string;
+  isActive?: boolean;
+}) {
+  const res = await superAdminClient.patch(`/super-admin/reseller-plans/${id}`, body);
+  return res.data;
+}
+
+export async function deleteResellerPlan(id: number) {
+  const res = await superAdminClient.delete(`/super-admin/reseller-plans/${id}`);
   return res.data;
 }

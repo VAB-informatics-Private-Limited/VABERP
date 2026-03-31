@@ -13,8 +13,13 @@ function mapGrnItemFromBackend(data: any): GoodsReceiptItem {
     item_name: data.itemName,
     unit_of_measure: data.unitOfMeasure,
     expected_qty: Number(data.expectedQty || 0),
+    shortage_qty: data.shortageQty !== null && data.shortageQty !== undefined ? Number(data.shortageQty) : null,
     confirmed_qty: Number(data.confirmedQty || 0),
+    accepted_qty: Number(data.acceptedQty || 0),
+    rejected_qty: Number(data.rejectedQty || 0),
+    rejection_reason: data.rejectionReason,
     status: data.status || 'pending',
+    rtv_status: data.rtvStatus ?? null,
     notes: data.notes,
     created_date: data.createdDate,
   };
@@ -28,6 +33,9 @@ function mapGrnFromBackend(data: any): GoodsReceipt {
     grn_number: data.grnNumber,
     indent_id: data.indentId,
     indent_number: data.indent?.indentNumber,
+    po_number: data.poNumber,
+    supplier_name: data.supplierName,
+    supplier_id: data.supplierId,
     status: data.status || 'pending',
     released_by: data.releasedBy,
     released_by_name: data.releasedByEmployee
@@ -78,7 +86,14 @@ export async function confirmGoodsReceipt(
   id: number,
   payload: {
     receivedBy: number;
-    items: { grnItemId: number; confirmedQty: number; notes?: string }[];
+    items: {
+      grnItemId: number;
+      confirmedQty: number;
+      acceptedQty: number;
+      rejectedQty: number;
+      rejectionReason?: string;
+      notes?: string;
+    }[];
     notes?: string;
   },
 ): Promise<ApiResponse<GoodsReceipt>> {
@@ -97,4 +112,17 @@ export async function rejectGoodsReceipt(
 ): Promise<ApiResponse> {
   const response = await apiClient.post(`/goods-receipts/${id}/reject`, { notes });
   return response.data;
+}
+
+export async function markGrnItemReturned(
+  grnId: number,
+  itemId: number,
+): Promise<ApiResponse<GoodsReceipt>> {
+  const response = await apiClient.patch(`/goods-receipts/${grnId}/items/${itemId}/mark-returned`);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const d = response.data as any;
+  return {
+    message: d.message,
+    data: d.data ? mapGrnFromBackend(d.data) : undefined,
+  };
 }

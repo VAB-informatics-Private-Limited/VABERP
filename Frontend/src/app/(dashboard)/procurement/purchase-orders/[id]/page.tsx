@@ -2,13 +2,13 @@
 
 import { useState } from 'react';
 import {
-  Card, Table, Tag, Button, Typography, Descriptions, Space, Alert, Modal,
+  Card, Table, Tag, Button, Typography, Descriptions, Space, Alert, Modal, Badge,
   Form, Input, Spin, Divider, message,
 } from 'antd';
-import { ArrowLeftOutlined, EditOutlined, LinkOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, EditOutlined, LinkOutlined, CheckCircleOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter, useParams } from 'next/navigation';
-import { getPurchaseOrderById, updatePOExpectedDelivery } from '@/lib/api/purchase-orders';
+import { getPurchaseOrderById, updatePOExpectedDelivery, receivePurchaseOrder } from '@/lib/api/purchase-orders';
 import { PO_STATUS_OPTIONS } from '@/types/purchase-order';
 import type { PurchaseOrderItem } from '@/types/purchase-order';
 import dayjs from 'dayjs';
@@ -41,6 +41,16 @@ export default function ProcurementPODetailPage() {
       queryClient.invalidateQueries({ queryKey: ['procurement-purchase-orders'] });
     },
     onError: (err: any) => message.error(err?.response?.data?.message || 'Failed to update ETA'),
+  });
+
+  const receiveMutation = useMutation({
+    mutationFn: () => receivePurchaseOrder(id),
+    onSuccess: () => {
+      message.success('Purchase order marked as received — stock updated');
+      queryClient.invalidateQueries({ queryKey: ['procurement-po', id] });
+      queryClient.invalidateQueries({ queryKey: ['procurement-purchase-orders'] });
+    },
+    onError: (err: any) => message.error(err?.response?.data?.message || 'Failed to mark as received'),
   });
 
   if (isLoading) {
@@ -115,19 +125,38 @@ export default function ProcurementPODetailPage() {
             {statusOpt?.label || po.status}
           </Tag>
         </Space>
-        {hasPermission('orders', 'edit') && (
-          <Button
-            icon={<EditOutlined />}
-            onClick={() => {
-              form.setFieldsValue({
-                expectedDelivery: po.expected_delivery ? dayjs(po.expected_delivery).format('YYYY-MM-DD') : '',
-              });
-              setEtaModalOpen(true);
-            }}
-          >
-            Update ETA
-          </Button>
-        )}
+        <Space>
+          {hasPermission('orders', 'purchase_orders', 'edit') && po.status !== 'received' && (
+            <Button
+              type="primary"
+              icon={<CheckCircleOutlined />}
+              loading={receiveMutation.isPending}
+              onClick={() => {
+                Modal.confirm({
+                  title: 'Mark as Received?',
+                  content: 'Confirm that all goods from this purchase order have been received. This will update raw material stock.',
+                  okText: 'Mark as Received',
+                  onOk: () => receiveMutation.mutateAsync(),
+                });
+              }}
+            >
+              Mark as Received
+            </Button>
+          )}
+          {hasPermission('orders', 'purchase_orders', 'edit') && (
+            <Button
+              icon={<EditOutlined />}
+              onClick={() => {
+                form.setFieldsValue({
+                  expectedDelivery: po.expected_delivery ? dayjs(po.expected_delivery).format('YYYY-MM-DD') : '',
+                });
+                setEtaModalOpen(true);
+              }}
+            >
+              Update ETA
+            </Button>
+          )}
+        </Space>
       </div>
 
       {/* PO Info */}

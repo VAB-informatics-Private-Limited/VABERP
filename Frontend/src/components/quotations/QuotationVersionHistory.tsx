@@ -7,7 +7,7 @@ import {
 } from 'antd';
 import {
   HistoryOutlined, EyeOutlined, ClockCircleOutlined,
-  UserOutlined, FileTextOutlined, CheckCircleOutlined,
+  UserOutlined, FileTextOutlined, CheckCircleOutlined, CloseCircleOutlined,
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { QuotationVersion, QuotationVersionItem } from '@/types/quotation';
@@ -129,28 +129,37 @@ export default function QuotationVersionHistory({ versions, currentVersion, quot
             },
 
             // ── Archived previous versions ─────────────────────────────────
-            ...versions.map((v) => ({
+            ...versions.map((v) => {
+              const isRejected = v.change_notes?.startsWith('[REJECTED]');
+              const rejectionNote = isRejected
+                ? v.change_notes?.replace('[REJECTED]', '').trim()
+                : undefined;
+              return {
               dot: (
-                <div className="w-8 h-8 rounded-full bg-white border-2 border-gray-300 flex items-center justify-center text-xs font-bold text-gray-500">
+                <div className={`w-8 h-8 rounded-full bg-white border-2 flex items-center justify-center text-xs font-bold ${isRejected ? 'border-red-400 text-red-500' : 'border-gray-300 text-gray-500'}`}>
                   v{v.version_number}
                 </div>
               ),
               children: (
                 <Card
                   size="small"
-                  className="mb-2 hover:shadow-md transition-shadow bg-gray-50"
-                  style={{ borderLeft: '3px solid #d9d9d9' }}
+                  className="mb-2 hover:shadow-md transition-shadow"
+                  style={{ borderLeft: `3px solid ${isRejected ? '#ff4d4f' : '#d9d9d9'}`, backgroundColor: isRejected ? '#fff2f0' : '#fafafa' }}
                 >
                   <div className="flex justify-between items-start flex-wrap gap-2">
                     <div className="flex flex-col gap-1">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <Text strong className="text-gray-600">
+                        <Text strong className={isRejected ? 'text-red-600' : 'text-gray-600'}>
                           {quotationNumber} — Version {v.version_number}
                         </Text>
                         <Tag color="default">Archived</Tag>
-                        <Tag color={STATUS_COLORS[v.snapshot.status] || 'default'}>
-                          {v.snapshot.status}
-                        </Tag>
+                        {isRejected ? (
+                          <Tag color="red" icon={<CloseCircleOutlined />}>Rejected</Tag>
+                        ) : (
+                          <Tag color={STATUS_COLORS[v.snapshot.status] || 'default'}>
+                            {v.snapshot.status}
+                          </Tag>
+                        )}
                         <Text className="text-blue-600 font-semibold text-sm">
                           {fmt(v.snapshot.grandTotal)}
                         </Text>
@@ -167,7 +176,15 @@ export default function QuotationVersionHistory({ versions, currentVersion, quot
                             {v.changed_by_name}
                           </span>
                         )}
-                        {v.change_notes && (
+                        {rejectionNote && (
+                          <Tooltip title={rejectionNote}>
+                            <span className="flex items-center gap-1 text-red-500 cursor-help">
+                              <FileTextOutlined />
+                              Rejection reason
+                            </span>
+                          </Tooltip>
+                        )}
+                        {!isRejected && v.change_notes && (
                           <Tooltip title={v.change_notes}>
                             <span className="flex items-center gap-1 text-orange-500 cursor-help">
                               <FileTextOutlined />
@@ -200,7 +217,7 @@ export default function QuotationVersionHistory({ versions, currentVersion, quot
                   </div>
                 </Card>
               ),
-            })),
+            }; }),
           ]}
         />
       </Card>
@@ -235,12 +252,18 @@ export default function QuotationVersionHistory({ versions, currentVersion, quot
       >
         {snap && (
           <>
-            {selected?.change_notes && (
-              <div className="mb-4 p-3 bg-orange-50 border border-orange-200 rounded">
-                <Text strong>Change Notes: </Text>
-                <Text>{selected.change_notes}</Text>
-              </div>
-            )}
+            {selected?.change_notes && (() => {
+              const isRejectedNote = selected.change_notes?.startsWith('[REJECTED]');
+              const displayNote = isRejectedNote
+                ? selected.change_notes?.replace('[REJECTED]', '').trim()
+                : selected.change_notes;
+              return (
+                <div className={`mb-4 p-3 rounded border ${isRejectedNote ? 'bg-red-50 border-red-200' : 'bg-orange-50 border-orange-200'}`}>
+                  <Text strong className={isRejectedNote ? 'text-red-700' : ''}>{isRejectedNote ? 'Rejection Reason: ' : 'Change Notes: '}</Text>
+                  <Text className={isRejectedNote ? 'text-red-600' : ''}>{displayNote || '—'}</Text>
+                </div>
+              );
+            })()}
 
             <Descriptions
               title="Quotation Details"

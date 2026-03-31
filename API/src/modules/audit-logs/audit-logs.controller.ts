@@ -3,7 +3,7 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiQuery } from '@nestjs/swagger';
 import { AuditLogsService } from './audit-logs.service';
-import { EnterpriseId } from '../../common/decorators';
+import { EnterpriseId, RequirePermission } from '../../common/decorators';
 
 @ApiTags('Audit Logs')
 @Controller('audit-logs')
@@ -13,6 +13,7 @@ export class AuditLogsController {
 
   @Get()
   @ApiOperation({ summary: 'Get audit logs' })
+  @RequirePermission('configurations', 'view')
   @ApiQuery({ name: 'page', required: false })
   @ApiQuery({ name: 'limit', required: false })
   @ApiQuery({ name: 'entityType', required: false })
@@ -20,6 +21,7 @@ export class AuditLogsController {
   @ApiQuery({ name: 'action', required: false })
   @ApiQuery({ name: 'fromDate', required: false })
   @ApiQuery({ name: 'toDate', required: false })
+  @ApiQuery({ name: 'userName', required: false })
   async findAll(
     @EnterpriseId() enterpriseId: number,
     @Query('page') page?: number,
@@ -29,7 +31,8 @@ export class AuditLogsController {
     @Query('action') action?: string,
     @Query('fromDate') fromDate?: string,
     @Query('toDate') toDate?: string,
+    @Query('userName') userName?: string,
   ) {
-    return this.service.findAll(enterpriseId, page, limit, entityType, entityId, action, fromDate, toDate);
+    return this.service.findAll(enterpriseId, page, limit, entityType, entityId, action, fromDate, toDate, userName);
   }
 }

@@ -4,6 +4,7 @@ import { Table, Button, Tag, Space, Popconfirm, message } from 'antd';
 import { EditOutlined, DeleteOutlined, SettingOutlined } from '@ant-design/icons';
 import { useRouter } from 'next/navigation';
 import { Product } from '@/types/product';
+import { usePermissions } from '@/stores/authStore';
 import type { ColumnsType } from 'antd/es/table';
 
 interface ProductTableProps {
@@ -20,6 +21,7 @@ interface ProductTableProps {
 
 export function ProductTable({ data, loading, pagination, onDelete }: ProductTableProps) {
   const router = useRouter();
+  const { hasPermission } = usePermissions();
 
   const columns: ColumnsType<Product> = [
     {
@@ -92,18 +94,22 @@ export function ProductTable({ data, loading, pagination, onDelete }: ProductTab
       width: 150,
       render: (_, record) => (
         <Space>
-          <Button
-            type="text"
-            icon={<SettingOutlined />}
-            onClick={() => router.push(`/products/${record.id}/attributes`)}
-            title="Manage Attributes"
-          />
-          <Button
-            type="text"
-            icon={<EditOutlined />}
-            onClick={() => router.push(`/products/${record.id}/edit`)}
-          />
-          {onDelete && (
+          {hasPermission('catalog', 'products', 'edit') && (
+            <Button
+              type="text"
+              icon={<SettingOutlined />}
+              onClick={() => router.push(`/products/${record.id}/attributes`)}
+              title="Manage Attributes"
+            />
+          )}
+          {hasPermission('catalog', 'products', 'edit') && (
+            <Button
+              type="text"
+              icon={<EditOutlined />}
+              onClick={() => router.push(`/products/${record.id}/edit`)}
+            />
+          )}
+          {onDelete && hasPermission('catalog', 'products', 'delete') && (
             <Popconfirm
               title="Delete Product"
               description="Are you sure you want to delete this product?"

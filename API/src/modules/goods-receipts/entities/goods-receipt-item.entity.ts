@@ -48,11 +48,23 @@ export class GoodsReceiptItem {
   @Column({ name: 'confirmed_qty', type: 'decimal', precision: 10, scale: 2, default: 0 })
   confirmedQty: number;
 
+  @Column({ name: 'accepted_qty', type: 'decimal', precision: 10, scale: 2, default: 0 })
+  acceptedQty: number;
+
+  @Column({ name: 'rejected_qty', type: 'decimal', precision: 10, scale: 2, default: 0 })
+  rejectedQty: number;
+
+  @Column({ name: 'rejection_reason', nullable: true })
+  rejectionReason: string; // 'damaged' | 'defective' | 'incorrect_item' | 'other'
+
   @Column({ default: 'pending' })
   status: string; // 'pending', 'confirmed', 'partial', 'rejected'
 
   @Column({ nullable: true, type: 'text' })
   notes: string;
+
+  @Column({ name: 'rtv_status', type: 'varchar', nullable: true })
+  rtvStatus: string; // null | 'pending' | 'returned'
 
   @CreateDateColumn({ name: 'created_date' })
   createdDate: Date;

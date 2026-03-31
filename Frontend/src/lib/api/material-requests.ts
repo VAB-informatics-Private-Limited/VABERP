@@ -19,11 +19,14 @@ function mapMRFromBackend(data: any): MaterialRequest {
       ? `${data.requestedByEmployee.firstName} ${data.requestedByEmployee.lastName || ''}`.trim()
       : undefined,
     request_date: data.requestDate,
+    expected_delivery: data.expectedDelivery,
     purpose: data.purpose,
     status: data.status,
     approved_by: data.approvedBy,
     approved_date: data.approvedDate,
     notes: data.notes,
+    confirmed_received: data.confirmedReceived,
+    confirmed_received_at: data.confirmedReceivedAt,
     items: data.items?.map((i: any) => ({
       id: i.id,
       material_request_id: i.materialRequestId,
@@ -89,4 +92,16 @@ export async function refreshStock(mrId: number): Promise<ApiResponse<MaterialRe
   const response = await apiClient.post(`/material-requests/${mrId}/refresh-stock`);
   const d = response.data as any;
   return { message: d.message, data: d.data ? mapMRFromBackend(d.data) : undefined, refreshResult: d.refreshResult };
+}
+
+export async function confirmMaterialsReceived(id: number): Promise<ApiResponse<MaterialRequest>> {
+  const response = await apiClient.post(`/material-requests/${id}/confirm-received`);
+  const d = response.data as any;
+  return { message: d.message, data: d.data ? mapMRFromBackend(d.data) : undefined };
+}
+
+export async function updateMaterialRequestETA(id: number, expectedDelivery: string): Promise<ApiResponse<MaterialRequest>> {
+  const response = await apiClient.patch(`/material-requests/${id}/eta`, { expectedDelivery });
+  const d = response.data as any;
+  return { message: d.message, data: d.data ? mapMRFromBackend(d.data) : undefined };
 }

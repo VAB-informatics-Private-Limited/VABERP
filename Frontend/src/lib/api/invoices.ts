@@ -69,6 +69,12 @@ function mapInvoiceFromBackend(data: any): Invoice {
       sort_order: item.sortOrder,
     })),
     payments: data.payments?.map(mapPaymentFromBackend),
+    so_order_number: data.salesOrder?.orderNumber ?? null,
+    so_grand_total: data.salesOrder ? Number(data.salesOrder.grandTotal) : null,
+    so_invoiced_amount: data.salesOrder ? Number(data.salesOrder.invoicedAmount || 0) : null,
+    so_remaining_amount: data.salesOrder
+      ? Number(data.salesOrder.grandTotal) - Number(data.salesOrder.invoicedAmount || 0)
+      : null,
     created_date: data.createdDate,
     modified_date: data.modifiedDate,
   };
@@ -215,5 +221,51 @@ export async function getPaymentHistory(invoiceId: number): Promise<ApiResponse<
   return {
     message: backendData.message,
     data: (backendData.data || []).map(mapPaymentFromBackend),
+  };
+}
+
+export async function getCustomerBalance(customerName: string): Promise<ApiResponse<{
+  customerName: string;
+  totalInvoiced: number;
+  totalPaid: number;
+  totalBalance: number;
+  invoiceCount: number;
+}>> {
+  const response = await apiClient.get('/invoices/customer-balance', { params: { customerName } });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const backendData = response.data as any;
+  return { message: backendData.message, data: backendData.data };
+}
+
+export async function getAllPayments(params: {
+  page?: number;
+  pageSize?: number;
+  search?: string;
+  fromDate?: string;
+  toDate?: string;
+}): Promise<PaginatedResponse<Payment & { invoice_number?: string; customer_name?: string }>> {
+  const queryParams: Record<string, unknown> = {
+    page: params.page || 1,
+    limit: params.pageSize || 20,
+  };
+  if (params.search) queryParams.search = params.search;
+  if (params.fromDate) queryParams.fromDate = params.fromDate;
+  if (params.toDate) queryParams.toDate = params.toDate;
+
+  const response = await apiClient.get('/invoices/payments/all', { params: queryParams });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const backendData = response.data as any;
+  return {
+    message: backendData.message,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    data: (backendData.data || []).map((p: any) => ({
+      ...mapPaymentFromBackend(p),
+      invoice_number: p.invoice?.invoiceNumber,
+      customer_name: p.invoice?.customerName,
+      invoice_id: p.invoiceId,
+    })),
+    totalRecords: backendData.totalRecords,
+    page: backendData.page,
+    limit: backendData.limit,
   };
 }

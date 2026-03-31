@@ -54,8 +54,10 @@ export class PermissionGuard implements CanActivate {
         throw new ForbiddenException('No permissions assigned');
       }
 
-      // Attach data start date to request so service layers can filter records
+      // Attach data start date and own-data flag to request so service layers can filter records
       request.dataStartDate = record.dataStartDate ?? null;
+      request.ownDataOnly = record.ownDataOnly ?? false;
+      request.currentUserId = user.id;
 
       const { module, submodule, action } = required;
       let allowed: boolean;

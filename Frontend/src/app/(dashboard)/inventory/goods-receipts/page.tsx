@@ -131,6 +131,10 @@ export default function GoodsReceiptsPage() {
           columns={columns}
           rowKey="id"
           loading={isLoading}
+          onRow={(record: GoodsReceipt) => ({
+            onClick: () => router.push(`/inventory/goods-receipts/${record.id}`),
+            style: { cursor: 'pointer' },
+          })}
           pagination={{
             current: page,
             pageSize: 20,

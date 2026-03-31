@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Put,
+  Patch,
   Delete,
   Body,
   Param,
@@ -46,6 +47,17 @@ export class SalesOrdersController {
     @EnterpriseId() enterpriseId: number,
   ) {
     return this.service.findOne(id, enterpriseId);
+  }
+
+  @Patch(':id/eta')
+  @ApiOperation({ summary: 'Update sales order expected delivery (ETA)' })
+  @RequirePermission('orders', 'sales_orders', 'edit')
+  async updateETA(
+    @Param('id', ParseIntPipe) id: number,
+    @EnterpriseId() enterpriseId: number,
+    @Body('expectedDelivery') expectedDelivery: string,
+  ) {
+    return this.service.updateETA(id, enterpriseId, expectedDelivery);
   }
 
   @Post()
@@ -109,10 +121,11 @@ export class SalesOrdersController {
   async updateStatus(
     @Param('id', ParseIntPipe) id: number,
     @EnterpriseId() enterpriseId: number,
+    @CurrentUser() user: any,
     @Body('status') status: string,
     @Body('reason') reason?: string,
   ) {
-    return this.service.updateStatus(id, enterpriseId, status, reason);
+    return this.service.updateStatus(id, enterpriseId, status, reason, user);
   }
 
   @Put(':id')

@@ -1,10 +1,12 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
 import { Enquiry } from './entities/enquiry.entity';
 import { Followup } from './entities/followup.entity';
 import { Customer } from '../customers/entities/customer.entity';
+import { Quotation } from '../quotations/entities/quotation.entity';
 import { CreateEnquiryDto, CreateFollowupDto, FollowupOutcomeDto } from './dto';
+import { AuditLogsService } from '../audit-logs/audit-logs.service';
 
 @Injectable()
 export class EnquiriesService {
@@ -15,7 +17,10 @@ export class EnquiriesService {
     private followupRepository: Repository<Followup>,
     @InjectRepository(Customer)
     private customerRepository: Repository<Customer>,
+    @InjectRepository(Quotation)
+    private quotationRepository: Repository<Quotation>,
     private dataSource: DataSource,
+    private auditLogsService: AuditLogsService,
   ) {}
 
   async findAll(
@@ -28,6 +33,8 @@ export class EnquiriesService {
     fromDate?: string,
     toDate?: string,
     dataStartDate?: Date | null,
+    ownDataOnly = false,
+    currentUserId?: number,
   ) {
     const pageNum = Number(page) || 1;
     const limitNum = Number(limit) || 20;
@@ -51,6 +58,10 @@ export class EnquiriesService {
 
     if (assignedTo) {
       query.andWhere('enquiry.assignedTo = :assignedTo', { assignedTo });
+    }
+
+    if (ownDataOnly && currentUserId) {
+      query.andWhere('enquiry.assignedTo = :currentUserId', { currentUserId });
     }
 
     // Employee data visibility: only show records from the assigned start date
@@ -97,7 +108,20 @@ export class EnquiriesService {
     };
   }
 
-  async create(enterpriseId: number, createDto: CreateEnquiryDto) {
+  async create(enterpriseId: number, createDto: CreateEnquiryDto, user?: { id: number; type: string; name?: string }) {
+    // Block duplicate phone numbers within the same enterprise
+    if (createDto.mobile) {
+      const existing = await this.enquiryRepository.findOne({
+        where: { enterpriseId, mobile: createDto.mobile },
+        select: ['id', 'enquiryNumber', 'customerName'],
+      });
+      if (existing) {
+        throw new ConflictException(
+          `An enquiry with mobile number ${createDto.mobile} already exists — ${existing.enquiryNumber} (${existing.customerName})`,
+        );
+      }
+    }
+
     // Generate enquiry number
     const count = await this.enquiryRepository.count({ where: { enterpriseId } });
     const enquiryNumber = `ENQ-${String(count + 1).padStart(6, '0')}`;
@@ -110,13 +134,25 @@ export class EnquiriesService {
 
     const saved = await this.enquiryRepository.save(enquiry);
 
+    this.auditLogsService.log({
+      enterpriseId,
+      userId: user?.id,
+      userType: user?.type,
+      userName: user?.name,
+      entityType: 'enquiry',
+      entityId: saved.id,
+      action: 'create',
+      description: `Created enquiry ${saved.enquiryNumber} for "${saved.customerName}"`,
+      newValues: { enquiryNumber: saved.enquiryNumber, interestStatus: saved.interestStatus },
+    }).catch(() => {});
+
     return {
       message: 'Enquiry created successfully',
       data: saved,
     };
   }
 
-  async update(id: number, enterpriseId: number, updateDto: Partial<CreateEnquiryDto>) {
+  async update(id: number, enterpriseId: number, updateDto: Partial<CreateEnquiryDto>, user?: { id: number; type: string; name?: string }) {
     const enquiry = await this.enquiryRepository.findOne({
       where: { id, enterpriseId },
     });
@@ -127,10 +163,22 @@ export class EnquiriesService {
 
     await this.enquiryRepository.update(id, updateDto);
 
+    this.auditLogsService.log({
+      enterpriseId,
+      userId: user?.id,
+      userType: user?.type,
+      userName: user?.name,
+      entityType: 'enquiry',
+      entityId: id,
+      action: 'update',
+      description: `Updated enquiry for "${enquiry.customerName}"`,
+      newValues: updateDto as Record<string, any>,
+    }).catch(() => {});
+
     return this.findOne(id, enterpriseId);
   }
 
-  async delete(id: number, enterpriseId: number) {
+  async delete(id: number, enterpriseId: number, user?: { id: number; type: string; name?: string }) {
     const enquiry = await this.enquiryRepository.findOne({
       where: { id, enterpriseId },
     });
@@ -142,6 +190,17 @@ export class EnquiriesService {
     // Delete related followups
     await this.followupRepository.delete({ enquiryId: id });
     await this.enquiryRepository.delete(id);
+
+    this.auditLogsService.log({
+      enterpriseId,
+      userId: user?.id,
+      userType: user?.type,
+      userName: user?.name,
+      entityType: 'enquiry',
+      entityId: id,
+      action: 'delete',
+      description: `Deleted enquiry ${enquiry.enquiryNumber} for "${enquiry.customerName}"`,
+    }).catch(() => {});
 
     return {
       message: 'Enquiry deleted successfully',
@@ -261,7 +320,11 @@ export class EnquiriesService {
       .leftJoinAndSelect('enquiry.assignedEmployee', 'assignedEmployee')
       .where('enquiry.enterpriseId = :enterpriseId', { enterpriseId })
       .andWhere('enquiry.nextFollowupDate >= :today', { today })
-      .andWhere('enquiry.nextFollowupDate < :tomorrow', { tomorrow });
+      .andWhere('enquiry.nextFollowupDate < :tomorrow', { tomorrow })
+      .andWhere('enquiry.convertedCustomerId IS NULL')
+      .andWhere('enquiry.interestStatus NOT IN (:...closedStatuses)', {
+        closedStatuses: ['Not Interested', 'not_interested', 'Sale Closed', 'sale_closed', 'Converted', 'converted'],
+      });
 
     if (assignedTo) {
       query.andWhere('enquiry.assignedTo = :assignedTo', { assignedTo });
@@ -285,6 +348,7 @@ export class EnquiriesService {
       .leftJoinAndSelect('enquiry.assignedEmployee', 'assignedEmployee')
       .where('enquiry.enterpriseId = :enterpriseId', { enterpriseId })
       .andWhere('enquiry.nextFollowupDate IS NOT NULL')
+      .andWhere('enquiry.convertedCustomerId IS NULL')
       .andWhere('enquiry.interestStatus NOT IN (:...closedStatuses)', {
         closedStatuses: ['Not Interested', 'not_interested', 'Sale Closed', 'sale_closed', 'Converted', 'converted'],
       });
@@ -314,6 +378,7 @@ export class EnquiriesService {
       .leftJoinAndSelect('enquiry.assignedEmployee', 'assignedEmployee')
       .where('enquiry.enterpriseId = :enterpriseId', { enterpriseId })
       .andWhere('enquiry.nextFollowupDate < :today', { today })
+      .andWhere('enquiry.convertedCustomerId IS NULL')
       .andWhere('enquiry.interestStatus NOT IN (:...closedStatuses)', {
         closedStatuses: ['Not Interested', 'not_interested', 'Sale Closed', 'sale_closed', 'Converted', 'converted'],
       });
@@ -414,44 +479,12 @@ export class EnquiriesService {
       } as any);
       await queryRunner.manager.save(Followup, completedFollowup);
 
-      let customer: Customer | null = null;
-
       switch (dto.outcomeStatus) {
         case 'sale_closed': {
-          // Convert enquiry to customer
-          if (enquiry.mobile) {
-            customer = await queryRunner.manager.findOne(Customer, {
-              where: { mobile: enquiry.mobile, enterpriseId },
-            });
-          }
-
-          if (!customer) {
-            const count = await queryRunner.manager.count(Customer, { where: { enterpriseId } });
-            const customerNumber = `CUS-${String(count + 1).padStart(6, '0')}`;
-
-            customer = queryRunner.manager.create(Customer, {
-              enterpriseId,
-              customerName: enquiry.customerName,
-              mobile: enquiry.mobile,
-              email: enquiry.email,
-              businessName: enquiry.businessName,
-              address: enquiry.address,
-              city: enquiry.city,
-              state: enquiry.state,
-              pincode: enquiry.pincode,
-              sourceEnquiryId: enquiry.id,
-              customerNumber,
-              status: 'active',
-            });
-            customer = await queryRunner.manager.save(Customer, customer);
-          } else if (!customer.sourceEnquiryId) {
-            await queryRunner.manager.update(Customer, customer.id, { sourceEnquiryId: enquiry.id });
-          }
-
-          // Update enquiry to converted — use raw query to guarantee NULL is set
+          // Mark enquiry as sale closed — customer is only created when a quotation is accepted
           await queryRunner.query(
-            `UPDATE enquiries SET interest_status = $1, converted_customer_id = $2, next_followup_date = NULL WHERE id = $3`,
-            ['converted', customer.id, enquiry.id],
+            `UPDATE enquiries SET interest_status = $1, next_followup_date = NULL WHERE id = $2`,
+            ['sale_closed', enquiry.id],
           );
           break;
         }
@@ -517,10 +550,22 @@ export class EnquiriesService {
 
       await queryRunner.commitTransaction();
 
+      this.auditLogsService.log({
+        enterpriseId,
+        userId: userId,
+        userType: undefined,
+        userName: undefined,
+        entityType: 'enquiry',
+        entityId: enquiryId,
+        action: 'status_change',
+        description: `Enquiry outcome updated to "${dto.outcomeStatus}"`,
+        newValues: { outcomeStatus: dto.outcomeStatus },
+      }).catch(() => {});
+
       return {
         message:
           dto.outcomeStatus === 'sale_closed'
-            ? 'Sale closed and customer created successfully'
+            ? 'Sale closed successfully'
             : dto.outcomeStatus === 'not_interested'
             ? 'Enquiry marked as not interested'
             : dto.outcomeStatus === 'follow_up'
@@ -528,7 +573,6 @@ export class EnquiriesService {
             : 'Follow-up updated successfully',
         data: {
           outcomeStatus: dto.outcomeStatus,
-          ...(customer ? { customer } : {}),
         },
       };
     } catch (error) {
@@ -537,6 +581,37 @@ export class EnquiriesService {
     } finally {
       await queryRunner.release();
     }
+  }
+
+  async getQuotationsByEnquiry(enquiryId: number, enterpriseId: number) {
+    const enquiry = await this.enquiryRepository.findOne({
+      where: { id: enquiryId, enterpriseId },
+    });
+
+    if (!enquiry) {
+      throw new NotFoundException('Enquiry not found');
+    }
+
+    const quotations = await this.quotationRepository.find({
+      where: { enquiryId, enterpriseId },
+      order: { createdDate: 'DESC' },
+    });
+
+    return {
+      message: 'Quotations fetched successfully',
+      data: quotations,
+    };
+  }
+
+  async checkMobile(mobile: string, enterpriseId: number) {
+    const existing = await this.enquiryRepository.findOne({
+      where: { mobile, enterpriseId },
+      select: ['id', 'customerName'],
+    });
+    if (existing) {
+      return { exists: true, customerName: existing.customerName };
+    }
+    return { exists: false };
   }
 
   async convertToCustomer(enquiryId: number, enterpriseId: number) {

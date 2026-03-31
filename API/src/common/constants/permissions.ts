@@ -28,6 +28,7 @@ export const PERMISSION_STRUCTURE: Record<string, Record<string, string[]>> = {
   procurement: {
     indents: ['view', 'create', 'edit', 'delete'],
     suppliers: ['view', 'create', 'edit', 'delete'],
+    rfqs: ['view', 'create', 'edit', 'delete', 'send'],
   },
   invoicing: {
     invoices: ['view', 'create', 'edit', 'delete'],

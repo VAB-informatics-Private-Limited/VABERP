@@ -11,7 +11,7 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { CustomersService } from './customers.service';
-import { EnterpriseId, RequirePermission, DataStartDate } from '../../common/decorators';
+import { EnterpriseId, RequirePermission, DataStartDate, CurrentUser, OwnDataOnly, CurrentUserId } from '../../common/decorators';
 
 @ApiTags('Customers')
 @Controller('customers')
@@ -28,11 +28,13 @@ export class CustomersController {
   async findAll(
     @EnterpriseId() enterpriseId: number,
     @DataStartDate() dataStartDate: Date | null,
+    @OwnDataOnly() ownDataOnly: boolean,
+    @CurrentUserId() currentUserId: number,
     @Query('page') page?: number,
     @Query('limit') limit?: number,
     @Query('search') search?: string,
   ) {
-    return this.customersService.findAll(enterpriseId, page, limit, search, dataStartDate);
+    return this.customersService.findAll(enterpriseId, page, limit, search, dataStartDate, ownDataOnly, currentUserId);
   }
 
   @Get(':id')
@@ -50,9 +52,10 @@ export class CustomersController {
   @RequirePermission('sales', 'customers', 'create')
   async create(
     @EnterpriseId() enterpriseId: number,
+    @CurrentUser() user: any,
     @Body() createDto: any,
   ) {
-    return this.customersService.create(enterpriseId, createDto);
+    return this.customersService.create(enterpriseId, createDto, user);
   }
 
   @Patch(':id')
@@ -61,9 +64,10 @@ export class CustomersController {
   async update(
     @Param('id', ParseIntPipe) id: number,
     @EnterpriseId() enterpriseId: number,
+    @CurrentUser() user: any,
     @Body() updateDto: any,
   ) {
-    return this.customersService.update(id, enterpriseId, updateDto);
+    return this.customersService.update(id, enterpriseId, updateDto, user);
   }
 
   @Delete(':id')
@@ -72,7 +76,8 @@ export class CustomersController {
   async delete(
     @Param('id', ParseIntPipe) id: number,
     @EnterpriseId() enterpriseId: number,
+    @CurrentUser() user: any,
   ) {
-    return this.customersService.delete(id, enterpriseId);
+    return this.customersService.delete(id, enterpriseId, user);
   }
 }

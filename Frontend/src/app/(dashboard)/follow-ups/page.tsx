@@ -25,10 +25,12 @@ export default function FollowupsPage() {
   const stats = useMemo(() => {
     const followups = data?.data || [];
     const today = new Date().toISOString().split('T')[0];
+    // Normalize: backend may return ISO timestamps ("2026-01-15T00:00:00.000Z"), take date part only
+    const nd = (d: string) => (d ? d.split('T')[0] : d);
 
-    const overdue = followups.filter((f) => f.next_followup_date < today);
-    const todayItems = followups.filter((f) => f.next_followup_date === today);
-    const upcoming = followups.filter((f) => f.next_followup_date > today);
+    const overdue = followups.filter((f) => nd(f.next_followup_date) < today);
+    const todayItems = followups.filter((f) => nd(f.next_followup_date) === today);
+    const upcoming = followups.filter((f) => nd(f.next_followup_date) > today);
 
     return {
       total: followups.length,

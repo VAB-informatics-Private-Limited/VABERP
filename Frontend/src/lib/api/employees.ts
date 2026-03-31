@@ -99,6 +99,11 @@ export async function deleteDepartment(id: number, _enterpriseId?: number): Prom
   return response.data;
 }
 
+export async function seedDefaultDepartments(): Promise<ApiResponse<{ createdDepartments: number; createdDesignations: number }>> {
+  const response = await apiClient.post('/employees/departments/seed-defaults');
+  return response.data;
+}
+
 // ============ Designations ============
 
 export async function getDesignations(_enterpriseId?: number, departmentId?: number): Promise<ApiResponse<Designation[]>> {
@@ -236,6 +241,7 @@ export function normalizePermissions(permissions: MenuPermissions): MenuPermissi
 export interface EmployeePermissionsResponse {
   permissions: MenuPermissions;
   dataStartDate: string | null;
+  ownDataOnly: boolean;
 }
 
 export async function getEmployeePermissions(employeeId: number): Promise<ApiResponse<EmployeePermissionsResponse>> {
@@ -250,17 +256,22 @@ export async function getEmployeePermissions(employeeId: number): Promise<ApiRes
     data: {
       permissions: isWrapped ? normalizePermissions(rawData.permissions) : (rawData ? normalizePermissions(rawData) : {}),
       dataStartDate: isWrapped ? rawData.dataStartDate ?? null : null,
+      ownDataOnly: isWrapped ? rawData.ownDataOnly ?? false : false,
     },
   };
 }
 
 export async function updateEmployeePermissions(
-  data: { employee_id: number; enterprise_id?: number; permissions: MenuPermissions; dataStartDate?: string | null }
+  data: { employee_id: number; enterprise_id?: number; permissions: MenuPermissions; dataStartDate?: string | null; ownDataOnly?: boolean }
 ): Promise<ApiResponse> {
-  const { employee_id, permissions, dataStartDate } = data;
+  const { employee_id, permissions, dataStartDate, ownDataOnly } = data;
   // Bypass transformRequest so snake_case submodule keys (e.g. purchase_orders) are NOT
   // converted to camelCase — they must be stored as-is for hasPermission() to work.
-  const body = { permissions, dataStartDate: dataStartDate !== undefined ? dataStartDate : undefined };
+  const body = {
+    permissions,
+    dataStartDate: dataStartDate !== undefined ? dataStartDate : undefined,
+    ownDataOnly: ownDataOnly !== undefined ? ownDataOnly : undefined,
+  };
   const response = await apiClient.patch<ApiResponse>(
     `/employees/${employee_id}/permissions`,
     body,

@@ -9,6 +9,7 @@ import { MaterialRequest } from '../material-requests/entities/material-request.
 import { MaterialRequestItem } from '../material-requests/entities/material-request-item.entity';
 import { IndentItem } from '../indents/entities/indent-item.entity';
 import { Indent } from '../indents/entities/indent.entity';
+import { PurchaseOrder } from '../purchase-orders/entities/purchase-order.entity';
 
 @Injectable()
 export class GoodsReceiptsService {
@@ -29,6 +30,8 @@ export class GoodsReceiptsService {
     private indentItemRepository: Repository<IndentItem>,
     @InjectRepository(Indent)
     private indentRepository: Repository<Indent>,
+    @InjectRepository(PurchaseOrder)
+    private poRepository: Repository<PurchaseOrder>,
   ) {}
 
   async findAll(enterpriseId: number, status?: string, page = 1, limit = 20) {
@@ -57,7 +60,24 @@ export class GoodsReceiptsService {
       relations: ['items', 'items.rawMaterial', 'releasedByEmployee', 'receivedByEmployee', 'indent'],
     });
     if (!grn) throw new NotFoundException('Goods receipt not found');
-    return { message: 'Goods receipt fetched', data: grn };
+
+    // Attach PO info (supplier, PO number) from the original purchase order for this indent
+    let linkedPo: { poNumber?: string; supplierName?: string; supplierId?: number } = {};
+    if (grn.indentId) {
+      const originalPo = await this.poRepository.findOne({
+        where: { indentId: grn.indentId, enterpriseId },
+        order: { id: 'ASC' }, // oldest PO = the original one
+      });
+      if (originalPo) {
+        linkedPo = {
+          poNumber: originalPo.poNumber,
+          supplierName: originalPo.supplierName,
+          supplierId: originalPo.supplierId,
+        };
+      }
+    }
+
+    return { message: 'Goods receipt fetched', data: { ...grn, ...linkedPo } };
   }
 
   async confirmReceipt(
@@ -65,7 +85,14 @@ export class GoodsReceiptsService {
     enterpriseId: number,
     dto: {
       receivedBy: number;
-      items: { grnItemId: number; confirmedQty: number; notes?: string }[];
+      items: {
+        grnItemId: number;
+        confirmedQty: number;
+        acceptedQty?: number;
+        rejectedQty?: number;
+        rejectionReason?: string;
+        notes?: string;
+      }[];
       notes?: string;
     },
     userId?: number,
@@ -81,92 +108,95 @@ export class GoodsReceiptsService {
       const grnItem = grn.items.find((i) => i.id === input.grnItemId);
       if (!grnItem) continue;
 
-      if (input.confirmedQty <= 0) {
+      const confirmedQty = Number(input.confirmedQty) || 0;
+
+      // acceptedQty defaults to confirmedQty if not provided (backward compat)
+      const acceptedQty = input.acceptedQty !== undefined ? Number(input.acceptedQty) : confirmedQty;
+      const rejectedQty = confirmedQty - acceptedQty;
+
+      if (acceptedQty > confirmedQty) {
+        throw new BadRequestException(`Accepted qty (${acceptedQty}) cannot exceed received qty (${confirmedQty}) for item ${grnItem.itemName}`);
+      }
+
+      if (confirmedQty <= 0) {
         await this.grnItemRepository.update(grnItem.id, {
           status: 'rejected',
           confirmedQty: 0,
+          acceptedQty: 0,
+          rejectedQty: 0,
           notes: input.notes,
         });
         continue;
       }
 
-      const confirmedQty = Number(input.confirmedQty);
       const expectedQty = Number(grnItem.expectedQty);
 
-      // Update raw material stock
-      if (grnItem.rawMaterialId) {
+      // Update raw material stock — only accepted qty enters inventory
+      if (grnItem.rawMaterialId && acceptedQty > 0) {
         const rawMat = await this.rawMaterialRepository.findOne({
           where: { id: grnItem.rawMaterialId, enterpriseId },
         });
         if (rawMat) {
-          // Step 1: Correct procurement's stock entry
-          // procurement already did currentStock += expectedQty via receiveGoods()
-          // We reverse that and apply the correct received qty
-          const correctionQty = confirmedQty - expectedQty; // negative if under-delivered
-          const stockAfterCorrection = Number(rawMat.currentStock) + correctionQty;
+          const previousStock = Number(rawMat.currentStock);
+          const newStock = previousStock + acceptedQty;
 
-          if (correctionQty !== 0) {
-            await this.rawMaterialLedgerRepository.save(
-              this.rawMaterialLedgerRepository.create({
-                enterpriseId,
-                rawMaterialId: rawMat.id,
-                transactionType: 'adjustment',
-                quantity: correctionQty,
-                previousStock: Number(rawMat.currentStock),
-                newStock: stockAfterCorrection,
-                referenceType: 'grn',
-                referenceId: grn.id,
-                remarks: `GRN ${grn.grnNumber} stock correction: procurement claimed ${expectedQty}, inventory confirmed ${confirmedQty}`,
-                createdBy: userId,
-              }),
-            );
-            await this.rawMaterialRepository.update(rawMat.id, {
-              currentStock: stockAfterCorrection,
-              availableStock: stockAfterCorrection - Number(rawMat.reservedStock),
-            });
-          }
+          await this.rawMaterialRepository.update(rawMat.id, {
+            currentStock: newStock,
+            availableStock: newStock - Number(rawMat.reservedStock),
+          });
 
-          // Step 2: Issue confirmed qty to manufacturing (deduct from stock)
-          if (confirmedQty > 0) {
-            const stockAfterIssue = stockAfterCorrection - confirmedQty;
-            await this.rawMaterialRepository.update(rawMat.id, {
-              currentStock: stockAfterIssue,
-              availableStock: stockAfterIssue - Number(rawMat.reservedStock),
-            });
-            await this.rawMaterialLedgerRepository.save(
-              this.rawMaterialLedgerRepository.create({
-                enterpriseId,
-                rawMaterialId: rawMat.id,
-                transactionType: 'issue',
-                quantity: confirmedQty,
-                previousStock: stockAfterCorrection,
-                newStock: stockAfterIssue,
-                referenceType: 'grn',
-                referenceId: grn.id,
-                remarks: `Issued via GRN ${grn.grnNumber} — confirmed by inventory and released to manufacturing`,
-                createdBy: userId,
-              }),
-            );
-          }
+          const remarksBase = `GRN ${grn.grnNumber}: received ${confirmedQty}, accepted ${acceptedQty}`;
+          const rejectedNote = rejectedQty > 0
+            ? `, rejected ${rejectedQty}${input.rejectionReason ? ` (${input.rejectionReason})` : ''}`
+            : '';
+
+          await this.rawMaterialLedgerRepository.save(
+            this.rawMaterialLedgerRepository.create({
+              enterpriseId,
+              rawMaterialId: rawMat.id,
+              transactionType: 'purchase_receive',
+              quantity: acceptedQty,
+              previousStock,
+              newStock,
+              referenceType: 'grn',
+              referenceId: grn.id,
+              remarks: remarksBase + rejectedNote + ` of ${expectedQty} expected`,
+              createdBy: userId,
+            }),
+          );
         }
       }
 
+      // Item status: confirmed / partial / rejected
       const itemStatus =
-        confirmedQty === 0 ? 'rejected' :
-        confirmedQty >= expectedQty ? 'confirmed' : 'partial';
-      await this.grnItemRepository.update(grnItem.id, {
+        acceptedQty === 0 ? 'rejected' :
+        acceptedQty >= expectedQty && rejectedQty === 0 ? 'confirmed' : 'partial';
+
+      const updatePayload: any = {
         confirmedQty,
+        acceptedQty,
+        rejectedQty,
+        rejectionReason: rejectedQty > 0 ? (input.rejectionReason || undefined) : undefined,
         status: itemStatus,
         notes: input.notes,
-      });
+      };
+      // RTV status: set 'pending' when there are rejected/damaged items to return
+      if (rejectedQty > 0) updatePayload.rtvStatus = 'pending';
 
-      // Update the linked indent item
+      await this.grnItemRepository.update(grnItem.id, updatePayload);
+
+      // Update the linked indent item — use acceptedQty for stock tracking
       if (grnItem.indentItemId) {
         const indentItem = await this.indentItemRepository.findOne({ where: { id: grnItem.indentItemId } });
         if (indentItem) {
+          const shortage = Number(indentItem.shortageQuantity);
+          const indentItemStatus =
+            acceptedQty === 0 ? 'grn_rejected'
+            : acceptedQty >= shortage ? 'received'
+            : 'partial';
           await this.indentItemRepository.update(indentItem.id, {
-            receivedQuantity: confirmedQty,
-            status: confirmedQty >= Number(indentItem.shortageQuantity) ? 'received' : 'ordered',
+            receivedQuantity: acceptedQty,
+            status: indentItemStatus,
           });
 
           // Update the linked MR item
@@ -175,13 +205,23 @@ export class GoodsReceiptsService {
               where: { id: indentItem.materialRequestItemId },
             });
             if (mrItem) {
-              const qtyToIssue = Math.min(Number(mrItem.quantityRequested), confirmedQty);
-              await this.mrItemRepository.update(mrItem.id, {
-                quantityApproved: qtyToIssue,
-                quantityIssued: qtyToIssue,
-                status: 'issued',
-                notes: `Issued from GRN ${grn.grnNumber} — confirmed by inventory`,
-              });
+              if (acceptedQty === 0) {
+                // All units rejected — nothing was issued
+                await this.mrItemRepository.update(mrItem.id, {
+                  quantityApproved: 0,
+                  quantityIssued: 0,
+                  status: 'rejected',
+                  notes: `All ${rejectedQty} unit(s) rejected in GRN ${grn.grnNumber}${input.rejectionReason ? `: ${input.rejectionReason}` : ''}`,
+                });
+              } else {
+                const qtyToIssue = Math.min(Number(mrItem.quantityRequested), acceptedQty);
+                await this.mrItemRepository.update(mrItem.id, {
+                  quantityApproved: qtyToIssue,
+                  quantityIssued: qtyToIssue,
+                  status: 'issued',
+                  notes: `Issued from GRN ${grn.grnNumber} — accepted ${acceptedQty}${rejectedQty > 0 ? `, rejected ${rejectedQty}` : ''}`,
+                });
+              }
             }
           }
         }
@@ -190,9 +230,12 @@ export class GoodsReceiptsService {
 
     // Recalculate GRN overall status
     const updatedItems = await this.grnItemRepository.find({ where: { grnId: grn.id } });
-    const allDone = updatedItems.every((i) => i.status === 'confirmed' || i.status === 'rejected');
+    const allDone = updatedItems.every((i) => ['confirmed', 'rejected', 'partial'].includes(i.status));
+    // 'confirmed' = all items fully accepted (no partial, no rejected)
+    // 'partially_confirmed' = all items processed but some were partial/rejected, OR some still pending
+    const allFullyAccepted = updatedItems.every((i) => i.status === 'confirmed');
     const anyConfirmed = updatedItems.some((i) => i.status === 'confirmed' || i.status === 'partial');
-    const newStatus = allDone ? 'confirmed' : anyConfirmed ? 'partially_confirmed' : 'pending';
+    const newStatus = allFullyAccepted ? 'confirmed' : allDone && anyConfirmed ? 'partially_confirmed' : anyConfirmed ? 'partially_confirmed' : 'pending';
 
     await this.grnRepository.update(grn.id, {
       status: newStatus,
@@ -201,7 +244,7 @@ export class GoodsReceiptsService {
       notes: dto.notes,
     });
 
-    // Update Material Request status
+    // Post-confirmation flows
     if (grn.indentId) {
       const indent = await this.indentRepository.findOne({ where: { id: grn.indentId, enterpriseId } });
       if (indent?.materialRequestId) {
@@ -214,15 +257,35 @@ export class GoodsReceiptsService {
           approvedBy: userId,
           approvedDate: new Date(),
         });
+      }
 
-        // Close indent if all items confirmed
-        const allIndentItems = await this.indentItemRepository.find({ where: { indentId: indent.id } });
-        const allReceived = allIndentItems.every(
-          (i) => Number(i.receivedQuantity) >= Number(i.shortageQuantity),
-        );
-        if (allReceived) {
-          await this.indentRepository.update(indent.id, { status: 'closed' });
+      // Auto-reset short-delivery (partial) indent items and create follow-up draft PO
+      const allIndentItems = await this.indentItemRepository.find({ where: { indentId: grn.indentId } });
+      const partialIndentItems = allIndentItems.filter((i) => i.status === 'partial');
+
+      if (partialIndentItems.length > 0) {
+        // Reset each partial item so procurement can re-order the remaining qty
+        for (const item of partialIndentItems) {
+          const remaining = Number(item.shortageQuantity) - Number(item.receivedQuantity);
+          if (remaining > 0) {
+            await this.indentItemRepository.update(item.id, {
+              shortageQuantity: remaining,
+              receivedQuantity: 0,
+              orderedQuantity: 0,
+              status: 'pending',
+            });
+          }
         }
+
+      }
+
+      // Close indent if all items confirmed
+      const refreshedIndentItems = await this.indentItemRepository.find({ where: { indentId: grn.indentId } });
+      const allReceived = refreshedIndentItems.every(
+        (i) => Number(i.receivedQuantity) >= Number(i.shortageQuantity),
+      );
+      if (allReceived) {
+        await this.indentRepository.update(grn.indentId, { status: 'closed' });
       }
     }
 
@@ -231,8 +294,8 @@ export class GoodsReceiptsService {
       ...result,
       message:
         newStatus === 'confirmed'
-          ? `GRN ${grn.grnNumber} fully confirmed. All items issued to manufacturing.`
-          : `GRN ${grn.grnNumber} partially confirmed. Stock updated for confirmed items.`,
+          ? `GRN ${grn.grnNumber} confirmed. Stock updated and accepted items issued to manufacturing.`
+          : `GRN ${grn.grnNumber} partially confirmed. Stock updated for accepted items.`,
     };
   }
 
@@ -242,5 +305,75 @@ export class GoodsReceiptsService {
     if (grn.status !== 'pending') throw new BadRequestException('Only pending GRNs can be rejected');
     await this.grnRepository.update(grn.id, { status: 'rejected', notes });
     return { message: 'Goods receipt rejected. Items returned to procurement.', data: grn };
+  }
+
+  async markItemReturned(
+    grnId: number,
+    itemId: number,
+    enterpriseId: number,
+    userId?: number,
+  ) {
+    const grn = await this.grnRepository.findOne({ where: { id: grnId, enterpriseId } });
+    if (!grn) throw new NotFoundException('Goods receipt not found');
+
+    const grnItem = await this.grnItemRepository.findOne({
+      where: { id: itemId, grnId },
+    });
+    if (!grnItem) throw new NotFoundException('GRN item not found');
+    if (grnItem.rtvStatus !== 'pending') {
+      throw new BadRequestException('Item is not pending return to vendor');
+    }
+
+    await this.grnItemRepository.update(itemId, { rtvStatus: 'returned' });
+
+    // Reset the linked indent item to pending so procurement can track remaining qty with supplier
+    if (grnItem.indentItemId) {
+      const indentItem = await this.indentItemRepository.findOne({ where: { id: grnItem.indentItemId } });
+      if (indentItem) {
+        const rejectedQty = Number(grnItem.rejectedQty);
+        const reasonLabel = grnItem.rejectionReason
+          ? { damaged: 'Damaged', defective: 'Defective', incorrect_item: 'Incorrect Item', other: 'Other' }[grnItem.rejectionReason] || grnItem.rejectionReason
+          : 'rejected';
+        await this.indentItemRepository.update(indentItem.id, {
+          shortageQuantity: rejectedQty,
+          receivedQuantity: 0,
+          orderedQuantity: 0,
+          status: 'pending',
+          notes: `Returned to vendor — ${reasonLabel}. ${rejectedQty} unit(s) need replacement delivery from supplier.`,
+        });
+
+        // Reset the linked MR item back to pending
+        if (indentItem.materialRequestItemId) {
+          const mrItem = await this.mrItemRepository.findOne({ where: { id: indentItem.materialRequestItemId } });
+          if (mrItem) {
+            await this.mrItemRepository.update(mrItem.id, {
+              quantityApproved: 0,
+              quantityIssued: 0,
+              status: 'pending',
+              notes: 'Reset for re-delivery — item returned to vendor',
+            });
+            // Recalculate MR overall status
+            const allMrItems = await this.mrItemRepository.find({ where: { materialRequestId: mrItem.materialRequestId } });
+            const allIssued = allMrItems.every((i) => i.status === 'issued' || i.status === 'rejected');
+            await this.mrRepository.update(mrItem.materialRequestId, {
+              status: allIssued ? 'fulfilled' : 'partially_fulfilled',
+            });
+          }
+        }
+
+        // Recalculate indent overall status
+        const allIndentItems = await this.indentItemRepository.find({ where: { indentId: indentItem.indentId } });
+        const allReceived = allIndentItems.every((i) => i.status === 'received');
+        const anyOrderedOrReceived = allIndentItems.some((i) => ['ordered', 'received'].includes(i.status));
+        const newIndentStatus = allReceived ? 'closed' : anyOrderedOrReceived ? 'partially_ordered' : 'pending';
+        await this.indentRepository.update(indentItem.indentId, { status: newIndentStatus });
+      }
+    }
+
+    const result = await this.findOne(grnId, enterpriseId);
+    return {
+      ...result,
+      message: `Item marked as returned to vendor. Procurement can now re-order the replacement.`,
+    };
   }
 }

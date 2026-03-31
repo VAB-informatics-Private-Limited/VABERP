@@ -1,6 +1,7 @@
 'use client';
 
 import { Typography, Button, Card, Input, Select, Space, Table, Tag, Popconfirm, message } from 'antd';
+import dayjs from 'dayjs';
 import { SearchOutlined, ClearOutlined, EyeOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -39,7 +40,11 @@ export default function SalesOrdersPage() {
     { title: 'Order #', dataIndex: 'order_number', key: 'order_number', sorter: (a, b) => a.order_number.localeCompare(b.order_number) },
     { title: 'Customer', dataIndex: 'customer_name', key: 'customer_name' },
     { title: 'Date', dataIndex: 'order_date', key: 'order_date' },
-    { title: 'Delivery', dataIndex: 'expected_delivery', key: 'expected_delivery', render: (v) => v || '-' },
+    { title: 'ETA', dataIndex: 'expected_delivery', key: 'expected_delivery', render: (v) => {
+      if (!v) return <Typography.Text type="secondary">Not set</Typography.Text>;
+      const isOverdue = dayjs(v).isBefore(dayjs(), 'day');
+      return <Typography.Text type={isOverdue ? 'danger' : undefined}>{dayjs(v).format('DD MMM YYYY')}{isOverdue ? ' ⚠' : ''}</Typography.Text>;
+    }},
     { title: 'Total', dataIndex: 'grand_total', key: 'grand_total', render: (v) => `₹${Number(v).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` },
     { title: 'Status', dataIndex: 'status', key: 'status', render: (s) => <Tag color={getStatusColor(s)}>{getStatusLabel(s)}</Tag> },
     {

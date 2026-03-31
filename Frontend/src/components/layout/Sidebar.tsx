@@ -4,19 +4,16 @@ import { Layout, Menu, Badge } from 'antd';
 import {
   DashboardOutlined,
   ShoppingCartOutlined,
-  TeamOutlined,
   AppstoreOutlined,
   InboxOutlined,
   FileTextOutlined,
   BarChartOutlined,
   SettingOutlined,
-  PhoneOutlined,
   UserOutlined,
   DollarOutlined,
   FileDoneOutlined,
   ToolOutlined,
   ShoppingOutlined,
-  CarOutlined,
 } from '@ant-design/icons';
 import { useRouter, usePathname } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
@@ -87,51 +84,87 @@ export function Sidebar({ collapsed, inDrawer, onMenuClick }: SidebarProps) {
     queryKey: ['material-requests-pending-count'],
     queryFn: () => getMaterialRequestList({ pageSize: 100, status: 'pending' }),
     refetchInterval: 60000,
+    enabled: userType === 'enterprise' || canView('inventory', 'material_requests'),
   });
   const pendingMRCount = mrData?.data?.length || 0;
 
-  // Build Sales submenu — only include items the employee has view access to
+  // ── 1. SALES ─────────────────────────────────────────────────────────────
+  // Enquiries, Follow-ups, Customers, Quotations
   const salesChildren = [
-    canView('enquiry', 'enquiries') && { key: '/enquiries', label: 'Enquiries' },
-    canView('enquiry', 'follow_ups') && { key: '/follow-ups', label: 'Follow-ups' },
-    canView('sales', 'quotations') && { key: '/quotations', label: 'Quotations' },
-    canView('orders', 'purchase_orders') && { key: '/purchase-orders', label: 'Purchase Orders' },
+    canView('enquiry', 'enquiries')   && { key: '/enquiries',  label: 'Enquiries' },
+    canView('enquiry', 'follow_ups')  && { key: '/follow-ups', label: 'Follow-ups' },
+    canView('sales',   'customers')   && { key: '/customers',  label: 'Customers' },
+    canView('sales',   'quotations')  && { key: '/quotations', label: 'Quotations' },
   ].filter(Boolean);
 
+  // ── 2. ORDERS ────────────────────────────────────────────────────────────
+  // Purchase Orders (sales-side) + Sales Orders
+  const ordersChildren = [
+    canView('orders', 'purchase_orders') && { key: '/purchase-orders', label: 'Purchase Orders' },
+    canView('orders', 'sales_orders')    && { key: '/sales-orders',    label: 'Sales Orders' },
+  ].filter(Boolean);
+
+  // ── 3. MANUFACTURING ─────────────────────────────────────────────────────
+  // Overview, Job Cards, Process Templates, Dispatch Status, Dispatched Orders
+  const manufacturingChildren = [
+    canView('orders', 'manufacturing') && { key: '/manufacturing',                label: 'Overview' },
+    canView('orders', 'job_cards')     && { key: '/manufacturing/stages',         label: 'Job Cards' },
+    canView('orders', 'manufacturing') && { key: '/manufacturing/processes',      label: 'Process Templates' },
+    canView('orders', 'manufacturing') && { key: '/manufacture-status',           label: 'Dispatch Status' },
+    canView('orders', 'manufacturing') && { key: '/manufacture-status/dispatched',label: 'Dispatched Orders' },
+  ].filter(Boolean);
+
+  // ── 4. PRODUCTS ──────────────────────────────────────────────────────────
   const productsChildren = [
-    canView('catalog', 'products') && { key: '/products', label: 'All Products' },
-    canView('catalog', 'categories') && { key: '/products/categories', label: 'Categories' },
+    canView('catalog', 'products')      && { key: '/products',               label: 'All Products' },
+    canView('catalog', 'categories')    && { key: '/products/categories',    label: 'Categories' },
     canView('catalog', 'subcategories') && { key: '/products/subcategories', label: 'Subcategories' },
   ].filter(Boolean);
 
+  // ── 5. INVENTORY ─────────────────────────────────────────────────────────
   const inventoryChildren = [
-    canView('inventory', 'raw_materials') && { key: '/inventory', label: 'Raw Materials' },
-    canView('inventory', 'stock_ledger') && { key: '/inventory/ledger', label: 'Stock Ledger' },
+    canView('inventory', 'raw_materials')  && { key: '/inventory',               label: 'Raw Materials' },
+    canView('inventory', 'stock_ledger')   && { key: '/inventory/ledger',        label: 'Stock Ledger' },
     canView('inventory', 'material_requests') && {
       key: '/material-requests',
-      label: <span>Material Requests {pendingMRCount > 0 && <Badge count={pendingMRCount} size="small" offset={[4, -2]} />}</span>,
+      label: (
+        <span>
+          Material Requests
+          {pendingMRCount > 0 && <Badge count={pendingMRCount} size="small" offset={[4, -2]} />}
+        </span>
+      ),
     },
     canView('inventory', 'goods_receipts') && { key: '/inventory/goods-receipts', label: 'Goods Receipts (GRN)' },
   ].filter(Boolean);
 
+  // ── 6. PROCUREMENT ───────────────────────────────────────────────────────
+  // Indents, RFQ Quotations, Vendors — Purchase Orders moved to Orders group
   const procurementChildren = [
-    canView('procurement', 'indents') && { key: '/procurement/indents', label: 'Indents' },
-    canView('procurement', 'suppliers') && { key: '/procurement/suppliers', label: 'Suppliers' },
-    canView('orders', 'purchase_orders') && { key: '/procurement/purchase-orders', label: 'Purchase Orders' },
+    canView('procurement', 'indents')   && { key: '/procurement/indents',         label: 'Indents' },
+    canView('procurement', 'rfqs')      && { key: '/procurement/rfq-quotations',  label: 'RFQ Quotations' },
+    canView('procurement', 'suppliers') && { key: '/procurement/suppliers',       label: 'Vendors' },
   ].filter(Boolean);
 
-  const manufacturingChildren = [
-    canView('orders', 'manufacturing') && { key: '/manufacturing', label: 'Overview' },
-    canView('orders', 'manufacturing') && { key: '/manufacturing/stages', label: 'Stages' },
-    canView('orders', 'manufacturing') && { key: '/manufacturing/processes', label: 'Process Templates' },
+  // ── 7. INVOICING ─────────────────────────────────────────────────────────
+  const invoicingChildren = [
+    canView('invoicing', 'invoices')  && { key: '/invoices',  label: 'Invoices' },
+    canView('invoicing', 'payments')  && { key: '/payments',  label: 'Payments' },
   ].filter(Boolean);
 
+  // ── 8. EMPLOYEES ─────────────────────────────────────────────────────────
   const employeesChildren = [
-    canView('employees', 'all_employees') && { key: '/employees', label: 'All Employees' },
-    canView('employees', 'departments') && { key: '/employees/departments', label: 'Departments' },
-    canView('employees', 'designations') && { key: '/employees/designations', label: 'Designations' },
+    canView('employees', 'all_employees') && { key: '/employees',              label: 'All Employees' },
+    canView('employees', 'departments')   && { key: '/employees/departments',  label: 'Departments' },
+    canView('employees', 'designations')  && { key: '/employees/designations', label: 'Designations' },
   ].filter(Boolean);
 
+  // ── 9. REPORTS ───────────────────────────────────────────────────────────
+  const reportsChildren = [
+    canView('reports', 'dashboard_reports') && { key: '/analytics', label: 'Analytics' },
+    canView('reports', 'enquiry_reports')   && { key: '/reports',   label: 'Enquiry Reports' },
+  ].filter(Boolean);
+
+  // ── MENU ASSEMBLY ────────────────────────────────────────────────────────
   const menuItems: MenuProps['items'] = [
     {
       key: '/dashboard',
@@ -144,19 +177,17 @@ export function Sidebar({ collapsed, inDrawer, onMenuClick }: SidebarProps) {
       label: 'Sales',
       children: salesChildren,
     },
-    canView('orders', 'manufacturing') && {
-      key: 'manufacture-status-menu',
-      icon: <CarOutlined />,
-      label: 'Manufacture Status',
-      children: [
-        { key: '/manufacture-status', label: 'Status Dashboard' },
-        { key: '/manufacture-status/dispatched', label: 'Dispatched Orders' },
-      ],
+    ordersChildren.length > 0 && {
+      key: 'orders-menu',
+      icon: <FileDoneOutlined />,
+      label: 'Orders',
+      children: ordersChildren,
     },
-    canView('sales', 'customers') && {
-      key: '/customers',
-      icon: <TeamOutlined />,
-      label: 'Customers',
+    manufacturingChildren.length > 0 && {
+      key: 'manufacturing-menu',
+      icon: <ToolOutlined />,
+      label: 'Manufacturing',
+      children: manufacturingChildren,
     },
     productsChildren.length > 0 && {
       key: 'products-menu',
@@ -176,11 +207,11 @@ export function Sidebar({ collapsed, inDrawer, onMenuClick }: SidebarProps) {
       label: 'Procurement',
       children: procurementChildren,
     },
-    manufacturingChildren.length > 0 && {
-      key: 'manufacturing-menu',
-      icon: <ToolOutlined />,
-      label: 'Manufacturing',
-      children: manufacturingChildren,
+    invoicingChildren.length > 0 && {
+      key: 'invoicing-menu',
+      icon: <DollarOutlined />,
+      label: 'Invoicing',
+      children: invoicingChildren,
     },
     employeesChildren.length > 0 && {
       key: 'employees-menu',
@@ -188,15 +219,11 @@ export function Sidebar({ collapsed, inDrawer, onMenuClick }: SidebarProps) {
       label: 'Employees',
       children: employeesChildren,
     },
-    canView('reports') && {
-      key: '/analytics',
+    reportsChildren.length > 0 && {
+      key: 'reports-menu',
       icon: <BarChartOutlined />,
-      label: 'Analytics',
-    },
-    canView('reports') && {
-      key: '/reports',
-      icon: <FileTextOutlined />,
       label: 'Reports',
+      children: reportsChildren,
     },
     canView('configurations') && {
       key: '/settings',
@@ -210,7 +237,6 @@ export function Sidebar({ collapsed, inDrawer, onMenuClick }: SidebarProps) {
     onMenuClick?.();
   };
 
-  // Get selected keys from pathname
   const selectedKeys = [pathname];
   const openKeys = menuItems
     ?.filter((item): item is { key: string; children?: { key: string }[] } =>

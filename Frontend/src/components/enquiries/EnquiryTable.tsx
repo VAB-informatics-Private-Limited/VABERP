@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Enquiry, INTEREST_STATUS_OPTIONS } from '@/types/enquiry';
 import { deleteEnquiry } from '@/lib/api/enquiries';
-import { useAuthStore } from '@/stores/authStore';
+import { useAuthStore, usePermissions } from '@/stores/authStore';
 import type { ColumnsType } from 'antd/es/table';
 
 interface EnquiryTableProps {
@@ -25,6 +25,7 @@ export function EnquiryTable({ data, loading, pagination }: EnquiryTableProps) {
   const queryClient = useQueryClient();
   const { getEnterpriseId } = useAuthStore();
   const enterpriseId = getEnterpriseId();
+  const { hasPermission } = usePermissions();
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => deleteEnquiry(id, enterpriseId!),
@@ -134,20 +135,24 @@ export function EnquiryTable({ data, loading, pagination }: EnquiryTableProps) {
             icon={<EyeOutlined />}
             onClick={() => router.push(`/enquiries/${record.id}`)}
           />
-          <Button
-            type="text"
-            icon={<EditOutlined />}
-            onClick={() => router.push(`/enquiries/${record.id}/edit`)}
-          />
-          <Popconfirm
-            title="Delete Enquiry"
-            description="Are you sure you want to delete this enquiry?"
-            onConfirm={() => deleteMutation.mutate(record.id)}
-            okText="Yes"
-            cancelText="No"
-          >
-            <Button type="text" danger icon={<DeleteOutlined />} />
-          </Popconfirm>
+          {hasPermission('enquiry', 'enquiries', 'edit') && (
+            <Button
+              type="text"
+              icon={<EditOutlined />}
+              onClick={() => router.push(`/enquiries/${record.id}/edit`)}
+            />
+          )}
+          {hasPermission('enquiry', 'enquiries', 'delete') && (
+            <Popconfirm
+              title="Delete Enquiry"
+              description="Are you sure you want to delete this enquiry?"
+              onConfirm={() => deleteMutation.mutate(record.id)}
+              okText="Yes"
+              cancelText="No"
+            >
+              <Button type="text" danger icon={<DeleteOutlined />} />
+            </Popconfirm>
+          )}
         </Space>
       ),
     },

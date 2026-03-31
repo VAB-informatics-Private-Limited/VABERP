@@ -160,6 +160,11 @@ export async function convertToCustomer(enquiryId: number): Promise<ApiResponse>
   return response.data;
 }
 
+export async function checkEnquiryMobile(mobile: string): Promise<{ exists: boolean; customerName?: string }> {
+  const response = await apiClient.get('/enquiries/check-mobile', { params: { mobile } });
+  return (response.data as any);
+}
+
 // Helper function to map backend camelCase to frontend snake_case for followups
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function mapFollowupFromBackend(data: any): Followup {
@@ -255,6 +260,24 @@ export async function getTodayFollowups(
 }
 
 // ============ Reports ============
+
+export async function getEnquiryQuotations(enquiryId: number): Promise<{ message: string; data: any[] }> {
+  const response = await apiClient.get(`/enquiries/${enquiryId}/quotations`);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const backendData = response.data as any;
+  return {
+    message: backendData.message,
+    data: (backendData.data || []).map((q: any) => ({
+      id: q.id,
+      quotation_number: q.quotationNumber,
+      status: q.status,
+      total_amount: q.grandTotal,
+      current_version: q.currentVersion ?? 1,
+      is_locked: q.isLocked ?? false,
+      created_date: q.createdDate,
+    })),
+  };
+}
 
 export async function getSalesEnquiryReports(params: {
   enterpriseId?: number;

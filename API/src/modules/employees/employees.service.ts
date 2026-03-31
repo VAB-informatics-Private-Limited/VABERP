@@ -7,6 +7,7 @@ import { Department } from './entities/department.entity';
 import { Designation } from './entities/designation.entity';
 import { MenuPermission } from './entities/menu-permission.entity';
 import { buildEmptyPermissions } from '../../common/constants/permissions';
+import { AuditLogsService } from '../audit-logs/audit-logs.service';
 
 @Injectable()
 export class EmployeesService {
@@ -19,6 +20,7 @@ export class EmployeesService {
     private designationRepository: Repository<Designation>,
     @InjectRepository(MenuPermission)
     private permissionRepository: Repository<MenuPermission>,
+    private auditLogsService: AuditLogsService,
   ) {}
 
   // ============ Departments ============
@@ -91,6 +93,98 @@ export class EmployeesService {
     return {
       message: 'Department deleted successfully',
       data: null,
+    };
+  }
+
+  async seedDefaultDepartmentsAndDesignations(enterpriseId: number) {
+    const defaults: { name: string; description: string; designations: string[] }[] = [
+      {
+        name: 'Sales & Marketing',
+        description: 'Handles enquiries, quotations, follow-ups and customer acquisition',
+        designations: ['Sales Manager', 'Sales Executive', 'Business Development Executive', 'Marketing Manager', 'CRM Specialist'],
+      },
+      {
+        name: 'Procurement',
+        description: 'Manages purchase orders, RFQs, vendor relations and goods receipts',
+        designations: ['Purchase Manager', 'Purchase Officer', 'Vendor Relations Executive', 'Procurement Analyst'],
+      },
+      {
+        name: 'Manufacturing & Production',
+        description: 'Oversees BOM, job cards, production stages and dispatch',
+        designations: ['Production Manager', 'Production Supervisor', 'Machine Operator', 'Process Engineer', 'Dispatch Coordinator'],
+      },
+      {
+        name: 'Store & Warehouse',
+        description: 'Manages indents, material requests, inventory and goods movement',
+        designations: ['Store Manager', 'Store Keeper', 'Inventory Controller', 'Material Handler'],
+      },
+      {
+        name: 'Quality Control',
+        description: 'Ensures quality standards across production and incoming materials',
+        designations: ['QC Manager', 'Quality Inspector', 'QA Engineer', 'Testing Technician'],
+      },
+      {
+        name: 'Finance & Accounts',
+        description: 'Handles billing, payments, purchase order finances and accounting',
+        designations: ['Finance Manager', 'Accountant', 'Accounts Executive', 'Billing Officer'],
+      },
+      {
+        name: 'Human Resources',
+        description: 'Manages employee lifecycle, payroll, recruitment and HR policies',
+        designations: ['HR Manager', 'HR Executive', 'Recruitment Specialist', 'Payroll Officer'],
+      },
+      {
+        name: 'Administration',
+        description: 'Handles office administration, compliance and general management',
+        designations: ['Admin Manager', 'Admin Executive', 'Office Assistant', 'Compliance Officer'],
+      },
+    ];
+
+    let createdDepartments = 0;
+    let createdDesignations = 0;
+
+    for (const def of defaults) {
+      // Check if department already exists (by name, case-insensitive)
+      const existing = await this.departmentRepository.findOne({
+        where: { enterpriseId, departmentName: def.name },
+      });
+
+      let dept: Department;
+      if (existing) {
+        dept = existing;
+      } else {
+        dept = await this.departmentRepository.save(
+          this.departmentRepository.create({
+            enterpriseId,
+            departmentName: def.name,
+            description: def.description,
+            status: 'active',
+          }),
+        );
+        createdDepartments++;
+      }
+
+      for (const desName of def.designations) {
+        const existingDes = await this.designationRepository.findOne({
+          where: { enterpriseId, departmentId: dept.id, designationName: desName },
+        });
+        if (!existingDes) {
+          await this.designationRepository.save(
+            this.designationRepository.create({
+              enterpriseId,
+              departmentId: dept.id,
+              designationName: desName,
+              status: 'active',
+            }),
+          );
+          createdDesignations++;
+        }
+      }
+    }
+
+    return {
+      message: `Seeded ${createdDepartments} departments and ${createdDesignations} designations`,
+      data: { createdDepartments, createdDesignations },
     };
   }
 
@@ -225,7 +319,7 @@ export class EmployeesService {
     };
   }
 
-  async create(enterpriseId: number, createDto: any) {
+  async create(enterpriseId: number, createDto: any, user?: { id: number; type: string; name?: string }) {
     const existingEmail = await this.employeeRepository.findOne({
       where: { email: createDto.email },
     });
@@ -253,13 +347,24 @@ export class EmployeesService {
     });
     await this.permissionRepository.save(permRecord);
 
+    this.auditLogsService.log({
+      enterpriseId,
+      userId: user?.id,
+      userType: user?.type,
+      userName: user?.name,
+      entityType: 'employee',
+      entityId: savedEmployee.id,
+      action: 'create',
+      description: `Created employee ${savedEmployee.firstName ?? ''} ${savedEmployee.lastName ?? ''} (${savedEmployee.email})`.trim(),
+    }).catch(() => {});
+
     return {
       message: 'Employee created successfully',
       data: savedEmployee,
     };
   }
 
-  async update(id: number, enterpriseId: number, updateDto: any) {
+  async update(id: number, enterpriseId: number, updateDto: any, user?: { id: number; type: string; name?: string }) {
     const employee = await this.employeeRepository.findOne({
       where: { id, enterpriseId },
     });
@@ -274,10 +379,21 @@ export class EmployeesService {
 
     await this.employeeRepository.update(id, updateDto);
 
+    this.auditLogsService.log({
+      enterpriseId,
+      userId: user?.id,
+      userType: user?.type,
+      userName: user?.name,
+      entityType: 'employee',
+      entityId: id,
+      action: 'update',
+      description: `Updated employee ${employee.firstName ?? ''} ${employee.lastName ?? ''} (${employee.email})`.trim(),
+    }).catch(() => {});
+
     return this.findOne(id, enterpriseId);
   }
 
-  async delete(id: number, enterpriseId: number) {
+  async delete(id: number, enterpriseId: number, user?: { id: number; type: string; name?: string }) {
     const employee = await this.employeeRepository.findOne({
       where: { id, enterpriseId },
     });
@@ -288,6 +404,17 @@ export class EmployeesService {
 
     await this.permissionRepository.delete({ employeeId: id });
     await this.employeeRepository.delete(id);
+
+    this.auditLogsService.log({
+      enterpriseId,
+      userId: user?.id,
+      userType: user?.type,
+      userName: user?.name,
+      entityType: 'employee',
+      entityId: id,
+      action: 'delete',
+      description: `Deleted employee ${employee.firstName ?? ''} ${employee.lastName ?? ''} (${employee.email})`.trim(),
+    }).catch(() => {});
 
     return {
       message: 'Employee deleted successfully',
@@ -322,6 +449,10 @@ export class EmployeesService {
       record.dataStartDate = dataStartDate ? new Date(dataStartDate) : null;
     }
 
+    if (body.ownDataOnly !== undefined) {
+      record.ownDataOnly = Boolean(body.ownDataOnly);
+    }
+
     const saved = await this.permissionRepository.save(record);
 
     return {
@@ -329,6 +460,7 @@ export class EmployeesService {
       data: {
         permissions: saved.permissions || buildEmptyPermissions(),
         dataStartDate: saved.dataStartDate ?? null,
+        ownDataOnly: saved.ownDataOnly ?? false,
       },
     };
   }
@@ -351,6 +483,7 @@ export class EmployeesService {
       data: {
         permissions: record?.permissions || buildEmptyPermissions(),
         dataStartDate: record?.dataStartDate ?? null,
+        ownDataOnly: record?.ownDataOnly ?? false,
       },
     };
   }

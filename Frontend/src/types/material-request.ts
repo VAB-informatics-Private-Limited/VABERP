@@ -30,12 +30,15 @@ export interface MaterialRequest {
   requested_by?: number;
   requested_by_name?: string;
   request_date: string;
+  expected_delivery?: string;
   purpose?: string;
   status: string;
   approved_by?: number;
   approved_date?: string;
   notes?: string;
   items?: MaterialRequestItem[];
+  confirmed_received?: boolean;
+  confirmed_received_at?: string;
   created_date: string;
 }
 

@@ -25,4 +25,7 @@ export class MenuPermission {
 
   @Column({ name: 'data_start_date', type: 'timestamptz', nullable: true, default: null })
   dataStartDate: Date | null;
+
+  @Column({ name: 'own_data_only', type: 'boolean', default: false })
+  ownDataOnly: boolean;
 }

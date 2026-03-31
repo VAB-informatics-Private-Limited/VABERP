@@ -1,11 +1,12 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Form, Input, DatePicker, Button, Card, Table, InputNumber, Select, Row, Col, Divider, message, Space } from 'antd';
-import { ArrowLeftOutlined, PlusOutlined, DeleteOutlined, SaveOutlined } from '@ant-design/icons';
+import { Form, Input, DatePicker, Button, Card, Table, InputNumber, Select, Row, Col, Divider, message, Space, Alert } from 'antd';
+import { ArrowLeftOutlined, PlusOutlined, DeleteOutlined, SaveOutlined, SendOutlined, CheckCircleOutlined } from '@ant-design/icons';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { QuotationFormData, QuotationItem, Quotation } from '@/types/quotation';
+import { Enquiry } from '@/types/enquiry';
 import { getDropdownProductsList } from '@/lib/api/products';
 import { getCustomerList } from '@/lib/api/customers';
 import { checkQuotationMobile } from '@/lib/api/quotations';
@@ -15,13 +16,15 @@ import type { ColumnsType } from 'antd/es/table';
 
 interface QuotationBuilderProps {
   initialData?: Quotation;
+  initialEnquiryData?: Enquiry;
   onSubmit: (data: QuotationFormData) => void;
   loading: boolean;
   submitText: string;
   isEdit?: boolean;
+  onCancel?: () => void;
 }
 
-export function QuotationBuilder({ initialData, onSubmit, loading, submitText, isEdit }: QuotationBuilderProps) {
+export function QuotationBuilder({ initialData, initialEnquiryData, onSubmit, loading, submitText, isEdit, onCancel }: QuotationBuilderProps) {
   const router = useRouter();
   const [form] = Form.useForm();
   const { getEnterpriseId } = useAuthStore();
@@ -30,6 +33,24 @@ export function QuotationBuilder({ initialData, onSubmit, loading, submitText, i
   const [items, setItems] = useState<QuotationItem[]>(initialData?.items || []);
   const [selectedProduct, setSelectedProduct] = useState<number | undefined>();
   const [mobileWarning, setMobileWarning] = useState<string | null>(null);
+  const [submitAction, setSubmitAction] = useState<'draft' | 'sent'>('draft');
+
+  useEffect(() => {
+    if (initialEnquiryData && !isEdit) {
+      const addressParts = [
+        initialEnquiryData.address,
+        initialEnquiryData.city,
+        initialEnquiryData.state,
+        initialEnquiryData.pincode,
+      ].filter(Boolean);
+      form.setFieldsValue({
+        customer_name: initialEnquiryData.customer_name,
+        customer_mobile: initialEnquiryData.customer_mobile,
+        customer_email: initialEnquiryData.customer_email,
+        billing_address: addressParts.join(', ') || undefined,
+      });
+    }
+  }, [initialEnquiryData, isEdit, form]);
 
   const { data: products } = useQuery({
     queryKey: ['products-dropdown', enterpriseId],
@@ -39,7 +60,7 @@ export function QuotationBuilder({ initialData, onSubmit, loading, submitText, i
 
   const { data: customers } = useQuery({
     queryKey: ['customers-dropdown', enterpriseId],
-    queryFn: () => getCustomerList({ enterpriseId: enterpriseId!, pageSize: 1000 }),
+    queryFn: () => getCustomerList({ enterpriseId: enterpriseId!, page: 1, pageSize: 1000 }),
     enabled: !!enterpriseId,
   });
 
@@ -124,6 +145,8 @@ export function QuotationBuilder({ initialData, onSubmit, loading, submitText, i
       ...values,
       quotation_date: values.quotation_date?.format('YYYY-MM-DD') || dayjs().format('YYYY-MM-DD'),
       valid_until: values.valid_until?.format('YYYY-MM-DD'),
+      // In drawer mode, action buttons control the status directly
+      status: onCancel ? submitAction : (values.status || 'draft'),
       items,
     };
     onSubmit(formData);
@@ -184,13 +207,22 @@ export function QuotationBuilder({ initialData, onSubmit, loading, submitText, i
       title: 'Qty',
       dataIndex: 'quantity',
       key: 'quantity',
-      width: 80,
+      width: 90,
       render: (_, record, index) => (
         <InputNumber
           min={1}
+          max={99999}
           value={record.quantity}
-          onChange={(value) => handleUpdateItem(index, 'quantity', value || 1)}
+          onChange={(value) => handleUpdateItem(index, 'quantity', Math.min(value || 1, 99999))}
+          onKeyDown={(e) => {
+            const input = e.currentTarget.querySelector('input') as HTMLInputElement | null;
+            const currentVal = input?.value?.replace(/[^0-9]/g, '') || '';
+            if (currentVal.length >= 5 && !['Backspace','Delete','ArrowLeft','ArrowRight','Tab'].includes(e.key)) {
+              e.preventDefault();
+            }
+          }}
           size="small"
+          style={{ width: 80 }}
         />
       ),
     },
@@ -198,14 +230,16 @@ export function QuotationBuilder({ initialData, onSubmit, loading, submitText, i
       title: 'Unit Price',
       dataIndex: 'unit_price',
       key: 'unit_price',
-      width: 120,
+      width: 130,
       render: (_, record, index) => (
         <InputNumber
           min={0}
+          max={9999999}
           value={record.unit_price}
-          onChange={(value) => handleUpdateItem(index, 'unit_price', value || 0)}
+          onChange={(value) => handleUpdateItem(index, 'unit_price', Math.min(value || 0, 9999999))}
           prefix="₹"
           size="small"
+          style={{ width: 110 }}
         />
       ),
     },
@@ -243,7 +277,12 @@ export function QuotationBuilder({ initialData, onSubmit, loading, submitText, i
       title: 'Total',
       dataIndex: 'total_amount',
       key: 'total_amount',
-      render: (amount) => `₹${Number(amount).toLocaleString('en-IN')}`,
+      width: 130,
+      render: (amount) => (
+        <span style={{ display: 'block', width: 110, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          ₹{Number(amount).toLocaleString('en-IN')}
+        </span>
+      ),
     },
     {
       title: '',
@@ -274,11 +313,13 @@ export function QuotationBuilder({ initialData, onSubmit, loading, submitText, i
 
   return (
     <Form form={form} layout="vertical" onFinish={handleFinish} initialValues={initialValues}>
-      <div className="mb-4">
-        <Button icon={<ArrowLeftOutlined />} onClick={() => router.push('/quotations')}>
-          Back to Quotations
-        </Button>
-      </div>
+      {!onCancel && (
+        <div className="mb-4">
+          <Button icon={<ArrowLeftOutlined />} onClick={() => router.push('/quotations')}>
+            Back to Quotations
+          </Button>
+        </div>
+      )}
 
       <Row gutter={16}>
         <Col xs={24} lg={16}>
@@ -292,6 +333,7 @@ export function QuotationBuilder({ initialData, onSubmit, loading, submitText, i
                     optionFilterProp="children"
                     onChange={handleCustomerSelect}
                     allowClear
+                    listHeight={192}
                   >
                     {customers?.data?.map((customer) => (
                       <Select.Option key={customer.id} value={customer.id}>
@@ -426,12 +468,14 @@ export function QuotationBuilder({ initialData, onSubmit, loading, submitText, i
               <DatePicker className="w-full" format="DD-MM-YYYY" />
             </Form.Item>
 
-            <Form.Item name="status" label="Status">
-              <Select>
-                <Select.Option value="draft">Draft</Select.Option>
-                <Select.Option value="sent">Sent</Select.Option>
-              </Select>
-            </Form.Item>
+            {!onCancel && (
+              <Form.Item name="status" label="Status">
+                <Select>
+                  <Select.Option value="draft">Draft</Select.Option>
+                  <Select.Option value="sent">Sent</Select.Option>
+                </Select>
+              </Form.Item>
+            )}
 
             <Form.Item name="notes" label="Notes">
               <Input.TextArea rows={3} placeholder="Additional notes" />
@@ -442,21 +486,60 @@ export function QuotationBuilder({ initialData, onSubmit, loading, submitText, i
             </Form.Item>
           </Card>
 
-          <Space direction="vertical" className="w-full">
-            <Button
-              type="primary"
-              icon={<SaveOutlined />}
-              htmlType="submit"
-              loading={loading}
-              block
-              size="large"
-            >
-              {submitText}
-            </Button>
-            <Button block onClick={() => router.push('/quotations')}>
-              Cancel
-            </Button>
-          </Space>
+          {onCancel ? (
+            <Space direction="vertical" className="w-full" size="small">
+              <Alert
+                type="info"
+                showIcon
+                className="!mb-1"
+                message="Choose how to save this quotation"
+                description="Save as draft to review later, or create and send it directly to the customer to continue the sales cycle."
+              />
+              <Button
+                type="primary"
+                icon={<SendOutlined />}
+                htmlType="submit"
+                loading={loading && submitAction === 'sent'}
+                disabled={loading}
+                block
+                size="large"
+                style={{ backgroundColor: '#52c41a', borderColor: '#52c41a' }}
+                onClick={() => setSubmitAction('sent')}
+              >
+                Create &amp; Send to Customer
+              </Button>
+              <Button
+                icon={<SaveOutlined />}
+                htmlType="submit"
+                loading={loading && submitAction === 'draft'}
+                disabled={loading}
+                block
+                size="large"
+                onClick={() => setSubmitAction('draft')}
+              >
+                Save as Draft
+              </Button>
+              <Button block onClick={onCancel} disabled={loading}>
+                Cancel
+              </Button>
+            </Space>
+          ) : (
+            <Space direction="vertical" className="w-full">
+              <Button
+                type="primary"
+                icon={<SaveOutlined />}
+                htmlType="submit"
+                loading={loading}
+                block
+                size="large"
+              >
+                {submitText}
+              </Button>
+              <Button block onClick={() => router.push('/quotations')}>
+                Cancel
+              </Button>
+            </Space>
+          )}
         </Col>
       </Row>
     </Form>

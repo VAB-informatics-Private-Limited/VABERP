@@ -76,6 +76,7 @@ export interface Quotation {
   shipping_address?: string;
   quotation_date: string;
   valid_until?: string;
+  expected_delivery?: string;
   subtotal: number;
   discount_amount?: number;
   tax_amount?: number;

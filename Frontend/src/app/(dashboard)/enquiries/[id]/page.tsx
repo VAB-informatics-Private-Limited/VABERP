@@ -1,6 +1,6 @@
 'use client';
 
-import { Typography, Card, Descriptions, Tag, Button, Space, Modal, message, Spin, Row, Col, Popconfirm, Select, Form } from 'antd';
+import { Typography, Card, Descriptions, Tag, Button, Space, Modal, message, Spin, Row, Col, Select, Form, Alert, Drawer } from 'antd';
 import {
   ArrowLeftOutlined,
   EditOutlined,
@@ -9,22 +9,26 @@ import {
   MailOutlined,
   EnvironmentOutlined,
   PrinterOutlined,
-  SwapOutlined,
   UserOutlined,
   InfoCircleOutlined,
   CalendarOutlined,
   TagOutlined,
   TeamOutlined,
+  FileTextOutlined,
+  FormOutlined,
 } from '@ant-design/icons';
 import { useRouter, useParams } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import { getEnquiryById, getFollowupHistory, addFollowup, convertToCustomer, assignEnquiry } from '@/lib/api/enquiries';
+import { getEnquiryById, getFollowupHistory, addFollowup, assignEnquiry, getEnquiryQuotations } from '@/lib/api/enquiries';
 import { getEmployees } from '@/lib/api/employees';
+import { addQuotation } from '@/lib/api/quotations';
 import { useAuthStore } from '@/stores/authStore';
 import { FollowupTimeline } from '@/components/enquiries/FollowupTimeline';
 import { FollowupForm } from '@/components/enquiries/FollowupForm';
+import { QuotationBuilder } from '@/components/quotations/QuotationBuilder';
 import { INTEREST_STATUS_OPTIONS, FollowupFormData } from '@/types/enquiry';
+import { QuotationFormData } from '@/types/quotation';
 
 const { Title, Text } = Typography;
 
@@ -40,6 +44,7 @@ export default function ViewEnquiryPage() {
   const [followupModalOpen, setFollowupModalOpen] = useState(false);
   const [assignModalOpen, setAssignModalOpen] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<number | undefined>();
+  const [quotationDrawerOpen, setQuotationDrawerOpen] = useState(false);
 
   const { data: enquiryData, isLoading: enquiryLoading } = useQuery({
     queryKey: ['enquiry', enquiryId],
@@ -56,6 +61,12 @@ export default function ViewEnquiryPage() {
   const { data: employeesData } = useQuery({
     queryKey: ['employees-dropdown'],
     queryFn: () => getEmployees(undefined, 1, 1000),
+  });
+
+  const { data: linkedQuotationsData } = useQuery({
+    queryKey: ['enquiry-quotations', enquiryId],
+    queryFn: () => getEnquiryQuotations(enquiryId),
+    enabled: !!enquiryId,
   });
 
   const assignMutation = useMutation({
@@ -91,29 +102,30 @@ export default function ViewEnquiryPage() {
     },
   });
 
-  const convertMutation = useMutation({
-    mutationFn: () => convertToCustomer(enquiryId),
-    onSuccess: (data: any) => {
-      message.success('Enquiry converted to customer successfully');
+  const createQuotationMutation = useMutation({
+    mutationFn: (data: QuotationFormData) =>
+      addQuotation({ ...data, enquiry_id: enquiryId }),
+    onSuccess: (result: any, variables) => {
+      const wasSent = variables.status === 'sent';
+      message.success(wasSent ? 'Quotation created and sent to customer!' : 'Quotation saved as draft');
+      queryClient.invalidateQueries({ queryKey: ['enquiry-quotations', enquiryId] });
       queryClient.invalidateQueries({ queryKey: ['enquiry', enquiryId] });
-      queryClient.invalidateQueries({ queryKey: ['enquiries'] });
-      const customerId = data?.data?.customer?.id;
-      if (customerId) {
-        router.push(`/customers/${customerId}`);
-      }
+      setQuotationDrawerOpen(false);
+      const newId = result?.data?.id;
+      if (newId) router.push(`/quotations/${newId}`);
     },
-    onError: (error: any) => {
-      const msg = error?.response?.data?.message;
-      message.error(msg || 'Failed to convert enquiry to customer');
+    onError: () => {
+      message.error('Failed to create quotation');
     },
   });
 
   const enquiry = enquiryData?.data;
-
-  const isConvertible = enquiry && !enquiry.converted_customer_id &&
-    enquiry.interest_status !== 'sale_closed' &&
-    enquiry.interest_status !== 'converted' &&
-    enquiry.interest_status !== 'not_interested';
+  const linkedQuotations = (linkedQuotationsData?.data || []) as any[];
+  const sortedQuotations = [...linkedQuotations].sort((a, b) => a.id - b.id);
+  const latestQuotation = [...linkedQuotations].sort((a, b) => b.id - a.id)[0];
+  const hasRejectedQuotation = latestQuotation?.status === 'rejected';
+  const hasPendingQuotation = latestQuotation && ['draft', 'sent'].includes(latestQuotation.status);
+  const isLead = enquiry && !enquiry.converted_customer_id;
 
   const getStatusColor = (status: string) => {
     const statusOption = INTEREST_STATUS_OPTIONS.find((s) => s.value === status);
@@ -171,24 +183,6 @@ export default function ViewEnquiryPage() {
           >
             Assign
           </Button>
-          {isConvertible && (
-            <Popconfirm
-              title="Convert to Customer"
-              description="This will create a customer record from this enquiry. Continue?"
-              onConfirm={() => convertMutation.mutate()}
-              okText="Yes, Convert"
-              cancelText="Cancel"
-            >
-              <Button
-                type="primary"
-                icon={<SwapOutlined />}
-                loading={convertMutation.isPending}
-                style={{ backgroundColor: '#52c41a', borderColor: '#52c41a' }}
-              >
-                Convert to Customer
-              </Button>
-            </Popconfirm>
-          )}
           {enquiry?.converted_customer_id && (
             <Button
               type="default"
@@ -197,6 +191,18 @@ export default function ViewEnquiryPage() {
               View Customer
             </Button>
           )}
+          <Button
+            type="primary"
+            icon={hasRejectedQuotation ? <FormOutlined /> : <FileTextOutlined />}
+            onClick={() =>
+              hasRejectedQuotation
+                ? router.push(`/quotations/${latestQuotation.id}/edit`)
+                : setQuotationDrawerOpen(true)
+            }
+            style={{ backgroundColor: '#722ed1', borderColor: '#722ed1' }}
+          >
+            {hasRejectedQuotation ? 'Revise Quotation' : 'Create Quotation'}
+          </Button>
           <Button
             type="primary"
             icon={<PlusOutlined />}
@@ -230,7 +236,14 @@ export default function ViewEnquiryPage() {
               <UserOutlined className="text-blue-500 text-lg" />
             </div>
             <div>
-              <Text strong className="text-lg block leading-tight">{enquiry.customer_name}</Text>
+              <div className="flex items-center gap-2 leading-tight">
+                <Text strong className="text-lg">{enquiry.customer_name}</Text>
+                {isLead ? (
+                  <Tag color="blue" className="!m-0">Lead</Tag>
+                ) : (
+                  <Tag color="green" className="!m-0">Customer</Tag>
+                )}
+              </div>
               {enquiry.business_name && (
                 <Text type="secondary" className="text-sm">{enquiry.business_name}</Text>
               )}
@@ -253,6 +266,49 @@ export default function ViewEnquiryPage() {
           </div>
         </div>
       </Card>
+
+      {/* Quotation cycle status alert */}
+      {hasRejectedQuotation && (
+        <Alert
+          type="warning"
+          showIcon
+          className="mb-4"
+          message={
+            <span>
+              Quotation <strong>{latestQuotation.quotation_number}</strong> was rejected
+            </span>
+          }
+          description="Follow up with the customer, then revise the quotation when ready to send again."
+          action={
+            <Space>
+              <Button size="small" icon={<PlusOutlined />} onClick={() => setFollowupModalOpen(true)}>
+                Add Follow-up
+              </Button>
+              <Button
+                size="small"
+                type="primary"
+                icon={<FormOutlined />}
+                onClick={() => router.push(`/quotations/${latestQuotation.id}/edit`)}
+              >
+                Revise Quotation
+              </Button>
+            </Space>
+          }
+        />
+      )}
+      {hasPendingQuotation && (
+        <Alert
+          type="info"
+          showIcon
+          className="mb-4"
+          message={
+            <span>
+              Quotation <strong>{latestQuotation.quotation_number}</strong> is{' '}
+              <strong>{latestQuotation.status}</strong> — waiting for customer response
+            </span>
+          }
+        />
+      )}
 
       <Row gutter={[16, 16]}>
         {/* Left Column */}
@@ -404,8 +460,104 @@ export default function ViewEnquiryPage() {
               loading={followupsLoading}
             />
           </Card>
+
+          <Card
+            title={
+              <span className="flex items-center gap-2">
+                <FileTextOutlined className="text-purple-500" />
+                Linked Quotations
+              </span>
+            }
+            className="card-shadow mt-4 print:hidden"
+            extra={
+              hasRejectedQuotation ? (
+                <Button
+                  type="link"
+                  icon={<FormOutlined />}
+                  onClick={() => router.push(`/quotations/${latestQuotation.id}/edit`)}
+                >
+                  Revise
+                </Button>
+              ) : !hasPendingQuotation && (
+                <Button
+                  type="link"
+                  icon={<PlusOutlined />}
+                  onClick={() => setQuotationDrawerOpen(true)}
+                >
+                  New Quotation
+                </Button>
+              )
+            }
+          >
+            {sortedQuotations.length === 0 ? (
+              <Text type="secondary">No quotations linked yet</Text>
+            ) : (
+              sortedQuotations.map((q: any, idx: number) => {
+                const isLatest = q.id === latestQuotation?.id;
+                const statusColor =
+                  q.status === 'accepted' ? 'green' :
+                  q.status === 'rejected' ? 'red' :
+                  q.status === 'sent' ? 'blue' :
+                  q.status === 'expired' ? 'orange' : 'default';
+                return (
+                  <div
+                    key={q.id}
+                    className={`flex justify-between items-center py-2 border-b last:border-b-0 cursor-pointer px-2 rounded transition-colors ${isLatest ? 'bg-blue-50 hover:bg-blue-100' : 'hover:bg-gray-50'}`}
+                    onClick={() => router.push(`/quotations/${q.id}`)}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-gray-400 font-mono w-5">#{idx + 1}</span>
+                      <div>
+                        <Text strong>{q.quotation_number}</Text>
+                        <Text type="secondary" className="ml-1 text-xs">v{q.current_version}</Text>
+                        {isLatest && <Tag color="processing" className="ml-1 !text-xs">Latest</Tag>}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Text className="text-sm">₹{Number(q.total_amount || q.grand_total || 0).toLocaleString('en-IN')}</Text>
+                      <Tag color={statusColor}>{q.status}</Tag>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </Card>
         </Col>
       </Row>
+
+      {/* Create Quotation Drawer */}
+      <Drawer
+        title={
+          <span className="flex items-center gap-2">
+            <FileTextOutlined className="text-purple-500" />
+            Create Quotation — {enquiry?.customer_name}
+          </span>
+        }
+        open={quotationDrawerOpen}
+        onClose={() => setQuotationDrawerOpen(false)}
+        width="85%"
+        styles={{ body: { padding: 24 } }}
+        destroyOnClose
+      >
+        {quotationDrawerOpen && (
+          <QuotationBuilder
+            initialEnquiryData={enquiry ? {
+              id: enquiry.id,
+              customer_name: enquiry.customer_name,
+              customer_mobile: enquiry.customer_mobile,
+              customer_email: enquiry.customer_email,
+              address: enquiry.address,
+              city: enquiry.city,
+              state: enquiry.state,
+              pincode: enquiry.pincode,
+            } as any : undefined}
+            onSubmit={(data) => createQuotationMutation.mutate(data)}
+            loading={createQuotationMutation.isPending}
+            submitText="Save Quotation"
+            onCancel={() => setQuotationDrawerOpen(false)}
+          />
+        )}
+      </Drawer>
 
       <Modal
         title="Add Follow-up"

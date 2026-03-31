@@ -11,6 +11,10 @@ import {
   CrownOutlined,
   CustomerServiceOutlined,
   LogoutOutlined,
+  AppstoreOutlined,
+  TagOutlined,
+  UsergroupAddOutlined,
+  WalletOutlined,
 } from '@ant-design/icons';
 import { useSuperAdminStore } from '@/stores/superAdminStore';
 
@@ -66,6 +70,43 @@ export default function SuperAdminPanelLayout({ children }: { children: React.Re
       icon: <CustomerServiceOutlined />,
       label: 'Support',
     },
+    {
+      key: '/superadmin/services',
+      icon: <AppstoreOutlined />,
+      label: 'Services',
+    },
+    {
+      key: '/superadmin/coupons',
+      icon: <TagOutlined />,
+      label: 'Coupons',
+    },
+    {
+      key: 'resellers-group',
+      icon: <UsergroupAddOutlined />,
+      label: 'Resellers',
+      children: [
+        {
+          key: '/superadmin/resellers',
+          icon: <TeamOutlined />,
+          label: 'All Resellers',
+        },
+        {
+          key: '/superadmin/resellers/plans',
+          icon: <CrownOutlined />,
+          label: 'Plans',
+        },
+        {
+          key: '/superadmin/resellers/subscriptions',
+          icon: <AppstoreOutlined />,
+          label: 'Subscriptions',
+        },
+        {
+          key: '/superadmin/resellers/wallets',
+          icon: <WalletOutlined />,
+          label: 'Wallets',
+        },
+      ],
+    },
   ];
 
   function handleLogout() {
@@ -73,7 +114,11 @@ export default function SuperAdminPanelLayout({ children }: { children: React.Re
     router.replace('/superadmin/login');
   }
 
-  const selectedKey = navItems.find((item) => pathname.startsWith(item.key))?.key ?? '';
+  const allLeafItems = navItems.flatMap((item) =>
+    'children' in item && item.children ? item.children : [item]
+  ).sort((a, b) => b.key.length - a.key.length);
+  const selectedKey = allLeafItems.find((item) => pathname === item.key || pathname.startsWith(item.key + '/'))?.key ?? '';
+  const openKeys = pathname.startsWith('/superadmin/resellers') ? ['resellers-group'] : [];
 
   return (
     <Layout className="min-h-screen">
@@ -99,11 +144,13 @@ export default function SuperAdminPanelLayout({ children }: { children: React.Re
         </div>
 
         <Menu
+          key={selectedKey}
           mode="inline"
           selectedKeys={[selectedKey]}
+          defaultOpenKeys={openKeys}
           items={navItems}
-          onClick={({ key }) => router.push(key)}
-          style={{ background: 'transparent', border: 'none', marginTop: 8 }}
+          onClick={({ key }) => { if (!key.endsWith('-group')) router.push(key); }}
+          style={{ background: 'transparent', border: 'none', marginTop: 8, overflowY: 'auto' }}
           theme="dark"
         />
       </Sider>

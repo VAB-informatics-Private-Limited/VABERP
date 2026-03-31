@@ -10,6 +10,7 @@ import { MaterialRequest } from '../material-requests/entities/material-request.
 import { MaterialRequestItem } from '../material-requests/entities/material-request-item.entity';
 import { IndentItem } from '../indents/entities/indent-item.entity';
 import { Indent } from '../indents/entities/indent.entity';
+import { PurchaseOrder } from '../purchase-orders/entities/purchase-order.entity';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { Indent } from '../indents/entities/indent.entity';
       MaterialRequestItem,
       IndentItem,
       Indent,
+      PurchaseOrder,
     ]),
   ],
   controllers: [GoodsReceiptsController],

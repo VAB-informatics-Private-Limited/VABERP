@@ -43,7 +43,7 @@ export class ManufacturingController {
 
   @Post('purchase-orders/:id/send-for-approval')
   @ApiOperation({ summary: 'Send PO for inventory approval (creates material request)' })
-  @RequirePermission('orders', 'manufacturing', 'approve')
+  @RequirePermission('orders', 'manufacturing', 'create')
   async sendForApproval(
     @Param('id', ParseIntPipe) id: number,
     @EnterpriseId() enterpriseId: number,
@@ -71,8 +71,9 @@ export class ManufacturingController {
     @EnterpriseId() enterpriseId: number,
     @CurrentUser() user: any,
     @Body('itemId', ParseIntPipe) itemId: number,
+    @Body('force') force?: boolean,
   ) {
-    return this.manufacturingService.startProductionForItem(id, itemId, enterpriseId, user?.id);
+    return this.manufacturingService.startProductionForItem(id, itemId, enterpriseId, user?.id, force);
   }
 
   @Post('purchase-orders/:id/request-inventory-item')
@@ -130,7 +131,7 @@ export class ManufacturingController {
 
   @Post('bom/:id/check-stock')
   @ApiOperation({ summary: 'Re-check stock availability for BOM items' })
-  @RequirePermission('orders', 'bom', 'create')
+  @RequirePermission('orders', 'bom', 'view')
   async checkBomStock(
     @Param('id', ParseIntPipe) id: number,
     @EnterpriseId() enterpriseId: number,
@@ -296,6 +297,17 @@ export class ManufacturingController {
     @Body('estimatedProductionDays') estimatedProductionDays: number,
   ) {
     return this.manufacturingService.setEstimate(id, estimatedProductionDays, enterpriseId, user?.id);
+  }
+
+  @Post('jobs/:id/recheck-materials')
+  @ApiOperation({ summary: 'Recheck material status — auto-issues insufficient items if stock is now available' })
+  @RequirePermission('orders', 'job_cards', 'create')
+  async recheckMaterials(
+    @Param('id', ParseIntPipe) id: number,
+    @EnterpriseId() enterpriseId: number,
+    @CurrentUser() user: any,
+  ) {
+    return this.manufacturingService.recheckMaterialStatus(id, enterpriseId, user?.id);
   }
 
   @Post('jobs/:id/verify-stock')

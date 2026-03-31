@@ -11,6 +11,8 @@ import { RawMaterialLedger } from '../raw-materials/entities/raw-material-ledger
 import { CreateMaterialRequestDto, ApproveMaterialRequestDto } from './dto/create-material-request.dto';
 import { EmailService } from '../email/email.service';
 import { IndentsService, InsufficientItem } from '../indents/indents.service';
+import { JobCard } from '../manufacturing/entities/job-card.entity';
+import { AuditLogsService } from '../audit-logs/audit-logs.service';
 
 @Injectable()
 export class MaterialRequestsService {
@@ -29,9 +31,12 @@ export class MaterialRequestsService {
     private rawMaterialRepository: Repository<RawMaterial>,
     @InjectRepository(RawMaterialLedger)
     private rawMaterialLedgerRepository: Repository<RawMaterialLedger>,
+    @InjectRepository(JobCard)
+    private jobCardRepository: Repository<JobCard>,
     private emailService: EmailService,
     @Inject(forwardRef(() => IndentsService))
     private indentsService: IndentsService,
+    private auditLogsService: AuditLogsService,
   ) {}
 
   async findAll(enterpriseId: number, page = 1, limit = 20, status?: string) {
@@ -64,6 +69,15 @@ export class MaterialRequestsService {
     );
 
     return { message: 'Material requests fetched successfully', data: dataWithItems, totalRecords: total, page: pageNum, limit: limitNum };
+  }
+
+  async updateETA(id: number, enterpriseId: number, expectedDelivery: string) {
+    const mr = await this.mrRepository.findOne({ where: { id, enterpriseId } });
+    if (!mr) throw new NotFoundException('Material request not found');
+    await this.mrRepository.update(id, {
+      expectedDelivery: expectedDelivery ? new Date(expectedDelivery) : null,
+    });
+    return this.findOne(id, enterpriseId);
   }
 
   async findOne(id: number, enterpriseId: number) {
@@ -130,7 +144,15 @@ export class MaterialRequestsService {
       await this.mrItemRepository.save(mrItem);
     }
 
-    return this.findOne(savedMr.id, enterpriseId);
+    const createResult = await this.findOne(savedMr.id, enterpriseId);
+    this.auditLogsService.log({
+      action: 'create',
+      entityType: 'material_request',
+      entityId: savedMr.id,
+      userId,
+      enterpriseId,
+    }).catch(() => {});
+    return createResult;
   }
 
   async approve(id: number, enterpriseId: number, dto: ApproveMaterialRequestDto, userId?: number) {
@@ -305,6 +327,13 @@ export class MaterialRequestsService {
     }
 
     const result = await this.findOne(id, enterpriseId);
+    this.auditLogsService.log({
+      action: 'status_change',
+      entityType: 'material_request',
+      entityId: id,
+      userId,
+      enterpriseId,
+    }).catch(() => {});
     return {
       ...result,
       indent: indentData,
@@ -329,20 +358,57 @@ export class MaterialRequestsService {
   }
 
   private async checkAndUpdateMrStatus(id: number) {
-    // Check if all approved/issued items are now issued
     const allItems = await this.mrItemRepository.find({ where: { materialRequestId: id } });
     const allIssuedOrRejected = allItems.every(
       (i) => i.status === 'issued' || i.status === 'rejected',
     );
     if (allIssuedOrRejected) {
       await this.mrRepository.update(id, { status: 'fulfilled' });
+      // Auto-update any linked job cards that are still waiting for materials
+      await this.updateLinkedJobCardsOnFulfill(id);
     } else {
-      // Check if any items are partially issued
       const hasPartiallyIssued = allItems.some((i) => i.status === 'partially_issued');
       const hasIssued = allItems.some((i) => i.status === 'issued');
       if (hasPartiallyIssued || (hasIssued && !allIssuedOrRejected)) {
         await this.mrRepository.update(id, { status: 'partially_fulfilled' });
       }
+    }
+  }
+
+  private async updateLinkedJobCardsOnFulfill(mrId: number) {
+    try {
+      const mr = await this.mrRepository.findOne({ where: { id: mrId } });
+      if (!mr) return;
+
+      // Find job cards linked via job_card_id or via sales_order_id that are waiting for materials
+      const waitingStatuses = ['WAITING_FOR_MATERIALS', 'REQUESTED_RECHECK', 'PENDING_INVENTORY'];
+
+      if (mr.jobCardId) {
+        const jc = await this.jobCardRepository.findOne({ where: { id: mr.jobCardId } });
+        if (jc && waitingStatuses.includes(jc.productionStage)) {
+          await this.jobCardRepository.update(jc.id, {
+            productionStage: 'PENDING_APPROVAL',
+            materialStatus: 'FULLY_ISSUED',
+          });
+        }
+      }
+
+      if (mr.salesOrderId) {
+        const linkedJcs = await this.jobCardRepository.find({
+          where: { purchaseOrderId: mr.salesOrderId },
+        });
+        for (const jc of linkedJcs) {
+          if (waitingStatuses.includes(jc.productionStage as string)) {
+            await this.jobCardRepository.update(jc.id, {
+              productionStage: 'PENDING_APPROVAL',
+              materialStatus: 'FULLY_ISSUED',
+            });
+          }
+        }
+      }
+    } catch (err) {
+      // Non-blocking — don't fail the issue operation if this update fails
+      console.error('Failed to update linked job cards after MR fulfilled:', err);
     }
   }
 
@@ -365,7 +431,15 @@ export class MaterialRequestsService {
     // Notify manufacturing side about issued materials
     await this.notifyManufacturingOnIssue(mr, approvedItems);
 
-    return this.findOne(id, enterpriseId);
+    const issueResult = await this.findOne(id, enterpriseId);
+    this.auditLogsService.log({
+      action: 'issue',
+      entityType: 'material_request',
+      entityId: id,
+      userId,
+      enterpriseId,
+    }).catch(() => {});
+    return issueResult;
   }
 
   async issueItem(id: number, itemId: number, enterpriseId: number, userId?: number) {
@@ -636,6 +710,36 @@ export class MaterialRequestsService {
         updatedItems,
       },
     };
+  }
+
+  /**
+   * Manufacturing team confirms they have received the issued materials.
+   */
+  async confirmReceived(id: number, enterpriseId: number, user?: { id: number; type: string; name?: string }) {
+    const result = await this.findOne(id, enterpriseId);
+    const mr = result.data;
+
+    const hasIssuedItems = mr.items.some((i: any) =>
+      ['issued', 'partially_issued'].includes(i.status),
+    );
+    if (!hasIssuedItems) {
+      throw new BadRequestException('No issued materials to confirm receipt for');
+    }
+
+    await this.mrRepository.update(id, {
+      confirmedReceived: true,
+      confirmedReceivedAt: new Date(),
+    });
+
+    const receivedResult = await this.findOne(id, enterpriseId);
+    this.auditLogsService.log({
+      action: 'receive',
+      entityType: 'material_request',
+      entityId: id,
+      userId: user?.id,
+      enterpriseId,
+    }).catch(() => {});
+    return receivedResult;
   }
 
   /**

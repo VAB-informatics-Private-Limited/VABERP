@@ -61,4 +61,8 @@ export class CreateEnterpriseDto {
   @IsString()
   @IsOptional()
   paymentNotes?: string;
+
+  @IsNumber()
+  @IsOptional()
+  resellerId?: number;
 }

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Form, Input, Button, Card, Typography, message } from 'antd';
-import { LockOutlined, MailOutlined } from '@ant-design/icons';
+import { LockOutlined, MailOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import { useRouter } from 'next/navigation';
 import { useSuperAdminStore } from '@/stores/superAdminStore';
 import { superAdminLogin } from '@/lib/api/super-admin';
@@ -13,6 +13,7 @@ export default function SuperAdminLoginPage() {
   const router = useRouter();
   const { isAuthenticated, login } = useSuperAdminStore();
   const [loading, setLoading] = useState(false);
+  const [form] = Form.useForm();
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -53,7 +54,7 @@ export default function SuperAdminLoginPage() {
           </Text>
         </div>
 
-        <Form layout="vertical" onFinish={onFinish} requiredMark={false}>
+        <Form form={form} layout="vertical" onFinish={onFinish} requiredMark={false}>
           <Form.Item
             name="email"
             rules={[{ required: true, message: 'Email is required' }]}
@@ -68,7 +69,7 @@ export default function SuperAdminLoginPage() {
             <Input.Password prefix={<LockOutlined />} placeholder="Password" size="large" />
           </Form.Item>
 
-          <Form.Item className="mb-0">
+          <Form.Item className="mb-2">
             <Button
               type="primary"
               htmlType="submit"
@@ -78,6 +79,17 @@ export default function SuperAdminLoginPage() {
               className="bg-slate-700 hover:bg-slate-600 border-slate-700"
             >
               Sign In
+            </Button>
+          </Form.Item>
+
+          <Form.Item className="mb-0">
+            <Button
+              size="large"
+              block
+              icon={<ThunderboltOutlined />}
+              onClick={() => form.setFieldsValue({ email: 'admin@vabinformatics.com', password: 'admin1234' })}
+            >
+              Auto Fill Credentials
             </Button>
           </Form.Item>
         </Form>

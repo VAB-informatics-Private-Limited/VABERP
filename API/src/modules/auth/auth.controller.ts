@@ -1,4 +1,4 @@
-import { Controller, Post, Body, Get, UseGuards } from '@nestjs/common';
+import { Controller, Post, Body, Get, UseGuards, Request } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import {
@@ -64,8 +64,8 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Get current user permissions' })
-  async getPermissions(@CurrentUser('id') userId: number) {
-    return this.authService.getPermissions(userId);
+  async getPermissions(@CurrentUser() user: any) {
+    return this.authService.getPermissions(user);
   }
 
   @Get('me')
@@ -77,5 +77,13 @@ export class AuthController {
       message: 'User info fetched successfully',
       data: user,
     };
+  }
+
+  @Get('enterprise/status')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Get enterprise subscription status (fresh from DB)' })
+  async getEnterpriseStatus(@Request() req: { user: { enterpriseId: number } }) {
+    return this.authService.getEnterpriseStatus(req.user.enterpriseId);
   }
 }

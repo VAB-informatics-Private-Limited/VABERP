@@ -22,6 +22,9 @@ interface AuthState {
   setToken: (token: string) => void;
   getEnterpriseId: () => number | null;
   getEmployeeId: () => number | null;
+  isSubscriptionActive: () => boolean;
+  isProfileLocked: () => boolean;
+  updateUser: (updates: Partial<Enterprise>) => void;
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -76,6 +79,27 @@ export const useAuthStore = create<AuthState>()(
         const { user, userType } = get();
         if (!user || userType !== 'employee') return null;
         return (user as Employee).id;
+      },
+
+      isSubscriptionActive: () => {
+        const { user, userType } = get();
+        // Only enterprise users are gated; employees pass through
+        if (userType !== 'enterprise') return true;
+        const ent = user as Enterprise;
+        if (!ent?.plan_id || !ent?.expiry_date) return false;
+        return new Date(ent.expiry_date) >= new Date() && ent.subscription_status === 'active';
+      },
+
+      isProfileLocked: () => {
+        const { user, userType } = get();
+        if (userType !== 'enterprise') return false;
+        return !!(user as Enterprise & { is_locked?: boolean })?.is_locked;
+      },
+
+      updateUser: (updates) => {
+        set((state) => ({
+          user: state.user ? ({ ...state.user, ...updates } as Employee | Enterprise) : state.user,
+        }));
       },
     }),
     {

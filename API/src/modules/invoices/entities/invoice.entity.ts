@@ -13,6 +13,7 @@ import { Customer } from '../../customers/entities/customer.entity';
 import { Quotation } from '../../quotations/entities/quotation.entity';
 import { Employee } from '../../employees/entities/employee.entity';
 import { Payment } from './payment.entity';
+import { SalesOrder } from '../../sales-orders/entities/sales-order.entity';
 
 @Entity('invoices')
 export class Invoice {
@@ -42,6 +43,10 @@ export class Invoice {
 
   @Column({ name: 'sales_order_id', nullable: true })
   salesOrderId: number;
+
+  @ManyToOne(() => SalesOrder, { nullable: true, eager: false })
+  @JoinColumn({ name: 'sales_order_id' })
+  salesOrder: SalesOrder;
 
   @Column({ name: 'created_by', nullable: true })
   createdBy: number;

@@ -51,6 +51,9 @@ export class MaterialRequest {
   @Column({ name: 'request_date', type: 'date' })
   requestDate: Date;
 
+  @Column({ name: 'expected_delivery', type: 'date', nullable: true })
+  expectedDelivery: Date | null;
+
   @Column({ nullable: true })
   purpose: string;
 
@@ -72,6 +75,12 @@ export class MaterialRequest {
 
   @Column({ nullable: true, type: 'text' })
   notes: string;
+
+  @Column({ name: 'confirmed_received', default: false })
+  confirmedReceived: boolean;
+
+  @Column({ name: 'confirmed_received_at', type: 'timestamp', nullable: true })
+  confirmedReceivedAt: Date | null;
 
   @CreateDateColumn({ name: 'created_date' })
   createdDate: Date;

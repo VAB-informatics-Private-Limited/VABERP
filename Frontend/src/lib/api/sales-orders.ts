@@ -125,6 +125,13 @@ export async function updateSOStatus(id: number, status: string, reason?: string
   return { message: d.message, data: d.data ? mapSOFromBackend(d.data) : undefined };
 }
 
+export async function updateSOETA(id: number, expectedDelivery: string): Promise<ApiResponse<SalesOrder>> {
+  const response = await apiClient.patch(`/sales-orders/${id}/eta`, { expectedDelivery });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const d = response.data as any;
+  return { message: d.message, data: d.data ? mapSOFromBackend(d.data) : undefined };
+}
+
 export async function updateSalesOrder(
   id: number,
   data: {

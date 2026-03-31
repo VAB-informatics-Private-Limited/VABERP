@@ -24,6 +24,9 @@ export class AuditLogsService {
   ) {}
 
   async log(params: AuditLogParams) {
+    // Only track employee actions — skip enterprise admin and unauthenticated actions
+    if (!params.userType || params.userType !== 'employee') return;
+
     const entry = this.auditLogRepository.create({
       enterpriseId: params.enterpriseId,
       userId: params.userId,
@@ -49,6 +52,7 @@ export class AuditLogsService {
     action?: string,
     fromDate?: string,
     toDate?: string,
+    userName?: string,
   ) {
     const query = this.auditLogRepository
       .createQueryBuilder('log')
@@ -72,6 +76,10 @@ export class AuditLogsService {
 
     if (toDate) {
       query.andWhere('log.createdDate <= :toDate', { toDate });
+    }
+
+    if (userName) {
+      query.andWhere('log.userName ILIKE :userName', { userName: `%${userName}%` });
     }
 
     const pageNum = Number(page) || 1;

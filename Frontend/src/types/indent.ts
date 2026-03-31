@@ -24,6 +24,26 @@ export interface IndentItem {
   unit_of_measure?: string;
   status: string;
   notes?: string;
+  // GRN rejection details (populated from latest GRN item when status = 'grn_rejected')
+  grn_rejected_qty?: number;
+  grn_rejection_reason?: string;
+  grn_rejection_notes?: string;
+  grn_rtv_status?: string;    // null | 'pending' | 'returned' — tracks physical return to vendor
+  grn_item_status?: string;   // 'pending' | 'confirmed' | 'partial' | 'rejected'
+}
+
+export interface IndentGRN {
+  id: number;
+  grn_number: string;
+  status: string;
+  received_date?: string;
+}
+
+export interface IndentReplacementRef {
+  id: number;
+  indent_number: string;
+  status: string;
+  created_date: string;
 }
 
 export interface Indent {
@@ -37,12 +57,21 @@ export interface Indent {
   requested_by?: number;
   requested_by_name?: string;
   request_date: string;
-  source?: string; // 'material_request' | 'inventory'
+  expected_delivery?: string;
+  source?: string; // 'material_request' | 'inventory' | 'replacement'
   status: string;
   notes?: string;
   items?: IndentItem[];
   purchase_orders?: IndentPO[];
+  grn?: IndentGRN | null;
   created_date: string;
+  // Replacement tracking
+  parent_indent_id?: number | null;
+  parent_indent_number?: string;
+  parent_indent_status?: string;
+  is_replacement?: boolean;
+  rejection_reason?: string | null;
+  replacement_indents?: IndentReplacementRef[];
 }
 
 export const INDENT_STATUS_OPTIONS = [

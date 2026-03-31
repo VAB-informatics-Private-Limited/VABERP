@@ -5,6 +5,7 @@ import { Layout, Drawer } from 'antd';
 import { ProtectedRoute } from '@/components/layout/ProtectedRoute';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { Header } from '@/components/layout/Header';
+import { useAuthStore } from '@/stores/authStore';
 
 const { Content } = Layout;
 
@@ -13,6 +14,7 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const { isSubscriptionActive, userType } = useAuthStore();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
@@ -67,7 +69,9 @@ export default function DashboardLayout({
               }}
             />
           </div>
-          <Content className="p-3 md:p-6 bg-[#f0f4f8] min-h-[calc(100vh-64px)]">
+          <Content
+            className="p-3 md:p-6 bg-[#f0f4f8] min-h-[calc(100vh-64px)]"
+          >
             {children}
           </Content>
         </Layout>

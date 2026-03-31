@@ -55,13 +55,13 @@ export class PurchaseOrderItem {
   @Column({ name: 'unit_of_measure', nullable: true })
   unitOfMeasure: string;
 
-  @Column({ name: 'unit_price', type: 'decimal', precision: 10, scale: 2, default: 0 })
+  @Column({ name: 'unit_price', type: 'decimal', precision: 18, scale: 2, default: 0 })
   unitPrice: number;
 
   @Column({ name: 'tax_rate', type: 'decimal', precision: 5, scale: 2, default: 0 })
   taxPercent: number;
 
-  @Column({ name: 'total', type: 'decimal', precision: 12, scale: 2, default: 0 })
+  @Column({ name: 'total', type: 'decimal', precision: 18, scale: 2, default: 0 })
   lineTotal: number;
 
   @Column({ name: 'sort_order', default: 0 })

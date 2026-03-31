@@ -31,8 +31,13 @@ import { RawMaterialsModule } from './modules/raw-materials/raw-materials.module
 import { SuppliersModule } from './modules/suppliers/suppliers.module';
 import { IndentsModule } from './modules/indents/indents.module';
 import { GoodsReceiptsModule } from './modules/goods-receipts/goods-receipts.module';
+import { RfqsModule } from './modules/rfqs/rfqs.module';
 import { SuperAdminModule } from './modules/super-admin/super-admin.module';
 import { LocationsModule } from './modules/locations/locations.module';
+import { ServicesMasterModule } from './modules/services-master/services-master.module';
+import { CouponsModule } from './modules/coupons/coupons.module';
+import { ResellersModule } from './modules/resellers/resellers.module';
+import { ScheduleModule } from '@nestjs/schedule';
 import databaseConfig from './config/database.config';
 import jwtConfig from './config/jwt.config';
 
@@ -99,8 +104,13 @@ import jwtConfig from './config/jwt.config';
     SuppliersModule,
     IndentsModule,
     GoodsReceiptsModule,
+    RfqsModule,
     SuperAdminModule,
     LocationsModule,
+    ServicesMasterModule,
+    CouponsModule,
+    ResellersModule,
+    ScheduleModule.forRoot(),
   ],
   providers: [
     {

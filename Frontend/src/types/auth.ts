@@ -29,6 +29,9 @@ export interface Enterprise {
   email_status: 0 | 1;
   mobile_status: 0 | 1;
   status: 'active' | 'inactive' | 'blocked';
+  subscription_status?: 'active' | 'expired' | 'none';
+  plan_id?: number | null;
+  subscription_start_date?: string | null;
 }
 
 export type MenuPermissions = Record<string, Record<string, Record<string, 0 | 1>>>;

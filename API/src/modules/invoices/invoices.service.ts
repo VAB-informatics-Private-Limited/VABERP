@@ -7,6 +7,7 @@ import { Payment } from './entities/payment.entity';
 import { Quotation } from '../quotations/entities/quotation.entity';
 import { QuotationItem } from '../quotations/entities/quotation-item.entity';
 import { CreateInvoiceDto, InvoiceItemDto, RecordPaymentDto } from './dto/create-invoice.dto';
+import { AuditLogsService } from '../audit-logs/audit-logs.service';
 
 @Injectable()
 export class InvoicesService {
@@ -21,6 +22,7 @@ export class InvoicesService {
     private quotationRepository: Repository<Quotation>,
     @InjectRepository(QuotationItem)
     private quotationItemRepository: Repository<QuotationItem>,
+    private auditLogsService: AuditLogsService,
   ) {}
 
   async findAll(
@@ -38,6 +40,7 @@ export class InvoicesService {
       .leftJoinAndSelect('invoice.customer', 'customer')
       .leftJoinAndSelect('invoice.createdByEmployee', 'createdByEmployee')
       .leftJoinAndSelect('invoice.payments', 'payments')
+      .leftJoinAndSelect('invoice.salesOrder', 'salesOrder')
       .where('invoice.enterpriseId = :enterpriseId', { enterpriseId });
 
     if (search) {
@@ -72,9 +75,16 @@ export class InvoicesService {
       .orderBy('invoice.createdDate', 'DESC')
       .getManyAndCount();
 
+    // Recompute balanceDue from grandTotal - totalPaid to handle stale stored values
+    const normalized = data.map((inv) => ({
+      ...inv,
+      totalPaid: Number(inv.totalPaid),
+      balanceDue: Number(inv.grandTotal) - Number(inv.totalPaid),
+    }));
+
     return {
       message: 'Invoices fetched successfully',
-      data,
+      data: normalized,
       totalRecords: total,
       page: pageNum,
       limit: limitNum,
@@ -84,7 +94,7 @@ export class InvoicesService {
   async findOne(id: number, enterpriseId: number) {
     const invoice = await this.invoiceRepository.findOne({
       where: { id, enterpriseId },
-      relations: ['customer', 'quotation', 'createdByEmployee'],
+      relations: ['customer', 'quotation', 'createdByEmployee', 'salesOrder'],
     });
 
     if (!invoice) {
@@ -103,10 +113,15 @@ export class InvoicesService {
       order: { createdDate: 'DESC' },
     });
 
+    const totalPaid = payments.reduce((sum, p) => sum + Number(p.amount), 0);
+    const balanceDue = Number(invoice.grandTotal) - totalPaid;
+
     return {
       message: 'Invoice fetched successfully',
       data: {
         ...invoice,
+        totalPaid,
+        balanceDue,
         items,
         payments,
       },
@@ -164,6 +179,16 @@ export class InvoicesService {
       }),
     );
     await this.itemRepository.save(itemEntities);
+
+    this.auditLogsService.log({
+      enterpriseId,
+      userId,
+      entityType: 'invoice',
+      entityId: savedInvoice.id,
+      action: 'create',
+      description: `Created invoice ${invoiceNumber}${createDto.customerName ? ' for "' + createDto.customerName + '"' : ''}`,
+      newValues: { invoiceNumber, grandTotal },
+    }).catch(() => {});
 
     return this.findOne(savedInvoice.id, enterpriseId);
   }
@@ -270,6 +295,15 @@ export class InvoicesService {
 
     await this.invoiceRepository.update(id, updateData);
 
+    this.auditLogsService.log({
+      enterpriseId,
+      userId,
+      entityType: 'invoice',
+      entityId: id,
+      action: 'update',
+      description: `Updated invoice`,
+    }).catch(() => {});
+
     return this.findOne(id, enterpriseId);
   }
 
@@ -289,6 +323,14 @@ export class InvoicesService {
 
     await this.itemRepository.delete({ invoiceId: id });
     await this.invoiceRepository.delete(id);
+
+    this.auditLogsService.log({
+      enterpriseId,
+      entityType: 'invoice',
+      entityId: id,
+      action: 'delete',
+      description: `Deleted invoice ${invoice.invoiceNumber}`,
+    }).catch(() => {});
 
     return {
       message: 'Invoice deleted successfully',
@@ -352,6 +394,16 @@ export class InvoicesService {
       status: newStatus,
     });
 
+    this.auditLogsService.log({
+      enterpriseId,
+      userId,
+      entityType: 'invoice',
+      entityId: invoiceId,
+      action: 'payment',
+      description: `Recorded payment ${paymentNumber} of ${dto.amount} for invoice ${invoice.invoiceNumber}`,
+      newValues: { amount: dto.amount, paymentMethod: dto.paymentMethod, paymentNumber, newStatus },
+    }).catch(() => {});
+
     return this.findOne(invoiceId, enterpriseId);
   }
 
@@ -373,6 +425,74 @@ export class InvoicesService {
     return {
       message: 'Payments fetched successfully',
       data: payments,
+    };
+  }
+
+  async getCustomerBalance(customerName: string, enterpriseId: number) {
+    const result = await this.invoiceRepository
+      .createQueryBuilder('invoice')
+      .select('SUM(invoice.grandTotal)', 'totalInvoiced')
+      .addSelect('SUM(invoice.totalPaid)', 'totalPaid')
+      .addSelect('COUNT(invoice.id)', 'invoiceCount')
+      .where('invoice.enterpriseId = :enterpriseId', { enterpriseId })
+      .andWhere('LOWER(invoice.customerName) = LOWER(:customerName)', { customerName })
+      .andWhere("invoice.status != 'cancelled'")
+      .getRawOne();
+
+    const totalInvoiced = Number(result?.totalInvoiced || 0);
+    const totalPaid = Number(result?.totalPaid || 0);
+    const totalBalance = totalInvoiced - totalPaid;
+    const invoiceCount = Number(result?.invoiceCount || 0);
+
+    return {
+      message: 'Customer balance fetched successfully',
+      data: { customerName, totalInvoiced, totalPaid, totalBalance, invoiceCount },
+    };
+  }
+
+  async getAllPayments(
+    enterpriseId: number,
+    page = 1,
+    limit = 20,
+    search?: string,
+    fromDate?: string,
+    toDate?: string,
+  ) {
+    const query = this.paymentRepository
+      .createQueryBuilder('payment')
+      .leftJoinAndSelect('payment.invoice', 'invoice')
+      .where('payment.enterpriseId = :enterpriseId', { enterpriseId });
+
+    if (search) {
+      query.andWhere(
+        '(payment.paymentNumber ILIKE :search OR invoice.invoiceNumber ILIKE :search OR invoice.customerName ILIKE :search)',
+        { search: `%${search}%` },
+      );
+    }
+
+    if (fromDate) {
+      query.andWhere('payment.paymentDate >= :fromDate', { fromDate });
+    }
+
+    if (toDate) {
+      query.andWhere('payment.paymentDate <= :toDate', { toDate });
+    }
+
+    const pageNum = Number(page) || 1;
+    const limitNum = Number(limit) || 20;
+
+    const [data, total] = await query
+      .skip((pageNum - 1) * limitNum)
+      .take(limitNum)
+      .orderBy('payment.createdDate', 'DESC')
+      .getManyAndCount();
+
+    return {
+      message: 'Payments fetched successfully',
+      data,
+      totalRecords: total,
+      page: pageNum,
+      limit: limitNum,
     };
   }
 

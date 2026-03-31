@@ -21,6 +21,7 @@ import {
 } from './dto';
 import { buildFullAccessPermissions, buildEmptyPermissions } from '../../common/constants/permissions';
 import { EmailService } from '../email/email.service';
+import { AuditLogsService } from '../audit-logs/audit-logs.service';
 
 @Injectable()
 export class AuthService {
@@ -33,6 +34,7 @@ export class AuthService {
     private permissionRepository: Repository<MenuPermission>,
     private jwtService: JwtService,
     private emailService: EmailService,
+    private auditLogsService: AuditLogsService,
   ) {}
 
   async employeeLogin(dto: EmployeeLoginDto) {
@@ -62,12 +64,25 @@ export class AuthService {
       where: { employeeId: employee.id },
     });
 
+    const employeeName = `${employee.firstName} ${employee.lastName || ''}`.trim();
     const payload = {
       sub: employee.id,
       email: employee.email,
       type: 'employee' as const,
       enterpriseId: employee.enterpriseId,
+      name: employeeName,
     };
+
+    this.auditLogsService.log({
+      enterpriseId: employee.enterpriseId,
+      userId: employee.id,
+      userType: 'employee',
+      userName: employeeName,
+      entityType: 'auth',
+      entityId: employee.id,
+      action: 'login',
+      description: `Employee "${employeeName}" logged in`,
+    }).catch(() => {});
 
     return {
       message: 'Login successful',
@@ -169,6 +184,7 @@ export class AuthService {
       email: enterprise.email,
       type: 'enterprise' as const,
       enterpriseId: enterprise.id,
+      name: enterprise.businessName,
     };
 
     return {
@@ -183,10 +199,37 @@ export class AuthService {
           state: enterprise.state,
           status: enterprise.status,
           expiryDate: enterprise.expiryDate,
+          planId: enterprise.planId,
+          subscriptionStartDate: enterprise.subscriptionStartDate,
+          subscriptionStatus: this.computeEnterpriseSubscriptionStatus(enterprise),
+          isLocked: enterprise.isLocked ?? false,
         },
         permissions: buildFullAccessPermissions(),
         token: this.jwtService.sign(payload),
         type: 'enterprise',
+      },
+    };
+  }
+
+  private computeEnterpriseSubscriptionStatus(
+    enterprise: Enterprise,
+  ): 'active' | 'expired' | 'none' {
+    if (!enterprise.planId) return 'none';
+    if (!enterprise.expiryDate) return 'none';
+    return new Date(enterprise.expiryDate) >= new Date() ? 'active' : 'expired';
+  }
+
+  async getEnterpriseStatus(enterpriseId: number) {
+    const enterprise = await this.enterpriseRepository.findOne({ where: { id: enterpriseId } });
+    if (!enterprise) throw new UnauthorizedException('Enterprise not found');
+
+    return {
+      message: 'Status fetched',
+      data: {
+        subscriptionStatus: this.computeEnterpriseSubscriptionStatus(enterprise),
+        expiryDate: enterprise.expiryDate,
+        planId: enterprise.planId,
+        status: enterprise.status,
       },
     };
   }
@@ -291,9 +334,17 @@ export class AuthService {
     throw new UnauthorizedException('Account not found with this email');
   }
 
-  async getPermissions(employeeId: number) {
+  async getPermissions(user: { id: number; type: string }) {
+    if (user.type !== 'employee') {
+      return {
+        message: 'Permissions fetched successfully',
+        data: buildFullAccessPermissions(),
+        dataStartDate: null,
+      };
+    }
+
     const record = await this.permissionRepository.findOne({
-      where: { employeeId },
+      where: { employeeId: user.id },
     });
 
     return {

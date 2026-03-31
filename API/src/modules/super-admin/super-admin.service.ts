@@ -14,6 +14,7 @@ import { Employee } from '../employees/entities/employee.entity';
 import { SupportTicket } from './entities/support-ticket.entity';
 import { SubscriptionPlan } from './entities/subscription-plan.entity';
 import { PlatformPayment } from './entities/platform-payment.entity';
+import { Coupon } from '../coupons/entities/coupon.entity';
 
 @Injectable()
 export class SuperAdminService implements OnApplicationBootstrap {
@@ -38,10 +39,33 @@ export class SuperAdminService implements OnApplicationBootstrap {
     private subscriptionPlanRepository: Repository<SubscriptionPlan>,
     @InjectRepository(PlatformPayment)
     private platformPaymentRepository: Repository<PlatformPayment>,
+    @InjectRepository(Coupon)
+    private couponRepository: Repository<Coupon>,
     private jwtService: JwtService,
   ) {}
 
   async onApplicationBootstrap() {
+    // Ensure super_admin table exists (synchronize is off in production)
+    await this.superAdminRepository.manager.query(`
+      CREATE TABLE IF NOT EXISTS super_admin (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR NOT NULL,
+        email VARCHAR NOT NULL UNIQUE,
+        password VARCHAR NOT NULL,
+        status VARCHAR NOT NULL DEFAULT 'active',
+        created_at TIMESTAMP NOT NULL DEFAULT now(),
+        updated_at TIMESTAMP NOT NULL DEFAULT now()
+      )
+    `);
+
+    // Ensure is_locked column exists on enterprises and resellers (production migration)
+    await this.superAdminRepository.manager.query(`
+      ALTER TABLE enterprises ADD COLUMN IF NOT EXISTS is_locked BOOLEAN NOT NULL DEFAULT FALSE
+    `);
+    await this.superAdminRepository.manager.query(`
+      ALTER TABLE resellers ADD COLUMN IF NOT EXISTS is_locked BOOLEAN NOT NULL DEFAULT FALSE
+    `);
+
     // Seed super admin
     const existing = await this.superAdminRepository.findOne({
       where: { email: 'admin@vabinformatics.com' },
@@ -90,6 +114,22 @@ export class SuperAdminService implements OnApplicationBootstrap {
         created_date TIMESTAMP NOT NULL DEFAULT now(),
         updated_date TIMESTAMP NOT NULL DEFAULT now()
       )
+    `);
+
+    // Add new columns to subscription_plans if not exists
+    await this.subscriptionPlanRepository.manager.query(`
+      ALTER TABLE subscription_plans ADD COLUMN IF NOT EXISTS duration_type VARCHAR NOT NULL DEFAULT 'days'
+    `);
+    await this.subscriptionPlanRepository.manager.query(`
+      ALTER TABLE subscription_plans ADD COLUMN IF NOT EXISTS number_of_services_allowed INTEGER NOT NULL DEFAULT 0
+    `);
+
+    // Add new columns to enterprises if not exists
+    await this.subscriptionPlanRepository.manager.query(`
+      ALTER TABLE enterprises ADD COLUMN IF NOT EXISTS plan_id INTEGER REFERENCES subscription_plans(id)
+    `);
+    await this.subscriptionPlanRepository.manager.query(`
+      ALTER TABLE enterprises ADD COLUMN IF NOT EXISTS subscription_start_date DATE
     `);
 
     await this.subscriptionPlanRepository.manager.query(`
@@ -469,7 +509,7 @@ export class SuperAdminService implements OnApplicationBootstrap {
         ent.business_name,
         COALESCE(SUM(inv.grand_total) FILTER (WHERE inv.status != 'cancelled'), 0) as total_revenue,
         COALESCE((
-          SELECT SUM(po.grand_total)
+          SELECT SUM(po.total_amount)
           FROM purchase_orders po
           WHERE po.enterprise_id = ent.id AND po.status NOT IN ('cancelled','draft')
             AND po.order_date >= NOW() - INTERVAL '${days} days'
@@ -502,7 +542,7 @@ export class SuperAdminService implements OnApplicationBootstrap {
     }> = await this.invoiceRepository.manager.query(`
       SELECT
         COALESCE(SUM(inv.grand_total) FILTER (WHERE inv.status != 'cancelled'), 0) as total_revenue,
-        COALESCE((SELECT SUM(po.grand_total) FROM purchase_orders po
+        COALESCE((SELECT SUM(po.total_amount) FROM purchase_orders po
                   WHERE po.status NOT IN ('cancelled','draft')
                     AND po.order_date >= NOW() - INTERVAL '${days} days'), 0) as total_costs,
         COALESCE((SELECT SUM(pay.amount) FROM payments pay
@@ -531,7 +571,7 @@ export class SuperAdminService implements OnApplicationBootstrap {
           DATE_TRUNC('month', m.month_date) as month_date,
           COALESCE(SUM(inv.grand_total) FILTER (WHERE inv.status != 'cancelled'), 0) as revenue,
           COALESCE((
-            SELECT SUM(po.grand_total) FROM purchase_orders po
+            SELECT SUM(po.total_amount) FROM purchase_orders po
             WHERE DATE_TRUNC('month', po.order_date) = DATE_TRUNC('month', m.month_date)
               AND po.status NOT IN ('cancelled','draft')
           ), 0) as cost
@@ -735,6 +775,7 @@ export class SuperAdminService implements OnApplicationBootstrap {
     const plans = await this.subscriptionPlanRepository.find({
       where: { isActive: true },
       order: { price: 'ASC' },
+      relations: ['services'],
     });
     return { message: 'Subscription plans fetched', data: plans };
   }
@@ -743,20 +784,43 @@ export class SuperAdminService implements OnApplicationBootstrap {
     name: string;
     description?: string;
     price: number;
-    durationDays: number;
+    durationDays?: number;
+    durationType?: string;
+    durationValue?: number;
     maxEmployees: number;
     features?: string;
+    numberOfServicesAllowed?: number;
+    serviceIds?: number[];
   }) {
+    // Compute durationDays from type + value if provided
+    let durationDays = dto.durationDays ?? 30;
+    const durationType = dto.durationType ?? 'days';
+    if (dto.durationValue !== undefined) {
+      if (durationType === 'months') durationDays = dto.durationValue * 30;
+      else if (durationType === 'year') durationDays = dto.durationValue * 365;
+      else durationDays = dto.durationValue;
+    }
+
     const plan = this.subscriptionPlanRepository.create({
       name: dto.name,
       description: dto.description ?? null,
       price: dto.price,
-      durationDays: dto.durationDays,
+      durationDays,
+      durationType,
       maxEmployees: dto.maxEmployees,
       features: dto.features ?? null,
+      numberOfServicesAllowed: dto.numberOfServicesAllowed ?? 0,
       isActive: true,
     });
     await this.subscriptionPlanRepository.save(plan);
+
+    if (dto.serviceIds && dto.serviceIds.length > 0) {
+      const values = dto.serviceIds.map((sid) => `(${plan.id}, ${sid})`).join(', ');
+      await this.subscriptionPlanRepository.manager.query(
+        `INSERT INTO plan_services (plan_id, service_id) VALUES ${values} ON CONFLICT DO NOTHING`,
+      );
+    }
+
     return { message: 'Plan created', data: plan };
   }
 
@@ -765,18 +829,64 @@ export class SuperAdminService implements OnApplicationBootstrap {
     description?: string;
     price?: number;
     durationDays?: number;
+    durationType?: string;
+    durationValue?: number;
     maxEmployees?: number;
     features?: string;
+    numberOfServicesAllowed?: number;
+    serviceIds?: number[];
   }) {
     const plan = await this.subscriptionPlanRepository.findOne({ where: { id } });
     if (!plan) throw new NotFoundException('Plan not found');
-    await this.subscriptionPlanRepository.update(id, dto);
+
+    const update: Partial<SubscriptionPlan> = {};
+    if (dto.name !== undefined) update.name = dto.name;
+    if (dto.description !== undefined) update.description = dto.description;
+    if (dto.price !== undefined) update.price = dto.price;
+    if (dto.maxEmployees !== undefined) update.maxEmployees = dto.maxEmployees;
+    if (dto.features !== undefined) update.features = dto.features;
+    if (dto.numberOfServicesAllowed !== undefined) update.numberOfServicesAllowed = dto.numberOfServicesAllowed;
+    if (dto.durationType !== undefined) update.durationType = dto.durationType;
+
+    if (dto.durationValue !== undefined) {
+      const type = dto.durationType ?? plan.durationType;
+      if (type === 'months') update.durationDays = dto.durationValue * 30;
+      else if (type === 'year') update.durationDays = dto.durationValue * 365;
+      else update.durationDays = dto.durationValue;
+    } else if (dto.durationDays !== undefined) {
+      update.durationDays = dto.durationDays;
+    }
+
+    await this.subscriptionPlanRepository.update(id, update);
+
+    if (dto.serviceIds !== undefined) {
+      await this.subscriptionPlanRepository.manager.query(
+        `DELETE FROM plan_services WHERE plan_id = $1`,
+        [id],
+      );
+      if (dto.serviceIds.length > 0) {
+        const values = dto.serviceIds.map((sid) => `(${id}, ${sid})`).join(', ');
+        await this.subscriptionPlanRepository.manager.query(
+          `INSERT INTO plan_services (plan_id, service_id) VALUES ${values} ON CONFLICT DO NOTHING`,
+        );
+      }
+    }
+
     return { message: 'Plan updated' };
   }
 
   async deletePlan(id: number) {
     const plan = await this.subscriptionPlanRepository.findOne({ where: { id } });
     if (!plan) throw new NotFoundException('Plan not found');
+
+    const rows: Array<{ count: string }> = await this.subscriptionPlanRepository.manager.query(
+      `SELECT COUNT(*) as count FROM enterprises WHERE plan_id = $1 AND status = 'active'`,
+      [id],
+    );
+    if (parseInt(rows[0].count, 10) > 0) {
+      throw new BadRequestException('Plan is assigned to active enterprises');
+    }
+
     await this.subscriptionPlanRepository.update(id, { isActive: false });
     return { message: 'Plan deactivated' };
   }
@@ -816,19 +926,68 @@ export class SuperAdminService implements OnApplicationBootstrap {
     return { message: 'Enterprise subscriptions fetched', data };
   }
 
-  async assignPlan(enterpriseId: number, planId: number) {
+  async assignPlan(enterpriseId: number, planId: number, couponCode?: string) {
     const enterprise = await this.enterpriseRepository.findOne({ where: { id: enterpriseId } });
     if (!enterprise) throw new NotFoundException('Enterprise not found');
 
     const plan = await this.subscriptionPlanRepository.findOne({ where: { id: planId } });
     if (!plan) throw new NotFoundException('Plan not found');
+    if (!plan.isActive) throw new BadRequestException('Plan is not active');
+
+    let finalAmount = Number(plan.price);
+    let couponId: number | null = null;
+
+    if (couponCode) {
+      const coupon = await this.couponRepository.findOne({
+        where: { couponCode: couponCode.toUpperCase() },
+      });
+      if (!coupon) throw new NotFoundException('Invalid coupon code');
+      if (coupon.status !== 'active') throw new BadRequestException('Coupon is inactive');
+
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const expiry = new Date(coupon.expiryDate);
+      expiry.setHours(0, 0, 0, 0);
+      if (expiry < today) throw new BadRequestException('Coupon has expired');
+      if (coupon.maxUses > 0 && coupon.usedCount >= coupon.maxUses) {
+        throw new BadRequestException('Coupon usage limit reached');
+      }
+
+      const discountValue = Number(coupon.discountValue);
+      if (coupon.discountType === 'percentage') {
+        finalAmount = parseFloat((finalAmount - (finalAmount * discountValue) / 100).toFixed(2));
+      } else {
+        finalAmount = parseFloat(Math.max(0, finalAmount - discountValue).toFixed(2));
+      }
+      couponId = coupon.id;
+
+      // Increment coupon usage
+      await this.couponRepository.manager.query(
+        `UPDATE coupons SET used_count = used_count + 1 WHERE id = $1`,
+        [coupon.id],
+      );
+    }
 
     const expiryDate = new Date();
     expiryDate.setDate(expiryDate.getDate() + plan.durationDays);
 
-    await this.enterpriseRepository.update(enterpriseId, { expiryDate });
+    await this.enterpriseRepository.update(enterpriseId, {
+      expiryDate,
+      planId,
+      subscriptionStartDate: new Date(),
+    });
 
-    return { message: `Plan assigned. New expiry: ${expiryDate.toISOString().split('T')[0]}` };
+    // Record platform payment
+    await this.platformPaymentRepository.manager.query(
+      `INSERT INTO platform_payments (enterprise_id, plan_id, amount, payment_method, status)
+       VALUES ($1, $2, $3, 'assigned_by_admin', 'verified')`,
+      [enterpriseId, planId, finalAmount],
+    );
+
+    return {
+      message: `Plan assigned. New expiry: ${expiryDate.toISOString().split('T')[0]}`,
+      data: { expiryDate, finalAmount, couponApplied: !!couponId },
+    };
   }
 
   // ─── Enterprise Onboarding ────────────────────────────────────────────────
@@ -850,6 +1009,7 @@ export class SuperAdminService implements OnApplicationBootstrap {
     paymentMethod: string;
     paymentReference?: string;
     paymentNotes?: string;
+    resellerId?: number;
   }) {
     const existing = await this.enterpriseRepository.findOne({ where: { email: dto.email } });
     if (existing) throw new ConflictException('An enterprise with this email already exists');
@@ -864,8 +1024,8 @@ export class SuperAdminService implements OnApplicationBootstrap {
     const rows: Array<{ id: number }> = await this.enterpriseRepository.manager.query(
       `INSERT INTO enterprises
          (business_name, email, mobile, contact_person, address, city, state, pincode,
-          gst_number, cin_number, website, password, status)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+          gst_number, cin_number, website, password, status, reseller_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
        RETURNING id`,
       [
         dto.businessName,
@@ -881,6 +1041,7 @@ export class SuperAdminService implements OnApplicationBootstrap {
         dto.website ?? null,
         hashedPassword,
         'pending',
+        dto.resellerId ?? null,
       ],
     );
     const enterpriseId = rows[0].id;
@@ -962,5 +1123,376 @@ export class SuperAdminService implements OnApplicationBootstrap {
     }
 
     return { message: 'Enterprise rejected successfully' };
+  }
+
+  // ─── Lock / Unlock Profile ────────────────────────────────────────────────
+
+  async lockProfile(id: number, type: 'enterprise' | 'reseller') {
+    if (type === 'enterprise') {
+      const enterprise = await this.enterpriseRepository.findOne({ where: { id } });
+      if (!enterprise) throw new NotFoundException('Enterprise not found');
+      await this.enterpriseRepository.update(id, { isLocked: true } as any);
+      return { message: 'Enterprise profile locked successfully' };
+    } else {
+      const exists = await this.enterpriseRepository.manager.query(
+        `SELECT id FROM resellers WHERE id = $1`, [id]
+      );
+      if (!exists.length) throw new NotFoundException('Reseller not found');
+      await this.enterpriseRepository.manager.query(
+        `UPDATE resellers SET is_locked = true WHERE id = $1`, [id]
+      );
+      return { message: 'Reseller profile locked successfully' };
+    }
+  }
+
+  async unlockProfile(id: number, type: 'enterprise' | 'reseller') {
+    if (type === 'enterprise') {
+      const enterprise = await this.enterpriseRepository.findOne({ where: { id } });
+      if (!enterprise) throw new NotFoundException('Enterprise not found');
+      await this.enterpriseRepository.update(id, { isLocked: false } as any);
+      return { message: 'Enterprise profile unlocked successfully' };
+    } else {
+      const exists = await this.enterpriseRepository.manager.query(
+        `SELECT id FROM resellers WHERE id = $1`, [id]
+      );
+      if (!exists.length) throw new NotFoundException('Reseller not found');
+      await this.enterpriseRepository.manager.query(
+        `UPDATE resellers SET is_locked = false WHERE id = $1`, [id]
+      );
+      return { message: 'Reseller profile unlocked successfully' };
+    }
+  }
+
+  // ─── Analytics ────────────────────────────────────────────────────────────
+
+  async getAnalytics() {
+    const manager = this.enterpriseRepository.manager;
+
+    // KPIs
+    const [
+      totalEnterprises,
+      activeEnterprises,
+      totalEmployees,
+    ] = await Promise.all([
+      this.enterpriseRepository.count(),
+      this.enterpriseRepository.count({ where: { status: 'active' } }),
+      this.employeeRepository.count(),
+    ]);
+
+    const kpiRows: Array<{
+      total_invoices: string;
+      total_pos: string;
+      total_sos: string;
+      platform_revenue: string;
+    }> = await manager.query(`
+      SELECT
+        (SELECT COUNT(*) FROM invoices) as total_invoices,
+        (SELECT COUNT(*) FROM purchase_orders WHERE status NOT IN ('cancelled','draft')) as total_pos,
+        (SELECT COUNT(*) FROM sales_orders WHERE status != 'cancelled') as total_sos,
+        (SELECT COALESCE(SUM(grand_total),0) FROM invoices WHERE status != 'cancelled') as platform_revenue
+    `);
+
+    const kpi = kpiRows[0];
+
+    // Monthly enterprise signups — last 12 months
+    const monthlySignupRows: Array<{ month: string; count: string }> = await manager.query(`
+      SELECT TO_CHAR(DATE_TRUNC('month', created_date), 'Mon YY') as month,
+             COUNT(*) as count
+      FROM enterprises
+      WHERE created_date >= NOW() - INTERVAL '12 months'
+      GROUP BY DATE_TRUNC('month', created_date)
+      ORDER BY DATE_TRUNC('month', created_date)
+    `);
+
+    // Monthly platform revenue — last 12 months
+    const monthlyRevenueRows: Array<{ month: string; revenue: string; orders: string }> = await manager.query(`
+      SELECT TO_CHAR(DATE_TRUNC('month', invoice_date), 'Mon YY') as month,
+             COALESCE(SUM(grand_total), 0) as revenue,
+             COUNT(*) as orders
+      FROM invoices
+      WHERE invoice_date >= NOW() - INTERVAL '12 months'
+        AND status != 'cancelled'
+      GROUP BY DATE_TRUNC('month', invoice_date)
+      ORDER BY DATE_TRUNC('month', invoice_date)
+    `);
+
+    // Enterprise status breakdown
+    const statusRows: Array<{ status: string; count: string }> = await manager.query(`
+      SELECT status, COUNT(*) as count FROM enterprises GROUP BY status
+    `);
+
+    // Recent activity feed — last 40 transactions across all enterprises
+    const activityRows: Array<{
+      type: string;
+      ref_number: string;
+      amount: string;
+      status: string;
+      date: string;
+      enterprise_id: number;
+      business_name: string;
+    }> = await manager.query(`
+      SELECT 'Invoice' as type, inv.invoice_number as ref_number,
+             inv.grand_total::text as amount, inv.status,
+             inv.invoice_date::text as date,
+             inv.enterprise_id, ent.business_name
+      FROM invoices inv
+      LEFT JOIN enterprises ent ON ent.id = inv.enterprise_id
+      WHERE inv.created_date >= NOW() - INTERVAL '30 days'
+
+      UNION ALL
+
+      SELECT 'Purchase Order' as type, po.po_number as ref_number,
+             po.total_amount::text as amount, po.status,
+             po.order_date::text as date,
+             po.enterprise_id, ent.business_name
+      FROM purchase_orders po
+      LEFT JOIN enterprises ent ON ent.id = po.enterprise_id
+      WHERE po.created_date >= NOW() - INTERVAL '30 days'
+        AND po.status NOT IN ('cancelled','draft')
+
+      UNION ALL
+
+      SELECT 'Sales Order' as type, so.order_number as ref_number,
+             so.grand_total::text as amount, so.status,
+             so.order_date::text as date,
+             so.enterprise_id, ent.business_name
+      FROM sales_orders so
+      LEFT JOIN enterprises ent ON ent.id = so.enterprise_id
+      WHERE so.created_date >= NOW() - INTERVAL '30 days'
+        AND so.status != 'cancelled'
+
+      ORDER BY date DESC
+      LIMIT 40
+    `);
+
+    // Top enterprises by activity (invoices + POs + SOs)
+    const topActivityRows: Array<{
+      enterprise_id: number;
+      business_name: string;
+      invoice_count: string;
+      po_count: string;
+      so_count: string;
+      total_revenue: string;
+    }> = await manager.query(`
+      SELECT ent.id as enterprise_id, ent.business_name,
+             COUNT(DISTINCT inv.id) as invoice_count,
+             COUNT(DISTINCT po.id) as po_count,
+             COUNT(DISTINCT so.id) as so_count,
+             COALESCE(SUM(DISTINCT inv.grand_total) FILTER (WHERE inv.status != 'cancelled'), 0) as total_revenue
+      FROM enterprises ent
+      LEFT JOIN invoices inv ON inv.enterprise_id = ent.id
+      LEFT JOIN purchase_orders po ON po.enterprise_id = ent.id AND po.status NOT IN ('cancelled','draft')
+      LEFT JOIN sales_orders so ON so.enterprise_id = ent.id AND so.status != 'cancelled'
+      GROUP BY ent.id, ent.business_name
+      ORDER BY (COUNT(DISTINCT inv.id) + COUNT(DISTINCT po.id) + COUNT(DISTINCT so.id)) DESC
+      LIMIT 8
+    `);
+
+    return {
+      message: 'Analytics fetched',
+      data: {
+        kpis: {
+          totalEnterprises,
+          activeEnterprises,
+          totalEmployees,
+          totalInvoices: parseInt(kpi.total_invoices, 10) || 0,
+          totalPurchaseOrders: parseInt(kpi.total_pos, 10) || 0,
+          totalSalesOrders: parseInt(kpi.total_sos, 10) || 0,
+          platformRevenue: parseFloat(kpi.platform_revenue) || 0,
+        },
+        monthlySignups: monthlySignupRows.map((r) => ({
+          month: r.month,
+          count: parseInt(r.count, 10),
+        })),
+        monthlyRevenue: monthlyRevenueRows.map((r) => ({
+          month: r.month,
+          revenue: parseFloat(r.revenue) || 0,
+          orders: parseInt(r.orders, 10),
+        })),
+        enterpriseStatusBreakdown: statusRows.map((r) => ({
+          status: r.status,
+          count: parseInt(r.count, 10),
+        })),
+        recentActivity: activityRows.map((r) => ({
+          type: r.type,
+          refNumber: r.ref_number,
+          amount: parseFloat(r.amount) || 0,
+          status: r.status,
+          date: r.date,
+          enterpriseId: r.enterprise_id,
+          businessName: r.business_name,
+        })),
+        topEnterprises: topActivityRows.map((r) => ({
+          enterpriseId: r.enterprise_id,
+          businessName: r.business_name,
+          invoiceCount: parseInt(r.invoice_count, 10),
+          poCount: parseInt(r.po_count, 10),
+          soCount: parseInt(r.so_count, 10),
+          totalRevenue: parseFloat(r.total_revenue) || 0,
+        })),
+      },
+    };
+  }
+
+  async reassignReseller(enterpriseId: number, resellerId: number | null) {
+    const enterprise = await this.enterpriseRepository.findOne({ where: { id: enterpriseId } });
+    if (!enterprise) throw new NotFoundException('Enterprise not found');
+
+    await this.enterpriseRepository.manager.query(
+      `UPDATE enterprises SET reseller_id = $1 WHERE id = $2`,
+      [resellerId, enterpriseId],
+    );
+
+    return { message: 'Reseller reassigned successfully', data: { enterpriseId, resellerId } };
+  }
+
+  async getAllResellers() {
+    const rows: Array<{ id: number; name: string; email: string; status: string }> =
+      await this.enterpriseRepository.manager.query(
+        `SELECT id, name, email, status FROM resellers WHERE status = 'active' ORDER BY name ASC`,
+      );
+    return { message: 'Resellers fetched', data: rows };
+  }
+
+  // ─── Reseller Plans CRUD ─────────────────────────────────────────────────
+
+  async getResellerPlans() {
+    const rows = await this.enterpriseRepository.manager.query(
+      `SELECT id, name, description, price, duration_days, commission_percentage, max_tenants, features, is_active, created_date
+       FROM reseller_plans ORDER BY created_date DESC`,
+    );
+    return {
+      message: 'Reseller plans fetched',
+      data: rows.map((r: any) => ({
+        id: r.id,
+        name: r.name,
+        description: r.description,
+        price: parseFloat(r.price) || 0,
+        durationDays: r.duration_days,
+        commissionPercentage: parseFloat(r.commission_percentage) || 0,
+        maxTenants: r.max_tenants,
+        features: r.features,
+        isActive: r.is_active,
+        createdDate: r.created_date,
+      })),
+    };
+  }
+
+  async createResellerPlan(dto: {
+    name: string;
+    description?: string;
+    price: number;
+    durationDays: number;
+    commissionPercentage: number;
+    maxTenants?: number;
+    features?: string;
+  }) {
+    const rows = await this.enterpriseRepository.manager.query(
+      `INSERT INTO reseller_plans (name, description, price, duration_days, commission_percentage, max_tenants, features)
+       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+      [dto.name, dto.description ?? null, dto.price, dto.durationDays, dto.commissionPercentage, dto.maxTenants ?? null, dto.features ?? null],
+    );
+    return { message: 'Reseller plan created', data: rows[0] };
+  }
+
+  async updateResellerPlan(id: number, dto: {
+    name?: string;
+    description?: string;
+    price?: number;
+    durationDays?: number;
+    commissionPercentage?: number;
+    maxTenants?: number;
+    features?: string;
+    isActive?: boolean;
+  }) {
+    const existing = await this.enterpriseRepository.manager.query(
+      `SELECT id FROM reseller_plans WHERE id = $1`,
+      [id],
+    );
+    if (!existing.length) throw new NotFoundException('Reseller plan not found');
+
+    await this.enterpriseRepository.manager.query(
+      `UPDATE reseller_plans SET
+        name = COALESCE($1, name),
+        description = COALESCE($2, description),
+        price = COALESCE($3, price),
+        duration_days = COALESCE($4, duration_days),
+        commission_percentage = COALESCE($5, commission_percentage),
+        max_tenants = COALESCE($6, max_tenants),
+        features = COALESCE($7, features),
+        is_active = COALESCE($8, is_active)
+       WHERE id = $9`,
+      [dto.name ?? null, dto.description ?? null, dto.price ?? null, dto.durationDays ?? null,
+       dto.commissionPercentage ?? null, dto.maxTenants ?? null, dto.features ?? null, dto.isActive ?? null, id],
+    );
+    return { message: 'Reseller plan updated' };
+  }
+
+  async deleteResellerPlan(id: number) {
+    const inUse = await this.enterpriseRepository.manager.query(
+      `SELECT COUNT(*) AS cnt FROM resellers WHERE reseller_plan_id = $1`,
+      [id],
+    );
+    if (parseInt(inUse[0].cnt) > 0) {
+      throw new BadRequestException('Cannot delete plan currently assigned to resellers. Deactivate it instead.');
+    }
+    await this.enterpriseRepository.manager.query(`DELETE FROM reseller_plans WHERE id = $1`, [id]);
+    return { message: 'Reseller plan deleted' };
+  }
+
+  async getResellersSubscriptionsOverview() {
+    const rows = await this.enterpriseRepository.manager.query(`
+      SELECT r.id, r.name, r.email, r.company_name, r.status,
+             r.reseller_plan_id, rp.name AS plan_name, rp.duration_days, rp.commission_percentage,
+             r.subscription_start_date, r.expiry_date,
+             CASE
+               WHEN r.reseller_plan_id IS NULL THEN 'none'
+               WHEN r.expiry_date >= CURRENT_DATE THEN 'active'
+               ELSE 'expired'
+             END AS subscription_status
+      FROM resellers r
+      LEFT JOIN reseller_plans rp ON rp.id = r.reseller_plan_id
+      ORDER BY r.created_date DESC
+    `);
+    return {
+      message: 'Reseller subscriptions fetched',
+      data: rows.map((r: any) => ({
+        id: r.id,
+        name: r.name,
+        email: r.email,
+        companyName: r.company_name,
+        status: r.status,
+        planId: r.reseller_plan_id,
+        planName: r.plan_name,
+        durationDays: r.duration_days,
+        commissionPercentage: parseFloat(r.commission_percentage) || 0,
+        subscriptionStartDate: r.subscription_start_date,
+        expiryDate: r.expiry_date,
+        subscriptionStatus: r.subscription_status,
+      })),
+    };
+  }
+
+  async getResellersWalletsOverview() {
+    const rows = await this.enterpriseRepository.manager.query(`
+      SELECT r.id, r.name, r.email, r.company_name, r.status,
+             COALESCE(rw.balance, 0) AS balance,
+             rw.updated_date AS last_updated
+      FROM resellers r
+      LEFT JOIN reseller_wallets rw ON rw.reseller_id = r.id
+      ORDER BY rw.balance DESC NULLS LAST
+    `);
+    return {
+      message: 'Reseller wallets fetched',
+      data: rows.map((r: any) => ({
+        id: r.id,
+        name: r.name,
+        email: r.email,
+        companyName: r.company_name,
+        status: r.status,
+        balance: parseFloat(r.balance),
+        lastUpdated: r.last_updated,
+      })),
+    };
   }
 }

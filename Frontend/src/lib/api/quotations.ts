@@ -56,6 +56,7 @@ function mapQuotationFromBackend(data: any): Quotation {
     shipping_address: data.shippingAddress,
     quotation_date: data.quotationDate,
     valid_until: data.validUntil,
+    expected_delivery: data.expectedDelivery,
     subtotal: Number(data.subTotal || 0),
     discount_amount: Number(data.discountAmount || 0),
     tax_amount: data.taxAmount,
@@ -196,15 +197,22 @@ export async function updateQuotation(
 export async function updateQuotationStatus(
   id: number,
   status: string,
-  _enterpriseId?: number
+  _enterpriseId?: number,
+  rejectionReason?: string,
 ): Promise<ApiResponse> {
-  const response = await apiClient.put<ApiResponse>(`/quotations/${id}/status`, { status });
+  const response = await apiClient.put<ApiResponse>(`/quotations/${id}/status`, { status, rejectionReason });
   return response.data;
 }
 
 export async function deleteQuotation(id: number, _enterpriseId?: number): Promise<ApiResponse> {
   const response = await apiClient.delete<ApiResponse>(`/quotations/${id}`);
   return response.data;
+}
+
+export async function updateQuotationETA(id: number, expectedDelivery: string): Promise<ApiResponse<Quotation>> {
+  const response = await apiClient.patch(`/quotations/${id}/eta`, { expectedDelivery });
+  const d = response.data as any;
+  return { message: d.message, data: d.data ? mapQuotationFromBackend(d.data) : undefined };
 }
 
 export async function duplicateQuotation(id: number, _enterpriseId?: number): Promise<ApiResponse<Quotation>> {

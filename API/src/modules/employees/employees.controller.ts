@@ -11,7 +11,7 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { EmployeesService } from './employees.service';
-import { EnterpriseId, RequirePermission } from '../../common/decorators';
+import { EnterpriseId, CurrentUser, RequirePermission } from '../../common/decorators';
 
 @ApiTags('Employees')
 @Controller('employees')
@@ -20,6 +20,13 @@ export class EmployeesController {
   constructor(private readonly employeesService: EmployeesService) {}
 
   // ============ Departments (MUST be before :id) ============
+
+  @Post('departments/seed-defaults')
+  @ApiOperation({ summary: 'Seed default ERP departments and designations' })
+  @RequirePermission('employees', 'departments', 'create')
+  async seedDefaults(@EnterpriseId() enterpriseId: number) {
+    return this.employeesService.seedDefaultDepartmentsAndDesignations(enterpriseId);
+  }
 
   @Get('departments')
   @ApiOperation({ summary: 'Get all departments' })
@@ -141,9 +148,10 @@ export class EmployeesController {
   @RequirePermission('employees', 'all_employees', 'create')
   async create(
     @EnterpriseId() enterpriseId: number,
+    @CurrentUser() user: any,
     @Body() createDto: any,
   ) {
-    return this.employeesService.create(enterpriseId, createDto);
+    return this.employeesService.create(enterpriseId, createDto, user);
   }
 
   @Patch(':id')
@@ -152,9 +160,10 @@ export class EmployeesController {
   async update(
     @Param('id', ParseIntPipe) id: number,
     @EnterpriseId() enterpriseId: number,
+    @CurrentUser() user: any,
     @Body() updateDto: any,
   ) {
-    return this.employeesService.update(id, enterpriseId, updateDto);
+    return this.employeesService.update(id, enterpriseId, updateDto, user);
   }
 
   @Delete(':id')
@@ -163,8 +172,9 @@ export class EmployeesController {
   async delete(
     @Param('id', ParseIntPipe) id: number,
     @EnterpriseId() enterpriseId: number,
+    @CurrentUser() user: any,
   ) {
-    return this.employeesService.delete(id, enterpriseId);
+    return this.employeesService.delete(id, enterpriseId, user);
   }
 
   @Get(':id/permissions')

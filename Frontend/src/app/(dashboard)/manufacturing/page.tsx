@@ -426,7 +426,7 @@ export default function ManufacturingPage() {
         return (
           <Space size={4} wrap>
             <Button size="small" icon={<EditOutlined />} onClick={() => openEditDetails(po)}>Edit</Button>
-            {hasPermission('orders', 'create') && <Button size="small" type="primary" icon={<FileTextOutlined />} onClick={() => router.push(`/manufacturing/po/${po.id}`)}>Create BOM</Button>}
+            {hasPermission('orders', 'manufacturing', 'create') && <Button size="small" type="primary" icon={<FileTextOutlined />} onClick={() => router.push(`/manufacturing/po/${po.id}`)}>Create BOM</Button>}
           </Space>
         );
       case 'bom_created':
@@ -447,7 +447,7 @@ export default function ManufacturingPage() {
       case 'approved':
         return (
           <Space size={4} wrap>
-            {hasPermission('orders', 'create') && <Button size="small" type="primary" icon={<PlusOutlined />} onClick={() => router.push(`/manufacturing/po/${po.id}`)}>Create Job Cards</Button>}
+            {hasPermission('orders', 'manufacturing', 'create') && <Button size="small" type="primary" icon={<PlusOutlined />} onClick={() => router.push(`/manufacturing/po/${po.id}`)}>Create Job Cards</Button>}
           </Space>
         );
       case 'job_card_created':
@@ -710,7 +710,7 @@ export default function ManufacturingPage() {
         open={bomViewModalOpen} onCancel={() => { setBomViewModalOpen(false); setCurrentBom(null); setSelectedPO(null); }} width={700}
         footer={<Space>
           <Button onClick={() => { setBomViewModalOpen(false); setCurrentBom(null); }}>Close</Button>
-          {currentBom && hasPermission('orders', 'create') && <Button type="primary" icon={<PlusOutlined />} onClick={async () => {
+          {currentBom && hasPermission('orders', 'manufacturing', 'create') && <Button type="primary" icon={<PlusOutlined />} onClick={async () => {
             jobCardForm.resetFields();
             setJobCardMaterials([]);
             setSelectedMaterialId(null);

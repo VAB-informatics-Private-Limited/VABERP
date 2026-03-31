@@ -1,6 +1,6 @@
 'use client';
 
-import { Typography, Button, message, Spin, Tag, Modal } from 'antd';
+import { Typography, Button, message, Spin, Tag, Modal, Switch } from 'antd';
 import {
   ArrowLeftOutlined,
   SaveOutlined,
@@ -12,6 +12,7 @@ import {
   HistoryOutlined,
   CalendarOutlined,
   CheckCircleFilled,
+  FilterOutlined,
 } from '@ant-design/icons';
 import { useRouter, useParams } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -37,6 +38,7 @@ export default function EmployeePermissionsPage() {
   const [currentDataStartDate, setCurrentDataStartDate] = useState<string | null>(null);
   const [showDataModal, setShowDataModal] = useState(false);
   const [dataAccessChoice, setDataAccessChoice] = useState<DataAccessChoice>('all');
+  const [ownDataOnly, setOwnDataOnly] = useState(false);
 
   const { data: employee } = useQuery({
     queryKey: ['employee', employeeId],
@@ -58,6 +60,7 @@ export default function EmployeePermissionsPage() {
       setPermissions(permData.data.permissions as MenuPermissions);
       setCurrentDataStartDate(permData.data.dataStartDate ?? null);
       setDataAccessChoice(permData.data.dataStartDate ? 'from_today' : 'all');
+      setOwnDataOnly(permData.data.ownDataOnly ?? false);
     }
   }, [permData]);
 
@@ -68,6 +71,7 @@ export default function EmployeePermissionsPage() {
         enterprise_id: enterpriseId!,
         permissions,
         dataStartDate,
+        ownDataOnly,
       }),
     onSuccess: (_, dataStartDate) => {
       setCurrentDataStartDate(dataStartDate);
@@ -164,7 +168,7 @@ export default function EmployeePermissionsPage() {
                 )}
               </div>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 flex-wrap">
               {currentDataStartDate ? (
                 <Tag color="orange" icon={<CalendarOutlined />} className="!text-xs !py-0.5 !px-2">
                   Data from {new Date(currentDataStartDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
@@ -174,6 +178,11 @@ export default function EmployeePermissionsPage() {
                   Full Data Access
                 </Tag>
               )}
+              {ownDataOnly && (
+                <Tag color="green" icon={<FilterOutlined />} className="!text-xs !py-0.5 !px-2">
+                  Own Data Only
+                </Tag>
+              )}
               <Tag color={employee.status === 'active' ? 'green' : 'red'} className="!text-xs !py-0.5 !px-2">
                 {employee.status?.toUpperCase()}
               </Tag>
@@ -181,6 +190,27 @@ export default function EmployeePermissionsPage() {
           </div>
         </div>
       )}
+
+      {/* Sales Data Isolation Toggle */}
+      <div className="mb-4 p-4 bg-white rounded-xl border border-gray-100 card-shadow flex items-center justify-between gap-4">
+        <div className="flex items-start gap-3">
+          <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-green-50 text-green-600 flex-shrink-0 mt-0.5">
+            <FilterOutlined style={{ fontSize: 18 }} />
+          </div>
+          <div>
+            <div className="font-semibold text-gray-800 text-sm">Restrict to own sales data only</div>
+            <div className="text-xs text-gray-500 mt-0.5">
+              When enabled, this employee only sees enquiries assigned to them, quotations they created, and customers they converted.
+            </div>
+          </div>
+        </div>
+        <Switch
+          checked={ownDataOnly}
+          onChange={setOwnDataOnly}
+          checkedChildren="ON"
+          unCheckedChildren="OFF"
+        />
+      </div>
 
       <div className="mb-3">
         <Text type="secondary" className="text-sm">

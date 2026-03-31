@@ -102,11 +102,6 @@ export default function InterestStatusPage() {
     return result;
   }, [data?.data, searchText, sortField, sortOrder]);
 
-  const paginatedData = useMemo(() => {
-    const start = (page - 1) * pageSize;
-    return filteredData.slice(start, start + pageSize);
-  }, [filteredData, page, pageSize]);
-
   const handleTableChange = (
     pagination: TablePaginationConfig,
     _filters: Record<string, unknown>,
@@ -311,7 +306,7 @@ export default function InterestStatusPage() {
       <Card className="card-shadow">
         <Table
           columns={columns}
-          dataSource={paginatedData}
+          dataSource={filteredData}
           rowKey="id"
           loading={isLoading}
           onChange={handleTableChange}

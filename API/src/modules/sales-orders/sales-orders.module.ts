@@ -11,6 +11,9 @@ import { Invoice } from '../invoices/entities/invoice.entity';
 import { InvoiceItem } from '../invoices/entities/invoice-item.entity';
 import { Payment } from '../invoices/entities/payment.entity';
 import { JobCard } from '../manufacturing/entities/job-card.entity';
+import { Enquiry } from '../enquiries/entities/enquiry.entity';
+import { Enterprise } from '../enterprises/entities/enterprise.entity';
+import { EmailModule } from '../email/email.module';
 
 @Module({
   imports: [
@@ -18,8 +21,9 @@ import { JobCard } from '../manufacturing/entities/job-card.entity';
       SalesOrder, SalesOrderItem, SalesOrderVersion,
       Quotation, QuotationItem,
       Invoice, InvoiceItem, Payment,
-      JobCard,
+      JobCard, Enquiry, Enterprise,
     ]),
+    EmailModule,
   ],
   controllers: [SalesOrdersController],
   providers: [SalesOrdersService],

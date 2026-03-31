@@ -41,10 +41,10 @@ export default function PurchaseOrdersPage() {
     queryFn: () => getSalesOrderList({ page, pageSize, search: search || undefined, status }),
   });
 
-  // Fetch all POs for payment summary (no filters)
+  // Fetch all POs for payment summary (respects status filter)
   const { data: allPOsData } = useQuery({
-    queryKey: ['purchase-orders-summary'],
-    queryFn: () => getSalesOrderList({ page: 1, pageSize: 9999 }),
+    queryKey: ['purchase-orders-summary', status],
+    queryFn: () => getSalesOrderList({ page: 1, pageSize: 9999, status }),
   });
 
   // Fetch all job cards to find dispatch-ready ones

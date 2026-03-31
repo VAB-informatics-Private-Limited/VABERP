@@ -43,6 +43,36 @@ export class InvoicesController {
     return this.invoicesService.findAll(enterpriseId, page, limit, search, status, customerId, fromDate, toDate);
   }
 
+  @Get('payments/all')
+  @ApiOperation({ summary: 'Get all payments across all invoices' })
+  @RequirePermission('invoicing', 'payments', 'view')
+  @ApiQuery({ name: 'page', required: false })
+  @ApiQuery({ name: 'limit', required: false })
+  @ApiQuery({ name: 'search', required: false })
+  @ApiQuery({ name: 'fromDate', required: false })
+  @ApiQuery({ name: 'toDate', required: false })
+  async getAllPayments(
+    @EnterpriseId() enterpriseId: number,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+    @Query('search') search?: string,
+    @Query('fromDate') fromDate?: string,
+    @Query('toDate') toDate?: string,
+  ) {
+    return this.invoicesService.getAllPayments(enterpriseId, page, limit, search, fromDate, toDate);
+  }
+
+  @Get('customer-balance')
+  @ApiOperation({ summary: 'Get total outstanding balance for a customer by name' })
+  @RequirePermission('invoicing', 'invoices', 'view')
+  @ApiQuery({ name: 'customerName', required: true })
+  async getCustomerBalance(
+    @Query('customerName') customerName: string,
+    @EnterpriseId() enterpriseId: number,
+  ) {
+    return this.invoicesService.getCustomerBalance(customerName, enterpriseId);
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Get invoice by ID' })
   @RequirePermission('invoicing', 'invoices', 'view')

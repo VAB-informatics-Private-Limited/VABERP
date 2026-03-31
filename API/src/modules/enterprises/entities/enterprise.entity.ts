@@ -66,6 +66,18 @@ export class Enterprise {
   @Column({ name: 'mobile_otp', nullable: true, type: 'varchar' })
   mobileOtp: string | null;
 
+  @Column({ name: 'plan_id', nullable: true, type: 'int' })
+  planId: number | null;
+
+  @Column({ name: 'subscription_start_date', type: 'date', nullable: true })
+  subscriptionStartDate: Date | null;
+
+  @Column({ name: 'reseller_id', nullable: true, type: 'int' })
+  resellerId: number | null;
+
+  @Column({ name: 'is_locked', default: false })
+  isLocked: boolean;
+
   @CreateDateColumn({ name: 'created_date' })
   createdDate: Date;
 

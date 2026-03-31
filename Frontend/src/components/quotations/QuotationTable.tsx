@@ -1,12 +1,13 @@
 'use client';
 
-import { Table, Button, Tag, Space, Popconfirm, message, Dropdown, Modal, Badge } from 'antd';
+import { Table, Button, Tag, Space, Popconfirm, message, Dropdown, Modal, Badge, Typography } from 'antd';
+import dayjs from 'dayjs';
 import { EyeOutlined, EditOutlined, DeleteOutlined, MoreOutlined, FilePdfOutlined, SendOutlined, ShoppingCartOutlined, HistoryOutlined, CheckCircleOutlined } from '@ant-design/icons';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Quotation, QUOTATION_STATUS_OPTIONS } from '@/types/quotation';
 import { deleteQuotation, updateQuotationStatus, acceptQuotation } from '@/lib/api/quotations';
-import { useAuthStore } from '@/stores/authStore';
+import { useAuthStore, usePermissions } from '@/stores/authStore';
 import type { ColumnsType } from 'antd/es/table';
 import type { MenuProps } from 'antd';
 
@@ -26,6 +27,7 @@ export function QuotationTable({ data, loading, pagination }: QuotationTableProp
   const queryClient = useQueryClient();
   const { getEnterpriseId } = useAuthStore();
   const enterpriseId = getEnterpriseId();
+  const { hasPermission } = usePermissions();
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => deleteQuotation(id, enterpriseId!),
@@ -144,6 +146,16 @@ export function QuotationTable({ data, loading, pagination }: QuotationTableProp
       },
     },
     {
+      title: 'ETA',
+      dataIndex: 'expected_delivery',
+      key: 'expected_delivery',
+      render: (v: string) => {
+        if (!v) return <Typography.Text type="secondary">Not set</Typography.Text>;
+        const isOverdue = dayjs(v).isBefore(dayjs(), 'day');
+        return <Typography.Text type={isOverdue ? 'danger' : undefined}>{dayjs(v).format('DD MMM YYYY')}{isOverdue ? ' ⚠' : ''}</Typography.Text>;
+      },
+    },
+    {
       title: 'Total Amount',
       dataIndex: 'total_amount',
       key: 'total_amount',
@@ -177,7 +189,7 @@ export function QuotationTable({ data, loading, pagination }: QuotationTableProp
             icon={<EyeOutlined />}
             onClick={() => router.push(`/quotations/${record.id}`)}
           />
-          {!record.is_locked && (
+          {!record.is_locked && hasPermission('sales', 'quotations', 'edit') && (
             <Button
               type="text"
               icon={<EditOutlined />}
@@ -194,13 +206,13 @@ export function QuotationTable({ data, loading, pagination }: QuotationTableProp
                   label: 'Download PDF',
                   onClick: () => router.push(`/quotations/${record.id}?print=true`),
                 },
-                ...(record.status === 'draft' ? [{
+                ...(record.status === 'draft' && hasPermission('sales', 'quotations', 'edit') ? [{
                   key: 'send',
                   icon: <SendOutlined />,
                   label: 'Mark as Sent',
                   onClick: () => statusMutation.mutate({ id: record.id, status: 'sent' }),
                 }] : []),
-                ...(['draft', 'sent'].includes(record.status) ? [{
+                ...(['draft', 'sent'].includes(record.status) && hasPermission('sales', 'quotations', 'edit') ? [{
                   key: 'accept',
                   icon: <ShoppingCartOutlined />,
                   label: 'Transfer to Purchase Order',
@@ -215,10 +227,10 @@ export function QuotationTable({ data, loading, pagination }: QuotationTableProp
                     });
                   },
                 }] : []),
-                { type: 'divider' as const },
-                ...getStatusMenuItems(record.id, record.status),
-                { type: 'divider' as const },
-                ...(record.status === 'draft' ? [{
+                ...(hasPermission('sales', 'quotations', 'edit') ? [{ type: 'divider' as const }] : []),
+                ...(hasPermission('sales', 'quotations', 'edit') ? getStatusMenuItems(record.id, record.status) : []),
+                ...(record.status === 'draft' && hasPermission('sales', 'quotations', 'delete') ? [{ type: 'divider' as const }] : []),
+                ...(record.status === 'draft' && hasPermission('sales', 'quotations', 'delete') ? [{
                   key: 'delete',
                   icon: <DeleteOutlined />,
                   label: (

@@ -88,6 +88,17 @@ export async function getCurrentUser(): Promise<ApiResponse> {
   return response.data;
 }
 
+// Get Enterprise Subscription Status (fresh from DB - used by /activate page)
+export async function getEnterpriseStatus(): Promise<ApiResponse<{
+  subscriptionStatus: 'active' | 'expired' | 'none';
+  expiryDate: string | null;
+  planId: number | null;
+  status: string;
+}>> {
+  const response = await apiClient.get('/auth/enterprise/status');
+  return response.data;
+}
+
 // Update Menu Permissions
 export async function updatePermissions(data: MenuPermissions & { enterprise_id?: number }): Promise<ApiResponse> {
   const response = await apiClient.put<ApiResponse>('/employees/permissions', data);

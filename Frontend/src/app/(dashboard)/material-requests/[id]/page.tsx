@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Typography, Card, Button, Table, Tag, Descriptions, Space, message,
-  Modal, InputNumber, Select, Spin, Empty, Progress, Alert, Input, Tooltip, Steps,
+  Modal, InputNumber, Select, Spin, Empty, Progress, Alert, Input, Tooltip, Steps, DatePicker,
 } from 'antd';
 import {
   ArrowLeftOutlined, CheckCircleOutlined, SendOutlined,
@@ -13,7 +13,8 @@ import {
   ShopOutlined, FileTextOutlined, InboxOutlined, GiftOutlined,
   SyncOutlined,
 } from '@ant-design/icons';
-import { getMaterialRequestById, approveMaterialRequest, issueMaterials, issueSingleItem, issuePartialItem, recheckStock, refreshStock } from '@/lib/api/material-requests';
+import dayjs from 'dayjs';
+import { getMaterialRequestById, approveMaterialRequest, issueMaterials, issueSingleItem, issuePartialItem, recheckStock, refreshStock, updateMaterialRequestETA } from '@/lib/api/material-requests';
 import { getIndentByMR, createIndentFromMR } from '@/lib/api/indents';
 import { MR_STATUS_OPTIONS } from '@/types/material-request';
 import type { MaterialRequestItem } from '@/types/material-request';
@@ -42,6 +43,8 @@ export default function MaterialRequestDetailPage() {
   const [partialIssueModal, setPartialIssueModal] = useState(false);
   const [partialIssueItem, setPartialIssueItem] = useState<MaterialRequestItem | null>(null);
   const [partialIssueQty, setPartialIssueQty] = useState<number>(0);
+  const [etaModalOpen, setEtaModalOpen] = useState(false);
+  const [etaValue, setEtaValue] = useState<dayjs.Dayjs | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ['material-request', id],
@@ -162,6 +165,16 @@ export default function MaterialRequestDetailPage() {
       setPartialIssueQty(0);
     },
     onError: (err: any) => message.error(err?.response?.data?.message || 'Failed to issue partial materials'),
+  });
+
+  const etaMutation = useMutation({
+    mutationFn: (expectedDelivery: string) => updateMaterialRequestETA(id, expectedDelivery),
+    onSuccess: () => {
+      message.success('ETA updated');
+      setEtaModalOpen(false);
+      queryClient.invalidateQueries({ queryKey: ['material-request', id] });
+    },
+    onError: () => message.error('Failed to update ETA'),
   });
 
   // Create indent for shortage items
@@ -891,6 +904,17 @@ export default function MaterialRequestDetailPage() {
           <Descriptions.Item label="Request Date">
             {mr.request_date ? new Date(mr.request_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '-'}
           </Descriptions.Item>
+          <Descriptions.Item label="ETA">
+            <Space>
+              {mr.expected_delivery ? (
+                <Text type={dayjs(mr.expected_delivery).isBefore(dayjs(), 'day') ? 'danger' : undefined}>
+                  {dayjs(mr.expected_delivery).format('DD MMM YYYY')}
+                  {dayjs(mr.expected_delivery).isBefore(dayjs(), 'day') && ' (Overdue)'}
+                </Text>
+              ) : <Text type="secondary">Not set</Text>}
+              <Button size="small" onClick={() => { setEtaValue(mr.expected_delivery ? dayjs(mr.expected_delivery) : null); setEtaModalOpen(true); }}>Set ETA</Button>
+            </Space>
+          </Descriptions.Item>
           <Descriptions.Item label="Status">
             <Tag color={getStatusColor(mr.status)}>{getStatusLabel(mr.status)}</Tag>
           </Descriptions.Item>
@@ -1140,6 +1164,23 @@ export default function MaterialRequestDetailPage() {
             <Alert type="info" showIcon className="mt-3" message={`Remaining after this issue: ${(partialIssueItem.quantity_approved - partialIssueItem.quantity_issued - partialIssueQty)} ${partialIssueItem.unit_of_measure || 'units'}`} />
           </div>
         )}
+      </Modal>
+
+      <Modal
+        title="Set ETA"
+        open={etaModalOpen}
+        onCancel={() => setEtaModalOpen(false)}
+        onOk={() => etaMutation.mutate(etaValue ? etaValue.format('YYYY-MM-DD') : '')}
+        okText="Save"
+        confirmLoading={etaMutation.isPending}
+      >
+        <DatePicker
+          value={etaValue}
+          onChange={(d) => setEtaValue(d)}
+          format="DD MMM YYYY"
+          style={{ width: '100%' }}
+          placeholder="Select ETA date"
+        />
       </Modal>
     </div>
   );

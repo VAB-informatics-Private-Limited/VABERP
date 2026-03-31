@@ -34,6 +34,17 @@ export class MaterialRequestsController {
     return this.service.findOne(id, enterpriseId);
   }
 
+  @Patch(':id/eta')
+  @ApiOperation({ summary: 'Update material request expected delivery (ETA)' })
+  @RequirePermission('inventory', 'material_requests', 'edit')
+  async updateETA(
+    @Param('id', ParseIntPipe) id: number,
+    @EnterpriseId() enterpriseId: number,
+    @Body('expectedDelivery') expectedDelivery: string,
+  ) {
+    return this.service.updateETA(id, enterpriseId, expectedDelivery);
+  }
+
   @Post()
   @ApiOperation({ summary: 'Create a material request' })
   @RequirePermission('inventory', 'material_requests', 'create')
@@ -91,6 +102,17 @@ export class MaterialRequestsController {
     @Body('quantity') quantity: number,
   ) {
     return this.service.issuePartialItem(id, itemId, quantity, enterpriseId, user?.id);
+  }
+
+  @Post(':id/confirm-received')
+  @ApiOperation({ summary: 'Manufacturing team confirms receipt of issued materials' })
+  @RequirePermission('orders', 'manufacturing', 'view')
+  async confirmReceived(
+    @Param('id', ParseIntPipe) id: number,
+    @EnterpriseId() enterpriseId: number,
+    @CurrentUser() user: any,
+  ) {
+    return this.service.confirmReceived(id, enterpriseId);
   }
 
   @Post(':id/recheck')

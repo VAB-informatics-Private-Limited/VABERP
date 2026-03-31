@@ -1,6 +1,7 @@
 'use client';
 
-import { Typography, Button, Card, Select, Space, Table, Tag, Alert, Badge, Tabs, Statistic, Row, Col, Tooltip } from 'antd';
+import { Typography, Button, Card, Select, Space, Table, Tag, Alert, Badge, Tabs, Statistic, Row, Col, Tooltip, Progress } from 'antd';
+import dayjs from 'dayjs';
 import {
   ClearOutlined, EyeOutlined, ExclamationCircleOutlined, CheckCircleOutlined,
   FireOutlined, ToolOutlined, InboxOutlined, ClockCircleOutlined,
@@ -103,39 +104,101 @@ export default function MaterialRequestsPage() {
       render: (v) => v ? new Date(v).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '-',
     },
     {
-      title: 'Items & Stock Comparison',
+      title: 'ETA',
+      dataIndex: 'expected_delivery',
+      key: 'expected_delivery',
+      width: 120,
+      render: (v: string) => {
+        if (!v) return <Text type="secondary">Not set</Text>;
+        const isOverdue = dayjs(v).isBefore(dayjs(), 'day');
+        return <Text type={isOverdue ? 'danger' : undefined}>{dayjs(v).format('DD MMM YYYY')}{isOverdue ? ' ⚠' : ''}</Text>;
+      },
+    },
+    {
+      title: 'Items',
       key: 'items_stock',
+      width: 220,
       render: (_, record) => {
         const items = record.items || [];
-        if (items.length === 0) return <Text type="secondary">-</Text>;
-        return (
-          <div>
-            {items.slice(0, 3).map((item, i) => {
+        if (items.length === 0) return <Text type="secondary">—</Text>;
+
+        const shortItems = items.filter(i => i.available_stock < i.quantity_requested);
+        const allOk = shortItems.length === 0;
+
+        const tooltipContent = (
+          <div style={{ minWidth: 220 }}>
+            {items.map((item, i) => {
               const isShort = item.available_stock < item.quantity_requested;
               return (
-                <div key={i} className="py-0.5 flex items-center gap-2 flex-wrap">
-                  <Text strong className="text-sm">{item.item_name}</Text>
-                  <span className="text-xs text-gray-500">
-                    Need: <strong>{item.quantity_requested}</strong>
-                  </span>
-                  <span className={`text-xs font-semibold ${isShort ? 'text-red-500' : 'text-green-600'}`}>
-                    Stock: {item.available_stock}
-                  </span>
+                <div key={i} style={{ marginBottom: 8 }}>
+                  <div style={{ fontWeight: 600, fontSize: 12 }}>{item.item_name}</div>
+                  <div style={{ display: 'flex', gap: 12, fontSize: 11, color: '#ccc', marginTop: 2 }}>
+                    <span>Need: <strong style={{ color: '#fff' }}>{item.quantity_requested} {item.unit_of_measure || ''}</strong></span>
+                    <span>Stock: <strong style={{ color: isShort ? '#ff7875' : '#95de64' }}>{item.available_stock} {item.unit_of_measure || ''}</strong></span>
+                  </div>
                   {isShort && (
-                    <Tag color="red" style={{ fontSize: 10 }} className="!m-0">
-                      <WarningOutlined /> Short by {item.quantity_requested - item.available_stock}
-                    </Tag>
+                    <div style={{ fontSize: 11, color: '#ff7875', marginTop: 1 }}>
+                      ⚠ Short by {item.quantity_requested - item.available_stock}
+                    </div>
                   )}
-                  <Tag color={ITEM_STATUS_COLORS[item.status] || 'default'} style={{ fontSize: 10 }} className="!m-0">
-                    {item.status?.toUpperCase()}
-                  </Tag>
+                  <Progress
+                    percent={Math.min(100, Math.round((item.available_stock / item.quantity_requested) * 100))}
+                    size="small"
+                    strokeColor={isShort ? '#ff4d4f' : '#52c41a'}
+                    trailColor="rgba(255,255,255,0.15)"
+                    showInfo={false}
+                    style={{ margin: '3px 0 0' }}
+                  />
                 </div>
               );
             })}
-            {items.length > 3 && (
-              <Text type="secondary" className="text-xs">+{items.length - 3} more items</Text>
-            )}
           </div>
+        );
+
+        return (
+          <Tooltip title={tooltipContent} placement="left" overlayStyle={{ maxWidth: 280 }}>
+            <div style={{ cursor: 'default' }}>
+              {/* Summary badge row */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                <span style={{ fontSize: 13, fontWeight: 600, color: '#333' }}>
+                  {items.length} item{items.length !== 1 ? 's' : ''}
+                </span>
+                {allOk ? (
+                  <Tag color="green" style={{ fontSize: 10, padding: '0 5px', lineHeight: '16px', margin: 0 }}>
+                    ✓ All in stock
+                  </Tag>
+                ) : (
+                  <Tag color="red" style={{ fontSize: 10, padding: '0 5px', lineHeight: '16px', margin: 0 }}>
+                    ⚠ {shortItems.length} short
+                  </Tag>
+                )}
+              </div>
+
+              {/* Item list with dot indicator */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                {items.slice(0, 2).map((item, i) => {
+                  const isShort = item.available_stock < item.quantity_requested;
+                  return (
+                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{
+                        width: 7, height: 7, borderRadius: '50%', flexShrink: 0,
+                        background: isShort ? '#ff4d4f' : '#52c41a',
+                        boxShadow: isShort ? '0 0 0 2px #fff1f0' : '0 0 0 2px #f6ffed',
+                      }} />
+                      <Text style={{ fontSize: 12, color: '#444' }} ellipsis={{ tooltip: item.item_name }}>
+                        {item.item_name}
+                      </Text>
+                    </div>
+                  );
+                })}
+                {items.length > 2 && (
+                  <Text type="secondary" style={{ fontSize: 11, marginLeft: 13 }}>
+                    +{items.length - 2} more
+                  </Text>
+                )}
+              </div>
+            </div>
+          </Tooltip>
         );
       },
     },
@@ -456,6 +519,10 @@ export default function MaterialRequestsPage() {
             showSizeChanger: true,
             showTotal: (total, range) => `${range[0]}-${range[1]} of ${total}`,
           }}
+          onRow={(record) => ({
+            onClick: () => router.push(`/material-requests/${record.id}`),
+            style: { cursor: 'pointer' },
+          })}
           scroll={{ x: 1000 }}
           rowClassName={(record) => {
             if (record.status === 'pending' && isManufacturingRequest(record)) return 'bg-purple-50';

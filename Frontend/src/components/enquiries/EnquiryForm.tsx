@@ -7,6 +7,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useState, useEffect, useMemo } from 'react';
 import { EnquiryFormData, INTEREST_STATUS_OPTIONS, Enquiry } from '@/types/enquiry';
 import { getSources } from '@/lib/api/sources';
+import { checkEnquiryMobile } from '@/lib/api/enquiries';
 import { getCountries, getStates, getCities, Country, State, City } from '@/lib/api/locations';
 import dayjs from 'dayjs';
 
@@ -25,6 +26,7 @@ export function EnquiryForm({ initialData, onSubmit, loading, submitText, isEdit
   const router = useRouter();
   const [form] = Form.useForm();
 
+  const [mobileWarning, setMobileWarning] = useState<string | null>(null);
   const [selectedCountryId, setSelectedCountryId] = useState<number | null>(null);
   const [selectedStateId, setSelectedStateId] = useState<number | null>(null);
 
@@ -103,6 +105,25 @@ export function EnquiryForm({ initialData, onSubmit, loading, submitText, isEdit
     form.setFieldValue('city', undefined);
   };
 
+  const handleMobileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const mobile = e.target.value;
+    if (!/^[0-9]{10}$/.test(mobile)) {
+      setMobileWarning(null);
+      return;
+    }
+    if (isEdit) return;
+    try {
+      const result = await checkEnquiryMobile(mobile);
+      if (result.exists) {
+        setMobileWarning(`Mobile already exists: ${result.customerName}`);
+      } else {
+        setMobileWarning(null);
+      }
+    } catch {
+      setMobileWarning(null);
+    }
+  };
+
   const handleFinish = (values: EnquiryFormData & { next_followup_date?: dayjs.Dayjs }) => {
     const formData: EnquiryFormData = {
       ...values,
@@ -157,8 +178,14 @@ export function EnquiryForm({ initialData, onSubmit, loading, submitText, isEdit
                 { required: true, message: 'Please enter mobile number' },
                 { pattern: /^[0-9]{10}$/, message: 'Please enter valid 10-digit mobile number' },
               ]}
+              help={mobileWarning ? <span style={{ color: '#faad14' }}>⚠ {mobileWarning}</span> : undefined}
+              validateStatus={mobileWarning ? 'warning' : undefined}
             >
-              <Input placeholder="Enter mobile number" maxLength={10} />
+              <Input
+                placeholder="Enter mobile number"
+                maxLength={10}
+                onChange={handleMobileChange}
+              />
             </Form.Item>
           </Col>
         </Row>

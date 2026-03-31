@@ -56,6 +56,9 @@ export class Quotation {
   @Column({ name: 'valid_until', type: 'date', nullable: true })
   validUntil: Date | null;
 
+  @Column({ name: 'expected_delivery', type: 'date', nullable: true })
+  expectedDelivery: Date | null;
+
   @Column({ name: 'customer_name' })
   customerName: string;
 

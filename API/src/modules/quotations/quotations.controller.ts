@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Put,
+  Patch,
   Delete,
   Body,
   Param,
@@ -12,8 +13,8 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiQuery } from '@nestjs/swagger';
 import { QuotationsService } from './quotations.service';
-import { EnterpriseId, CurrentUser, RequirePermission } from '../../common/decorators';
-import { CreateQuotationDto } from './dto';
+import { EnterpriseId, CurrentUser, RequirePermission, DataStartDate, OwnDataOnly, CurrentUserId } from '../../common/decorators';
+import { CreateQuotationDto, UpdateQuotationStatusDto } from './dto';
 
 @ApiTags('Quotations')
 @Controller('quotations')
@@ -24,6 +25,7 @@ export class QuotationsController {
   @Get('check-mobile')
   @ApiOperation({ summary: 'Check if a mobile number already has a quotation' })
   @ApiQuery({ name: 'mobile', required: true })
+  @RequirePermission('sales', 'quotations', 'view')
   async checkMobile(
     @EnterpriseId() enterpriseId: number,
     @Query('mobile') mobile: string,
@@ -42,6 +44,9 @@ export class QuotationsController {
   @RequirePermission('sales', 'quotations', 'view')
   async findAll(
     @EnterpriseId() enterpriseId: number,
+    @DataStartDate() dataStartDate: Date | null,
+    @OwnDataOnly() ownDataOnly: boolean,
+    @CurrentUserId() currentUserId: number,
     @Query('page') page?: number,
     @Query('limit') limit?: number,
     @Query('search') search?: string,
@@ -57,6 +62,9 @@ export class QuotationsController {
       status,
       fromDate,
       toDate,
+      dataStartDate,
+      ownDataOnly,
+      currentUserId,
     );
   }
 
@@ -68,6 +76,17 @@ export class QuotationsController {
     @EnterpriseId() enterpriseId: number,
   ) {
     return this.quotationsService.findOne(id, enterpriseId);
+  }
+
+  @Patch(':id/eta')
+  @ApiOperation({ summary: 'Update quotation expected delivery (ETA)' })
+  @RequirePermission('sales', 'quotations', 'edit')
+  async updateETA(
+    @Param('id', ParseIntPipe) id: number,
+    @EnterpriseId() enterpriseId: number,
+    @Body('expectedDelivery') expectedDelivery: string,
+  ) {
+    return this.quotationsService.updateETA(id, enterpriseId, expectedDelivery);
   }
 
   @Post()
@@ -122,9 +141,10 @@ export class QuotationsController {
   async updateStatus(
     @Param('id', ParseIntPipe) id: number,
     @EnterpriseId() enterpriseId: number,
-    @Body('status') status: string,
+    @CurrentUser() user: any,
+    @Body() dto: UpdateQuotationStatusDto,
   ) {
-    return this.quotationsService.updateStatus(id, enterpriseId, status);
+    return this.quotationsService.updateStatus(id, enterpriseId, dto.status, user?.id, dto.rejectionReason);
   }
 
   @Delete(':id')

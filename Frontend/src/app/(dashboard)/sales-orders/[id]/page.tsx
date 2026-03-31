@@ -1,11 +1,13 @@
 'use client';
 
-import { Typography, Card, Descriptions, Tag, Button, Space, Table, message, Spin, Row, Col, Popconfirm } from 'antd';
-import { ArrowLeftOutlined, FileDoneOutlined, ToolOutlined } from '@ant-design/icons';
+import { useState } from 'react';
+import { Typography, Card, Descriptions, Tag, Button, Space, Table, message, Spin, Row, Col, Popconfirm, Modal, DatePicker } from 'antd';
+import { ArrowLeftOutlined, FileDoneOutlined, ToolOutlined, CalendarOutlined } from '@ant-design/icons';
 import { useRouter, useParams } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getSalesOrderById, sendToManufacturing, createInvoiceFromSO } from '@/lib/api/sales-orders';
+import { getSalesOrderById, sendToManufacturing, createInvoiceFromSO, updateSOETA } from '@/lib/api/sales-orders';
 import { SO_STATUS_OPTIONS } from '@/types/sales-order';
+import dayjs from 'dayjs';
 
 const { Title } = Typography;
 
@@ -38,6 +40,19 @@ export default function SalesOrderDetailPage() {
       if (invoiceId) router.push(`/invoices/${invoiceId}`);
     },
     onError: (err: any) => message.error(err?.response?.data?.message || 'Failed'),
+  });
+
+  const [etaModalOpen, setEtaModalOpen] = useState(false);
+  const [etaValue, setEtaValue] = useState<dayjs.Dayjs | null>(null);
+
+  const etaMutation = useMutation({
+    mutationFn: (expectedDelivery: string) => updateSOETA(soId, expectedDelivery),
+    onSuccess: () => {
+      message.success('ETA updated');
+      setEtaModalOpen(false);
+      queryClient.invalidateQueries({ queryKey: ['sales-order', soId] });
+    },
+    onError: () => message.error('Failed to update ETA'),
   });
 
   const so = soData?.data;
@@ -76,7 +91,17 @@ export default function SalesOrderDetailPage() {
               <Descriptions.Item label="Order Number">{so.order_number}</Descriptions.Item>
               <Descriptions.Item label="Order Date">{so.order_date}</Descriptions.Item>
               <Descriptions.Item label="Customer">{so.customer_name}</Descriptions.Item>
-              <Descriptions.Item label="Expected Delivery">{so.expected_delivery || '-'}</Descriptions.Item>
+              <Descriptions.Item label="ETA">
+                <Space>
+                  {so.expected_delivery ? (
+                    <Typography.Text type={dayjs(so.expected_delivery).isBefore(dayjs(), 'day') ? 'danger' : undefined}>
+                      {dayjs(so.expected_delivery).format('DD MMM YYYY')}
+                      {dayjs(so.expected_delivery).isBefore(dayjs(), 'day') && ' (Overdue)'}
+                    </Typography.Text>
+                  ) : <Typography.Text type="secondary">Not set</Typography.Text>}
+                  <Button size="small" icon={<CalendarOutlined />} onClick={() => { setEtaValue(so.expected_delivery ? dayjs(so.expected_delivery) : null); setEtaModalOpen(true); }}>Set ETA</Button>
+                </Space>
+              </Descriptions.Item>
               {so.billing_address && <Descriptions.Item label="Billing Address" span={2}>{so.billing_address}</Descriptions.Item>}
               {so.shipping_address && <Descriptions.Item label="Shipping Address" span={2}>{so.shipping_address}</Descriptions.Item>}
             </Descriptions>
@@ -112,6 +137,23 @@ export default function SalesOrderDetailPage() {
           </Card>
         </Col>
       </Row>
+
+      <Modal
+        title="Set ETA"
+        open={etaModalOpen}
+        onCancel={() => setEtaModalOpen(false)}
+        onOk={() => etaMutation.mutate(etaValue ? etaValue.format('YYYY-MM-DD') : '')}
+        okText="Save"
+        confirmLoading={etaMutation.isPending}
+      >
+        <DatePicker
+          value={etaValue}
+          onChange={(d) => setEtaValue(d)}
+          format="DD MMM YYYY"
+          style={{ width: '100%' }}
+          placeholder="Select ETA date"
+        />
+      </Modal>
     </div>
   );
 }

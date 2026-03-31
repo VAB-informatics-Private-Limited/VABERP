@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsNumber, IsDateString, IsArray, ValidateNested, IsEmail, Matches } from 'class-validator';
+import { IsString, IsOptional, IsNumber, IsDateString, IsArray, ValidateNested, IsEmail, Matches, IsIn } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 
@@ -132,4 +132,16 @@ export class CreateQuotationDto {
   @ValidateNested({ each: true })
   @Type(() => QuotationItemDto)
   items: QuotationItemDto[];
+}
+
+export class UpdateQuotationStatusDto {
+  @ApiProperty({ example: 'sent', enum: ['draft', 'sent', 'accepted', 'rejected', 'expired'] })
+  @IsString()
+  @IsIn(['draft', 'sent', 'accepted', 'rejected', 'expired'])
+  status: string;
+
+  @ApiPropertyOptional({ example: 'Price is too high for current budget' })
+  @IsOptional()
+  @IsString()
+  rejectionReason?: string;
 }

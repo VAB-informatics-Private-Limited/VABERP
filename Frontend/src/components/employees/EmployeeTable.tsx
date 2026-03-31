@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { EmployeeDetails } from '@/types/employee';
 import { deleteEmployee } from '@/lib/api/employees';
-import { useAuthStore } from '@/stores/authStore';
+import { useAuthStore, usePermissions } from '@/stores/authStore';
 import type { ColumnsType } from 'antd/es/table';
 
 interface EmployeeTableProps {
@@ -25,6 +25,7 @@ export function EmployeeTable({ data, loading, pagination }: EmployeeTableProps)
   const queryClient = useQueryClient();
   const { getEnterpriseId } = useAuthStore();
   const enterpriseId = getEnterpriseId();
+  const { hasPermission } = usePermissions();
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => deleteEmployee(id, enterpriseId!),
@@ -97,26 +98,32 @@ export function EmployeeTable({ data, loading, pagination }: EmployeeTableProps)
       width: 150,
       render: (_, record) => (
         <Space>
-          <Button
-            type="text"
-            icon={<KeyOutlined />}
-            onClick={() => router.push(`/employees/${record.id}/permissions`)}
-            title="Manage Permissions"
-          />
-          <Button
-            type="text"
-            icon={<EditOutlined />}
-            onClick={() => router.push(`/employees/${record.id}/edit`)}
-          />
-          <Popconfirm
-            title="Delete Employee"
-            description="Are you sure you want to delete this employee?"
-            onConfirm={() => deleteMutation.mutate(record.id)}
-            okText="Yes"
-            cancelText="No"
-          >
-            <Button type="text" danger icon={<DeleteOutlined />} />
-          </Popconfirm>
+          {hasPermission('employees', 'permissions', 'view') && (
+            <Button
+              type="text"
+              icon={<KeyOutlined />}
+              onClick={() => router.push(`/employees/${record.id}/permissions`)}
+              title="Manage Permissions"
+            />
+          )}
+          {hasPermission('employees', 'all_employees', 'edit') && (
+            <Button
+              type="text"
+              icon={<EditOutlined />}
+              onClick={() => router.push(`/employees/${record.id}/edit`)}
+            />
+          )}
+          {hasPermission('employees', 'all_employees', 'delete') && (
+            <Popconfirm
+              title="Delete Employee"
+              description="Are you sure you want to delete this employee?"
+              onConfirm={() => deleteMutation.mutate(record.id)}
+              okText="Yes"
+              cancelText="No"
+            >
+              <Button type="text" danger icon={<DeleteOutlined />} />
+            </Popconfirm>
+          )}
         </Space>
       ),
     },

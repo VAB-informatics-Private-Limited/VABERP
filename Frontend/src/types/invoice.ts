@@ -58,6 +58,10 @@ export interface Invoice {
   created_by_name?: string;
   items?: InvoiceItem[];
   payments?: Payment[];
+  so_order_number?: string | null;
+  so_grand_total?: number | null;
+  so_invoiced_amount?: number | null;
+  so_remaining_amount?: number | null;
   created_date: string;
   modified_date?: string;
 }

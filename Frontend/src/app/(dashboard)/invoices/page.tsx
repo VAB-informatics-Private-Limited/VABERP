@@ -1,11 +1,11 @@
 'use client';
 
-import { Typography, Button, Card, Input, Select, Space, DatePicker, Table, Tag, Popconfirm, message } from 'antd';
-import { PlusOutlined, SearchOutlined, ClearOutlined, EyeOutlined, DeleteOutlined } from '@ant-design/icons';
+import { Typography, Button, Card, Input, Select, Space, DatePicker, Table, Tag } from 'antd';
+import { PlusOutlined, SearchOutlined, ClearOutlined, EyeOutlined } from '@ant-design/icons';
 import { useRouter } from 'next/navigation';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
-import { getInvoiceList, deleteInvoice } from '@/lib/api/invoices';
+import { getInvoiceList } from '@/lib/api/invoices';
 import { INVOICE_STATUS_OPTIONS } from '@/types/invoice';
 import type { Invoice } from '@/types/invoice';
 import type { ColumnsType } from 'antd/es/table';
@@ -17,7 +17,6 @@ const { RangePicker } = DatePicker;
 
 export default function InvoicesPage() {
   const router = useRouter();
-  const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [search, setSearch] = useState('');
@@ -35,17 +34,6 @@ export default function InvoicesPage() {
         startDate: dateRange?.[0]?.format('YYYY-MM-DD'),
         endDate: dateRange?.[1]?.format('YYYY-MM-DD'),
       }),
-  });
-
-  const deleteMutation = useMutation({
-    mutationFn: (id: number) => deleteInvoice(id),
-    onSuccess: () => {
-      message.success('Invoice deleted successfully');
-      queryClient.invalidateQueries({ queryKey: ['invoices'] });
-    },
-    onError: (error: any) => {
-      message.error(error?.response?.data?.message || 'Failed to delete invoice');
-    },
   });
 
   const handleClear = () => {
@@ -84,11 +72,13 @@ export default function InvoicesPage() {
       sorter: (a, b) => a.invoice_date.localeCompare(b.invoice_date),
     },
     {
-      title: 'Grand Total',
-      dataIndex: 'grand_total',
-      key: 'grand_total',
-      sorter: (a, b) => a.grand_total - b.grand_total,
-      render: (val) => `₹${Number(val).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+      title: 'PO Total',
+      key: 'po_total',
+      sorter: (a: Invoice, b: Invoice) => (a.so_grand_total ?? a.grand_total) - (b.so_grand_total ?? b.grand_total),
+      render: (_: any, record: Invoice) => {
+        const val = record.so_grand_total ?? record.grand_total;
+        return `₹${Number(val).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+      },
     },
     {
       title: 'Paid',
@@ -97,38 +87,32 @@ export default function InvoicesPage() {
       render: (val) => `₹${Number(val).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
     },
     {
-      title: 'Balance',
-      dataIndex: 'balance_due',
-      key: 'balance_due',
-      render: (val) => (
-        <span className={Number(val) > 0 ? 'text-red-600 font-medium' : 'text-green-600'}>
-          ₹{Number(val).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-        </span>
-      ),
-    },
-    {
       title: 'Status',
       dataIndex: 'status',
       key: 'status',
       render: (s) => <Tag color={getStatusColor(s)}>{getStatusLabel(s)}</Tag>,
     },
     {
+      title: 'PO Balance',
+      key: 'po_balance',
+      render: (_: any, record: Invoice) => {
+        if (!record.sales_order_id || record.so_remaining_amount == null) {
+          return <span className="text-gray-400">—</span>;
+        }
+        const rem = record.so_remaining_amount;
+        return (
+          <span className={rem > 0 ? 'text-orange-500 font-medium' : 'text-green-600'}>
+            ₹{Number(rem).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </span>
+        );
+      },
+    },
+    {
       title: 'Actions',
       key: 'actions',
       width: 100,
       render: (_, record) => (
-        <Space>
-          <Button type="text" icon={<EyeOutlined />} onClick={() => router.push(`/invoices/${record.id}`)} />
-          <Popconfirm
-            title="Delete Invoice"
-            description="Are you sure?"
-            onConfirm={() => deleteMutation.mutate(record.id)}
-            okText="Yes"
-            cancelText="No"
-          >
-            <Button type="text" danger icon={<DeleteOutlined />} />
-          </Popconfirm>
-        </Space>
+        <Button type="text" icon={<EyeOutlined />} onClick={() => router.push(`/invoices/${record.id}`)} />
       ),
     },
   ];
@@ -143,7 +127,7 @@ export default function InvoicesPage() {
             disabled={!data?.data?.length}
             filename="invoices"
             title="Invoices"
-            columns={[{ key: 'invoice_number', title: 'Invoice #' }, { key: 'customer_name', title: 'Customer' }, { key: 'invoice_date', title: 'Date' }, { key: 'grand_total', title: 'Grand Total' }, { key: 'total_paid', title: 'Paid' }, { key: 'balance_due', title: 'Balance' }, { key: 'status', title: 'Status' }]}
+            columns={[{ key: 'invoice_number', title: 'Invoice #' }, { key: 'customer_name', title: 'Customer' }, { key: 'invoice_date', title: 'Date' }, { key: 'so_grand_total', title: 'PO Total' }, { key: 'total_paid', title: 'Paid' }, { key: 'status', title: 'Status' }]}
           />
           <Button type="primary" icon={<PlusOutlined />} onClick={() => router.push('/invoices/add')}>
             Create Invoice

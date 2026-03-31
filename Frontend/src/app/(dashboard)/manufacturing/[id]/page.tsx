@@ -31,6 +31,7 @@ import {
   jobCardDispatchAction,
 } from '@/lib/api/manufacturing';
 import { getSalesOrderById } from '@/lib/api/sales-orders';
+import { recheckJobCardMaterials } from '@/lib/api/bom';
 import { useAuthStore } from '@/stores/authStore';
 import { JOB_CARD_STATUS_OPTIONS, PRIORITY_OPTIONS } from '@/types/manufacturing';
 import type { JobCardProcess, JobCardStageHistory } from '@/types/manufacturing';
@@ -138,6 +139,12 @@ export default function ViewJobCardPage() {
       queryClient.invalidateQueries({ queryKey: ['material-requests'] });
     },
     onError: (err: any) => message.error(err?.response?.data?.message || 'Failed to send for approval'),
+  });
+
+  const recheckMaterialsMutation = useMutation({
+    mutationFn: () => recheckJobCardMaterials(jobCardId),
+    onSuccess: () => { message.success('Material status updated'); invalidateAll(); },
+    onError: (err: any) => message.error(err?.response?.data?.message || 'Failed to recheck materials'),
   });
 
   const completeCurrentStageMutation = useMutation({
@@ -382,73 +389,47 @@ export default function ViewJobCardPage() {
       </div>
 
       {/* Summary Bar */}
-      <Card className="card-shadow mb-4" bodyStyle={{ padding: '16px 24px' }}>
-        <Row gutter={[24, 16]} align="middle">
-          <Col xs={24} sm={12} md={6}>
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center flex-shrink-0">
-                <AppstoreOutlined className="text-blue-500 text-lg" />
-              </div>
-              <div className="min-w-0">
-                <div className="text-xs text-gray-400">Product</div>
-                <div className="font-semibold text-sm truncate">{jobCard.product_name || '-'}</div>
-                {jobCard.product_code && <div className="text-xs text-gray-400">SKU: {jobCard.product_code}</div>}
-              </div>
-            </div>
-          </Col>
-          <Col xs={12} sm={6} md={4}>
-            <div className="flex items-center gap-2">
-              <NumberOutlined className="text-green-500" />
-              <div>
-                <div className="text-xs text-gray-400">Quantity</div>
-                <div className="font-semibold text-sm">{Number(jobCard.quantity || 0)} {jobCard.unit || 'units'}</div>
-              </div>
-            </div>
-          </Col>
-          <Col xs={12} sm={6} md={4}>
-            <div className="flex items-center gap-2">
-              <UserOutlined className="text-purple-500" />
-              <div>
-                <div className="text-xs text-gray-400">Customer</div>
-                <div className="font-semibold text-sm truncate">{jobCard.customer_name || '-'}</div>
-              </div>
-            </div>
-          </Col>
-          <Col xs={12} sm={6} md={4}>
-            <div className="flex items-center gap-2">
-              <CalendarOutlined className={isOverdue ? 'text-red-500' : 'text-orange-400'} />
-              <div>
-                <div className="text-xs text-gray-400">Due Date</div>
-                <div className={`font-semibold text-sm ${isOverdue ? 'text-red-600' : ''}`}>
-                  {jobCard.due_date ? dayjs(jobCard.due_date).format('DD MMM YYYY') : '-'}
-                </div>
-              </div>
-            </div>
-          </Col>
-          <Col xs={12} sm={6} md={4}>
-            <div className="flex items-center gap-2">
-              <TeamOutlined className="text-blue-400" />
-              <div>
-                <div className="text-xs text-gray-400">Assigned To</div>
-                <div className="font-semibold text-sm truncate">{jobCard.assigned_to_name || '-'}</div>
-              </div>
-            </div>
-          </Col>
+      <Card className="card-shadow mb-4">
+        <Descriptions size="small" column={{ xs: 1, sm: 2, md: 3, lg: 4 }} colon>
+          <Descriptions.Item label={<span><AppstoreOutlined className="mr-1 text-blue-400" />Product</span>}>
+            <span className="font-semibold">{jobCard.product_name || '-'}</span>
+            {jobCard.product_code && <span className="text-gray-400 ml-1 text-xs">({jobCard.product_code})</span>}
+          </Descriptions.Item>
+          <Descriptions.Item label={<span><NumberOutlined className="mr-1 text-green-500" />Quantity</span>}>
+            <span className="font-semibold">{Number(jobCard.quantity || 0)} {jobCard.unit || 'units'}</span>
+          </Descriptions.Item>
+          <Descriptions.Item label={<span><UserOutlined className="mr-1 text-purple-500" />Customer</span>}>
+            <span className="font-semibold">{jobCard.customer_name || '-'}</span>
+          </Descriptions.Item>
+          <Descriptions.Item label={<span><TeamOutlined className="mr-1 text-blue-400" />Assigned To</span>}>
+            <span className="font-semibold">{jobCard.assigned_to_name || '-'}</span>
+          </Descriptions.Item>
+          <Descriptions.Item label={<span><CalendarOutlined className={`mr-1 ${isOverdue ? 'text-red-500' : 'text-orange-400'}`} />Due Date</span>}>
+            <span className={`font-semibold ${isOverdue ? 'text-red-600' : ''}`}>
+              {jobCard.due_date ? dayjs(jobCard.due_date).format('DD MMM YYYY') : '-'}
+            </span>
+            {isOverdue && <Tag color="red" className="ml-1 text-xs">Overdue</Tag>}
+          </Descriptions.Item>
+          {jobCard.estimated_production_days != null && (
+            <Descriptions.Item label={<span><ClockCircleOutlined className="mr-1 text-gray-400" />Est. Production</span>}>
+              <span className="font-semibold">{jobCard.estimated_production_days} days</span>
+            </Descriptions.Item>
+          )}
           {totalStages > 0 && (
-            <Col xs={24} sm={6} md={2}>
-              <div className="text-center">
+            <Descriptions.Item label={<span><SyncOutlined className="mr-1 text-blue-400" />Stages</span>}>
+              <Space>
                 <Progress
                   type="circle"
                   percent={stagePercent}
-                  size={50}
+                  size={36}
                   strokeColor={stagePercent === 100 ? '#52c41a' : '#1677ff'}
                   format={() => <span className="text-xs font-bold">{completedStages}/{totalStages}</span>}
                 />
-                <div className="text-xs text-gray-400 mt-1">Stages</div>
-              </div>
-            </Col>
+                <span className="text-xs text-gray-500">{completedStages} of {totalStages} done</span>
+              </Space>
+            </Descriptions.Item>
           )}
-        </Row>
+        </Descriptions>
       </Card>
 
       {/* ON HOLD Banner */}
@@ -715,72 +696,59 @@ export default function ViewJobCardPage() {
             title={<span className="flex items-center gap-2"><FileTextOutlined className="text-blue-500" />Job Card Details</span>}
             className="card-shadow h-full"
           >
-            <Row gutter={[24, 20]}>
-              <Col xs={12} sm={8} md={6}>
-                <div className="text-xs text-gray-400 mb-1">Job Card #</div>
-                <div className="font-semibold">{jobCard.job_card_number}</div>
-              </Col>
+            <Descriptions size="small" column={{ xs: 1, sm: 2 }} colon>
+              <Descriptions.Item label="Job Card #">
+                <span className="font-semibold">{jobCard.job_card_number}</span>
+              </Descriptions.Item>
               {jobCard.job_name && (
-                <Col xs={12} sm={8} md={6}>
-                  <div className="text-xs text-gray-400 mb-1">Job Name</div>
-                  <div className="font-semibold">{jobCard.job_name}</div>
-                </Col>
+                <Descriptions.Item label="Job Name">
+                  <span className="font-semibold">{jobCard.job_name}</span>
+                </Descriptions.Item>
               )}
-              <Col xs={12} sm={8} md={6}>
-                <div className="text-xs text-gray-400 mb-1">Status</div>
+              <Descriptions.Item label="Status">
                 <Tag color={getStatusColor(jobCard.status)}>{getStatusLabel(jobCard.status)}</Tag>
-              </Col>
-              <Col xs={12} sm={8} md={6}>
-                <div className="text-xs text-gray-400 mb-1">Priority</div>
+              </Descriptions.Item>
+              <Descriptions.Item label="Priority">
                 <Tag color={getPriorityColor(jobCard.priority)}>{getPriorityLabel(jobCard.priority)}</Tag>
-              </Col>
-              <Col xs={12} sm={8} md={6}>
-                <div className="text-xs text-gray-400 mb-1">Product</div>
-                <div className="font-semibold text-sm">{jobCard.product_name || '-'}</div>
-                {jobCard.product_code && <div className="text-xs text-gray-400">SKU: {jobCard.product_code}</div>}
-              </Col>
-              <Col xs={12} sm={8} md={6}>
-                <div className="text-xs text-gray-400 mb-1">Quantity</div>
-                <div className="font-semibold">{Number(jobCard.quantity || 0)} {jobCard.unit || 'units'}</div>
-              </Col>
-              <Col xs={12} sm={8} md={6}>
-                <div className="text-xs text-gray-400 mb-1">Customer</div>
-                <div className="font-semibold text-sm">{jobCard.customer_name || '-'}</div>
-              </Col>
-              <Col xs={12} sm={8} md={6}>
-                <div className="text-xs text-gray-400 mb-1">Assigned To</div>
-                <div className="font-semibold text-sm">{jobCard.assigned_to_name || '-'}</div>
-              </Col>
-              <Col xs={12} sm={8} md={6}>
-                <div className="text-xs text-gray-400 mb-1">Start Date</div>
-                <div className="font-semibold text-sm">{jobCard.start_date ? dayjs(jobCard.start_date).format('DD MMM YYYY') : '-'}</div>
-              </Col>
-              <Col xs={12} sm={8} md={6}>
-                <div className="text-xs text-gray-400 mb-1">Due Date</div>
-                <div className={`font-semibold text-sm ${isOverdue ? 'text-red-600' : ''}`}>
+              </Descriptions.Item>
+              <Descriptions.Item label="Product">
+                <span className="font-semibold">{jobCard.product_name || '-'}</span>
+                {jobCard.product_code && <span className="text-gray-400 ml-1 text-xs">({jobCard.product_code})</span>}
+              </Descriptions.Item>
+              <Descriptions.Item label="Quantity">
+                <span className="font-semibold">{Number(jobCard.quantity || 0)} {jobCard.unit || 'units'}</span>
+              </Descriptions.Item>
+              <Descriptions.Item label="Customer">
+                <span className="font-semibold">{jobCard.customer_name || '-'}</span>
+              </Descriptions.Item>
+              <Descriptions.Item label="Assigned To">
+                <span className="font-semibold">{jobCard.assigned_to_name || '-'}</span>
+              </Descriptions.Item>
+              <Descriptions.Item label="Start Date">
+                <span className="font-semibold">{jobCard.start_date ? dayjs(jobCard.start_date).format('DD MMM YYYY') : '-'}</span>
+              </Descriptions.Item>
+              <Descriptions.Item label="Due Date">
+                <span className={`font-semibold ${isOverdue ? 'text-red-600' : ''}`}>
                   {jobCard.due_date ? dayjs(jobCard.due_date).format('DD MMM YYYY') : '-'}
-                  {isOverdue && <Tag color="red" className="ml-1 text-xs">Overdue</Tag>}
-                </div>
-              </Col>
+                </span>
+                {isOverdue && <Tag color="red" className="ml-1 text-xs">Overdue</Tag>}
+              </Descriptions.Item>
               {jobCard.estimated_production_days != null && (
-                <Col xs={12} sm={8} md={6}>
-                  <div className="text-xs text-gray-400 mb-1">Est. Production</div>
-                  <div className="font-semibold text-sm">{jobCard.estimated_production_days} days</div>
-                </Col>
+                <Descriptions.Item label="Est. Production">
+                  <span className="font-semibold">{jobCard.estimated_production_days} days</span>
+                </Descriptions.Item>
               )}
               {jobCard.completed_date && (
-                <Col xs={12} sm={8} md={6}>
-                  <div className="text-xs text-gray-400 mb-1">Completed</div>
-                  <div className="font-semibold text-sm text-green-600">{dayjs(jobCard.completed_date).format('DD MMM YYYY')}</div>
-                </Col>
+                <Descriptions.Item label="Completed">
+                  <span className="font-semibold text-green-600">{dayjs(jobCard.completed_date).format('DD MMM YYYY')}</span>
+                </Descriptions.Item>
               )}
               {jobCard.remarks && (
-                <Col xs={24}>
-                  <div className="text-xs text-gray-400 mb-1">Notes</div>
+                <Descriptions.Item label="Notes" span={2}>
                   <div className="text-sm bg-gray-50 rounded p-2 border border-gray-100">{jobCard.remarks}</div>
-                </Col>
+                </Descriptions.Item>
               )}
-            </Row>
+            </Descriptions>
           </Card>
         </Col>
 

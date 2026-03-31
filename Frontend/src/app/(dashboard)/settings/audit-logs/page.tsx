@@ -14,18 +14,41 @@ import ExportDropdown from '@/components/common/ExportDropdown';
 const { Title } = Typography;
 const { RangePicker } = DatePicker;
 
-const ENTITY_TYPES = [
-  'enquiry', 'customer', 'quotation', 'invoice', 'payment',
-  'sales_order', 'job_card', 'material_request', 'purchase_order',
-  'source', 'interest_status', 'product', 'inventory',
+const ENTITY_TYPES: { value: string; label: string }[] = [
+  { value: 'auth', label: 'Login' },
+  { value: 'enquiry', label: 'Enquiry' },
+  { value: 'customer', label: 'Customer' },
+  { value: 'quotation', label: 'Quotation' },
+  { value: 'invoice', label: 'Invoice' },
+  { value: 'payment', label: 'Payment' },
+  { value: 'sales_order', label: 'Sales Order' },
+  { value: 'purchase_order', label: 'Purchase Order' },
+  { value: 'job_card', label: 'Job Card' },
+  { value: 'material_request', label: 'Material Request' },
+  { value: 'indent', label: 'Indent' },
+  { value: 'employee', label: 'Employee' },
+  { value: 'source', label: 'Source' },
+  { value: 'interest_status', label: 'Interest Status' },
+  { value: 'product', label: 'Product' },
+  { value: 'inventory', label: 'Inventory' },
 ];
 
-const ACTION_TYPES = [
-  'create', 'update', 'delete', 'status_change', 'convert',
-  'payment', 'approve', 'issue', 'receive',
+const ACTION_TYPES: { value: string; label: string }[] = [
+  { value: 'login', label: 'Login' },
+  { value: 'create', label: 'Create' },
+  { value: 'update', label: 'Update' },
+  { value: 'delete', label: 'Delete' },
+  { value: 'status_change', label: 'Status Change' },
+  { value: 'convert', label: 'Convert' },
+  { value: 'payment', label: 'Payment' },
+  { value: 'approve', label: 'Approve' },
+  { value: 'issue', label: 'Issue' },
+  { value: 'receive', label: 'Receive' },
+  { value: 'release', label: 'Release' },
 ];
 
 const ACTION_COLORS: Record<string, string> = {
+  login: 'default',
   create: 'green',
   update: 'blue',
   delete: 'red',
@@ -35,6 +58,12 @@ const ACTION_COLORS: Record<string, string> = {
   approve: 'lime',
   issue: 'gold',
   receive: 'geekblue',
+  release: 'volcano',
+};
+
+const USER_TYPE_COLORS: Record<string, string> = {
+  enterprise: 'blue',
+  employee: 'green',
 };
 
 export default function AuditLogsPage() {
@@ -44,9 +73,11 @@ export default function AuditLogsPage() {
   const [entityType, setEntityType] = useState<string | undefined>();
   const [action, setAction] = useState<string | undefined>();
   const [dateRange, setDateRange] = useState<[Dayjs | null, Dayjs | null] | null>(null);
+  const [userName, setUserName] = useState<string | undefined>();
+  const [userNameInput, setUserNameInput] = useState('');
 
   const { data, isLoading } = useQuery({
-    queryKey: ['audit-logs', page, pageSize, entityType, action, dateRange],
+    queryKey: ['audit-logs', page, pageSize, entityType, action, dateRange, userName],
     queryFn: () => getAuditLogs({
       page,
       pageSize,
@@ -54,6 +85,7 @@ export default function AuditLogsPage() {
       action,
       fromDate: dateRange?.[0]?.format('YYYY-MM-DD'),
       toDate: dateRange?.[1]?.format('YYYY-MM-DD'),
+      userName,
     }),
   });
 
@@ -61,6 +93,8 @@ export default function AuditLogsPage() {
     setEntityType(undefined);
     setAction(undefined);
     setDateRange(null);
+    setUserName(undefined);
+    setUserNameInput('');
     setPage(1);
   };
 
@@ -76,7 +110,16 @@ export default function AuditLogsPage() {
       title: 'User',
       dataIndex: 'user_name',
       key: 'user_name',
-      render: (v) => v || 'System',
+      render: (v, record) => (
+        <Space size={4}>
+          <span>{v || 'System'}</span>
+          {record.user_type && (
+            <Tag color={USER_TYPE_COLORS[record.user_type.toLowerCase()] || 'default'} style={{ fontSize: 10, lineHeight: '16px', padding: '0 4px' }}>
+              {record.user_type.toUpperCase()}
+            </Tag>
+          )}
+        </Space>
+      ),
     },
     {
       title: 'Entity',
@@ -123,11 +166,22 @@ export default function AuditLogsPage() {
       <div className="bg-white p-4 rounded-lg mb-4 card-shadow">
         <Space wrap>
           <Select placeholder="Entity Type" value={entityType} onChange={(v) => { setEntityType(v); setPage(1); }} style={{ width: 180 }} allowClear>
-            {ENTITY_TYPES.map((t) => <Select.Option key={t} value={t}>{t.replace('_', ' ').toUpperCase()}</Select.Option>)}
+            {ENTITY_TYPES.map((t) => <Select.Option key={t.value} value={t.value}>{t.label}</Select.Option>)}
           </Select>
           <Select placeholder="Action" value={action} onChange={(v) => { setAction(v); setPage(1); }} style={{ width: 160 }} allowClear>
-            {ACTION_TYPES.map((a) => <Select.Option key={a} value={a}>{a.replace('_', ' ').toUpperCase()}</Select.Option>)}
+            {ACTION_TYPES.map((a) => <Select.Option key={a.value} value={a.value}>{a.label}</Select.Option>)}
           </Select>
+          <Input
+            placeholder="Search by user name"
+            prefix={<SearchOutlined />}
+            value={userNameInput}
+            onChange={(e) => setUserNameInput(e.target.value)}
+            onPressEnter={() => { setUserName(userNameInput.trim() || undefined); setPage(1); }}
+            onBlur={() => { setUserName(userNameInput.trim() || undefined); setPage(1); }}
+            style={{ width: 200 }}
+            allowClear
+            onClear={() => { setUserName(undefined); setUserNameInput(''); setPage(1); }}
+          />
           <RangePicker value={dateRange} onChange={(dates) => { setDateRange(dates); setPage(1); }} format="DD-MM-YYYY" />
           <Button icon={<ClearOutlined />} onClick={handleClear}>Clear</Button>
         </Space>
@@ -139,6 +193,29 @@ export default function AuditLogsPage() {
           dataSource={data?.data || []}
           rowKey="id"
           loading={isLoading}
+          expandable={{
+            rowExpandable: (record) => !!(record.old_values || record.new_values),
+            expandedRowRender: (record) => (
+              <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
+                {record.old_values && (
+                  <div style={{ flex: 1, minWidth: 280 }}>
+                    <Tag color="red" style={{ marginBottom: 6 }}>Old Values</Tag>
+                    <pre style={{ background: '#fafafa', border: '1px solid #f0f0f0', borderRadius: 4, padding: 12, fontSize: 12, overflowX: 'auto', margin: 0 }}>
+                      {JSON.stringify(record.old_values, null, 2)}
+                    </pre>
+                  </div>
+                )}
+                {record.new_values && (
+                  <div style={{ flex: 1, minWidth: 280 }}>
+                    <Tag color="green" style={{ marginBottom: 6 }}>New Values</Tag>
+                    <pre style={{ background: '#fafafa', border: '1px solid #f0f0f0', borderRadius: 4, padding: 12, fontSize: 12, overflowX: 'auto', margin: 0 }}>
+                      {JSON.stringify(record.new_values, null, 2)}
+                    </pre>
+                  </div>
+                )}
+              </div>
+            ),
+          }}
           pagination={{
             current: page,
             pageSize,

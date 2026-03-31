@@ -64,7 +64,7 @@ export default function CustomersPage() {
             title="Customers"
             disabled={!data?.data?.length}
           />
-          {hasPermission('sales', 'create') && (
+          {hasPermission('sales', 'customers', 'create') && (
             <Button type="primary" icon={<PlusOutlined />} onClick={() => router.push('/customers/add')}>
               Add Customer
             </Button>

@@ -1,3 +1,10 @@
+export const REJECTION_REASONS = [
+  { value: 'damaged',        label: 'Damaged' },
+  { value: 'defective',      label: 'Defective / Not Working' },
+  { value: 'incorrect_item', label: 'Incorrect Item' },
+  { value: 'other',          label: 'Other' },
+];
+
 export interface GoodsReceiptItem {
   id: number;
   grn_id: number;
@@ -7,8 +14,13 @@ export interface GoodsReceiptItem {
   item_name: string;
   unit_of_measure?: string;
   expected_qty: number;
-  confirmed_qty: number;
+  shortage_qty: number | null;  // ordered quantity (shortageQuantity from indent item)
+  confirmed_qty: number;   // total received
+  accepted_qty: number;    // accepted into inventory
+  rejected_qty: number;    // rejected / damaged
+  rejection_reason?: string;
   status: string; // 'pending', 'confirmed', 'partial', 'rejected'
+  rtv_status: string | null; // null | 'pending' | 'returned'
   notes?: string;
   created_date: string;
 }
@@ -19,6 +31,9 @@ export interface GoodsReceipt {
   grn_number: string;
   indent_id?: number;
   indent_number?: string;
+  po_number?: string;
+  supplier_name?: string;
+  supplier_id?: number;
   status: string; // 'pending', 'partially_confirmed', 'confirmed', 'rejected'
   released_by?: number;
   released_by_name?: string;

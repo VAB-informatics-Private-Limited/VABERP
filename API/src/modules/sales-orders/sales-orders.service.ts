@@ -9,8 +9,12 @@ import { Invoice } from '../invoices/entities/invoice.entity';
 import { InvoiceItem } from '../invoices/entities/invoice-item.entity';
 import { Payment } from '../invoices/entities/payment.entity';
 import { JobCard } from '../manufacturing/entities/job-card.entity';
+import { Enquiry } from '../enquiries/entities/enquiry.entity';
+import { Enterprise } from '../enterprises/entities/enterprise.entity';
+import { EmailService } from '../email/email.service';
 import { CreateSalesOrderDto, SalesOrderItemDto, UpdateSalesOrderDto } from './dto/create-sales-order.dto';
 import { SalesOrderVersion } from './entities/sales-order-version.entity';
+import { AuditLogsService } from '../audit-logs/audit-logs.service';
 
 @Injectable()
 export class SalesOrdersService {
@@ -33,6 +37,12 @@ export class SalesOrdersService {
     private jobCardRepository: Repository<JobCard>,
     @InjectRepository(SalesOrderVersion)
     private soVersionRepository: Repository<SalesOrderVersion>,
+    @InjectRepository(Enquiry)
+    private enquiryRepository: Repository<Enquiry>,
+    @InjectRepository(Enterprise)
+    private enterpriseRepository: Repository<Enterprise>,
+    private emailService: EmailService,
+    private auditLogsService: AuditLogsService,
   ) {}
 
   async findAll(
@@ -78,6 +88,15 @@ export class SalesOrdersService {
       page: pageNum,
       limit: limitNum,
     };
+  }
+
+  async updateETA(id: number, enterpriseId: number, expectedDelivery: string) {
+    const so = await this.soRepository.findOne({ where: { id, enterpriseId } });
+    if (!so) throw new NotFoundException('Sales order not found');
+    await this.soRepository.update(id, {
+      expectedDelivery: expectedDelivery ? new Date(expectedDelivery) : null,
+    });
+    return this.findOne(id, enterpriseId);
   }
 
   async findOne(id: number, enterpriseId: number) {
@@ -156,6 +175,15 @@ export class SalesOrdersService {
     );
     await this.soItemRepository.save(itemEntities);
 
+    this.auditLogsService.log({
+      enterpriseId,
+      userId,
+      entityType: 'sales_order',
+      entityId: savedSo.id,
+      action: 'create',
+      description: `Created sales order ${orderNumber}`,
+    }).catch(() => {});
+
     return this.findOne(savedSo.id, enterpriseId);
   }
 
@@ -196,13 +224,81 @@ export class SalesOrdersService {
     return this.create(enterpriseId, createDto, userId);
   }
 
-  async updateStatus(id: number, enterpriseId: number, status: string, holdReason?: string) {
+  async updateStatus(id: number, enterpriseId: number, status: string, holdReason?: string, user?: { id: number; type: string; name?: string }) {
     const so = await this.soRepository.findOne({ where: { id, enterpriseId } });
     if (!so) throw new NotFoundException('Sales order not found');
 
+    const oldStatus = so.status;
+
     const updateData: any = { status };
 
-    if (status === 'on_hold') {
+    if (status === 'cancelled') {
+      // Halt all linked job cards
+      await this.jobCardRepository
+        .createQueryBuilder()
+        .update(JobCard)
+        .set({ dispatchOnHold: true })
+        .where('sales_order_id = :soId', { soId: id })
+        .execute();
+
+      // Revert linked enquiry to Follow Up so a new quotation can be created
+      if (so.enquiryId) {
+        await this.enquiryRepository.update(so.enquiryId, {
+          interestStatus: 'Follow Up',
+        });
+      }
+
+      // Send email notification if order was already sent to manufacturing
+      if (so.sentToManufacturing && this.emailService.isConfigured()) {
+        const jobCards = await this.jobCardRepository
+          .createQueryBuilder('jc')
+          .leftJoinAndSelect('jc.assignedEmployee', 'employee')
+          .where('jc.sales_order_id = :soId', { soId: id })
+          .getMany();
+
+        const assigneeEmails = [
+          ...new Set(
+            jobCards
+              .map((jc: any) => jc.assignedEmployee?.email)
+              .filter(Boolean) as string[],
+          ),
+        ];
+
+        const enterprise = await this.enterpriseRepository.findOne({
+          where: { id: so.enterpriseId },
+        });
+
+        const toEmails = [
+          ...(enterprise?.email ? [enterprise.email] : []),
+          ...assigneeEmails,
+        ].filter(Boolean);
+
+        const emailBody = `Dear Manufacturing Team,
+
+Purchase Order ${so.orderNumber} for customer ${so.customerName} has been CANCELLED.
+
+Please stop all further processing immediately. No additional work should be done on this order.
+
+Order Details:
+- PO Number: ${so.orderNumber}
+- Customer: ${so.customerName}
+- Grand Total: ₹${Number(so.grandTotal).toFixed(2)}
+
+This is an automated notification.`;
+
+        for (const email of toEmails) {
+          try {
+            await this.emailService.sendEmail({
+              to: email,
+              subject: `CANCELLED: Purchase Order ${so.orderNumber}`,
+              body: emailBody,
+            });
+          } catch (_) {
+            // Non-blocking — log but don't fail the cancellation
+          }
+        }
+      }
+    } else if (status === 'on_hold') {
       // Store hold reason (optional) and pause all related job cards
       updateData.holdReason = holdReason || null;
       updateData.holdAcknowledged = false;
@@ -225,6 +321,18 @@ export class SalesOrdersService {
     }
 
     await this.soRepository.update(id, updateData);
+
+    this.auditLogsService.log({
+      enterpriseId,
+      userId: user?.id,
+      userType: user?.type,
+      userName: user?.name,
+      entityType: 'sales_order',
+      entityId: id,
+      action: 'status_change',
+      description: `Status changed from "${oldStatus}" to "${status}" on sales order`,
+      newValues: { oldStatus, newStatus: status },
+    }).catch(() => {});
 
     return this.findOne(id, enterpriseId);
   }
@@ -550,6 +658,15 @@ export class SalesOrdersService {
       currentVersion: so.currentVersion + 1,
       updatedBy: userId || undefined,
     });
+
+    this.auditLogsService.log({
+      enterpriseId,
+      userId,
+      entityType: 'sales_order',
+      entityId: id,
+      action: 'update',
+      description: `Updated sales order ${so.orderNumber}: ${changeSummary}`,
+    }).catch(() => {});
 
     return this.findOne(id, enterpriseId);
   }

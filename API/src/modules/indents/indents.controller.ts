@@ -1,6 +1,7 @@
 import {
   Controller, Get, Post, Patch, Delete, Param, Query, Body, ParseIntPipe,
 } from '@nestjs/common';
+
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiQuery } from '@nestjs/swagger';
 import { IndentsService } from './indents.service';
 import { EnterpriseId, CurrentUser, RequirePermission } from '../../common/decorators';
@@ -40,6 +41,17 @@ export class IndentsController {
   @RequirePermission('procurement', 'indents', 'view')
   async findOne(@Param('id', ParseIntPipe) id: number, @EnterpriseId() enterpriseId: number) {
     return this.service.findOne(id, enterpriseId);
+  }
+
+  @Patch(':id/eta')
+  @ApiOperation({ summary: 'Update indent expected delivery (ETA)' })
+  @RequirePermission('procurement', 'indents', 'edit')
+  async updateETA(
+    @Param('id', ParseIntPipe) id: number,
+    @EnterpriseId() enterpriseId: number,
+    @Body('expectedDelivery') expectedDelivery: string,
+  ) {
+    return this.service.updateETA(id, enterpriseId, expectedDelivery);
   }
 
   @Post('from-mr/:mrId')
@@ -89,7 +101,7 @@ export class IndentsController {
 
   @Post(':id/receive-goods')
   @ApiOperation({ summary: 'Receive goods for indent items (updates raw material stock)' })
-  @RequirePermission('procurement', 'indents', 'create')
+  @RequirePermission('procurement', 'indents', 'edit')
   async receiveGoods(
     @Param('id', ParseIntPipe) id: number,
     @EnterpriseId() enterpriseId: number,
@@ -101,7 +113,7 @@ export class IndentsController {
 
   @Post(':id/release-to-inventory')
   @ApiOperation({ summary: 'Release received items to inventory (resets linked MR for re-approval)' })
-  @RequirePermission('procurement', 'indents', 'create')
+  @RequirePermission('procurement', 'indents', 'edit')
   async releaseToInventory(
     @Param('id', ParseIntPipe) id: number,
     @EnterpriseId() enterpriseId: number,
@@ -112,7 +124,7 @@ export class IndentsController {
 
   @Post(':id/release-all')
   @ApiOperation({ summary: 'Release all items to inventory — auto-approve and issue to manufacturing' })
-  @RequirePermission('procurement', 'indents', 'create')
+  @RequirePermission('procurement', 'indents', 'edit')
   async releaseAllItems(
     @Param('id', ParseIntPipe) id: number,
     @EnterpriseId() enterpriseId: number,
@@ -121,10 +133,47 @@ export class IndentsController {
     return this.service.releaseAllItems(id, enterpriseId, user?.id);
   }
 
+  @Post(':id/reorder-rejected')
+  @ApiOperation({ summary: 'Reset GRN-rejected items to pending so procurement can re-order fresh stock' })
+  @RequirePermission('procurement', 'indents', 'edit')
+  async reorderRejected(
+    @Param('id', ParseIntPipe) id: number,
+    @EnterpriseId() enterpriseId: number,
+  ) {
+    return this.service.reorderRejectedItems(id, enterpriseId);
+  }
+
+  @Post(':id/reissue-rejected')
+  @ApiOperation({ summary: 'Re-issue GRN-rejected items to inventory — marks as received and creates a new GRN' })
+  @RequirePermission('procurement', 'indents', 'edit')
+  async reissueRejected(
+    @Param('id', ParseIntPipe) id: number,
+    @EnterpriseId() enterpriseId: number,
+    @CurrentUser() user: any,
+  ) {
+    return this.service.reissueRejectedToInventory(id, enterpriseId, user?.id);
+  }
+
+  @Post(':id/create-replacement')
+  @ApiOperation({ summary: 'Create a new replacement indent for rejected/damaged items, linked to this indent' })
+  @RequirePermission('procurement', 'indents', 'create')
+  async createReplacement(
+    @Param('id', ParseIntPipe) id: number,
+    @EnterpriseId() enterpriseId: number,
+    @CurrentUser() user: any,
+    @Body('rejectionReason') rejectionReason?: string,
+  ) {
+    return this.service.createReplacementIndent(id, enterpriseId, rejectionReason, user?.id);
+  }
+
   @Post(':id/cancel')
   @ApiOperation({ summary: 'Cancel an indent' })
   @RequirePermission('procurement', 'indents', 'edit')
-  async cancel(@Param('id', ParseIntPipe) id: number, @EnterpriseId() enterpriseId: number) {
-    return this.service.cancel(id, enterpriseId);
+  async cancel(
+    @Param('id', ParseIntPipe) id: number,
+    @EnterpriseId() enterpriseId: number,
+    @CurrentUser() user: any,
+  ) {
+    return this.service.cancel(id, enterpriseId, user?.id);
   }
 }

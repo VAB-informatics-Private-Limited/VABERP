@@ -12,7 +12,7 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiQuery } from '@nestjs/swagger';
 import { EnquiriesService } from './enquiries.service';
-import { EnterpriseId, CurrentUser, RequirePermission, DataStartDate } from '../../common/decorators';
+import { EnterpriseId, CurrentUser, RequirePermission, DataStartDate, OwnDataOnly, CurrentUserId } from '../../common/decorators';
 import { CreateEnquiryDto, CreateFollowupDto, FollowupOutcomeDto } from './dto';
 
 @ApiTags('Enquiries')
@@ -34,6 +34,8 @@ export class EnquiriesController {
   async findAll(
     @EnterpriseId() enterpriseId: number,
     @DataStartDate() dataStartDate: Date | null,
+    @OwnDataOnly() ownDataOnly: boolean,
+    @CurrentUserId() currentUserId: number,
     @Query('page') page?: number,
     @Query('limit') limit?: number,
     @Query('search') search?: string,
@@ -52,6 +54,8 @@ export class EnquiriesController {
       fromDate,
       toDate,
       dataStartDate,
+      ownDataOnly,
+      currentUserId,
     );
   }
 
@@ -108,6 +112,26 @@ export class EnquiriesController {
     return this.enquiriesService.getPipelineStats(enterpriseId);
   }
 
+  @Get(':id/quotations')
+  @ApiOperation({ summary: 'Get all quotations linked to an enquiry' })
+  @RequirePermission('enquiry', 'enquiries', 'view')
+  async getQuotationsByEnquiry(
+    @Param('id', ParseIntPipe) id: number,
+    @EnterpriseId() enterpriseId: number,
+  ) {
+    return this.enquiriesService.getQuotationsByEnquiry(id, enterpriseId);
+  }
+
+  @Get('check-mobile')
+  @ApiOperation({ summary: 'Check if mobile number already exists in enquiries' })
+  @RequirePermission('enquiry', 'enquiries', 'view')
+  async checkMobile(
+    @Query('mobile') mobile: string,
+    @EnterpriseId() enterpriseId: number,
+  ) {
+    return this.enquiriesService.checkMobile(mobile, enterpriseId);
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Get enquiry by ID' })
   @RequirePermission('enquiry', 'enquiries', 'view')
@@ -133,9 +157,10 @@ export class EnquiriesController {
   @RequirePermission('enquiry', 'enquiries', 'create')
   async create(
     @EnterpriseId() enterpriseId: number,
+    @CurrentUser() user: any,
     @Body() createDto: CreateEnquiryDto,
   ) {
-    return this.enquiriesService.create(enterpriseId, createDto);
+    return this.enquiriesService.create(enterpriseId, createDto, user);
   }
 
   @Post(':id/followups')
@@ -174,25 +199,16 @@ export class EnquiriesController {
     return this.enquiriesService.updateFollowup(followupId, enterpriseId, updateDto);
   }
 
-  @Post(':id/convert')
-  @ApiOperation({ summary: 'Convert enquiry to customer' })
-  @RequirePermission('enquiry', 'enquiries', 'create')
-  async convertToCustomer(
-    @Param('id', ParseIntPipe) id: number,
-    @EnterpriseId() enterpriseId: number,
-  ) {
-    return this.enquiriesService.convertToCustomer(id, enterpriseId);
-  }
-
   @Put(':id')
   @ApiOperation({ summary: 'Update an enquiry' })
   @RequirePermission('enquiry', 'enquiries', 'edit')
   async update(
     @Param('id', ParseIntPipe) id: number,
     @EnterpriseId() enterpriseId: number,
+    @CurrentUser() user: any,
     @Body() updateDto: Partial<CreateEnquiryDto>,
   ) {
-    return this.enquiriesService.update(id, enterpriseId, updateDto);
+    return this.enquiriesService.update(id, enterpriseId, updateDto, user);
   }
 
   @Delete(':id')
@@ -201,7 +217,8 @@ export class EnquiriesController {
   async delete(
     @Param('id', ParseIntPipe) id: number,
     @EnterpriseId() enterpriseId: number,
+    @CurrentUser() user: any,
   ) {
-    return this.enquiriesService.delete(id, enterpriseId);
+    return this.enquiriesService.delete(id, enterpriseId, user);
   }
 }

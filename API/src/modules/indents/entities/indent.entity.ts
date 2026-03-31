@@ -51,14 +51,29 @@ export class Indent {
   @Column({ name: 'request_date', type: 'date' })
   requestDate: Date;
 
+  @Column({ name: 'expected_delivery', type: 'date', nullable: true })
+  expectedDelivery: Date | null;
+
   @Column({ default: 'material_request' })
   source: string; // 'material_request' or 'inventory'
 
   @Column({ default: 'pending' })
   status: string; // 'pending', 'partially_ordered', 'fully_ordered', 'closed', 'cancelled'
 
+  @Column({ default: 'normal' })
+  priority: string; // 'normal' | 'urgent'
+
   @Column({ nullable: true, type: 'text' })
   notes: string;
+
+  @Column({ name: 'parent_indent_id', nullable: true, type: 'int' })
+  parentIndentId: number | null;
+
+  @Column({ name: 'is_replacement', default: false })
+  isReplacement: boolean;
+
+  @Column({ name: 'rejection_reason', nullable: true, type: 'text' })
+  rejectionReason: string | null;
 
   @CreateDateColumn({ name: 'created_date' })
   createdDate: Date;

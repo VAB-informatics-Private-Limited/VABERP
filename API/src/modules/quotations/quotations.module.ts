@@ -8,10 +8,11 @@ import { QuotationVersion } from './entities/quotation-version.entity';
 import { Enquiry } from '../enquiries/entities/enquiry.entity';
 import { SalesOrder } from '../sales-orders/entities/sales-order.entity';
 import { SalesOrderItem } from '../sales-orders/entities/sales-order-item.entity';
+import { Customer } from '../customers/entities/customer.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Quotation, QuotationItem, QuotationVersion, Enquiry, SalesOrder, SalesOrderItem]),
+    TypeOrmModule.forFeature([Quotation, QuotationItem, QuotationVersion, Enquiry, SalesOrder, SalesOrderItem, Customer]),
   ],
   controllers: [QuotationsController],
   providers: [QuotationsService],

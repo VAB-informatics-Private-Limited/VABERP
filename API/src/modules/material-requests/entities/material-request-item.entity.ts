@@ -38,16 +38,16 @@ export class MaterialRequestItem {
   @Column({ name: 'item_name' })
   itemName: string;
 
-  @Column({ name: 'quantity_requested', type: 'decimal', precision: 10, scale: 2 })
+  @Column({ name: 'quantity_requested', type: 'decimal', precision: 15, scale: 2 })
   quantityRequested: number;
 
-  @Column({ name: 'quantity_approved', type: 'decimal', precision: 10, scale: 2, default: 0 })
+  @Column({ name: 'quantity_approved', type: 'decimal', precision: 15, scale: 2, default: 0 })
   quantityApproved: number;
 
-  @Column({ name: 'quantity_issued', type: 'decimal', precision: 10, scale: 2, default: 0 })
+  @Column({ name: 'quantity_issued', type: 'decimal', precision: 15, scale: 2, default: 0 })
   quantityIssued: number;
 
-  @Column({ name: 'available_stock', type: 'decimal', precision: 10, scale: 2, default: 0 })
+  @Column({ name: 'available_stock', type: 'decimal', precision: 15, scale: 2, default: 0 })
   availableStock: number;
 
   @Column({ name: 'unit_of_measure', nullable: true })

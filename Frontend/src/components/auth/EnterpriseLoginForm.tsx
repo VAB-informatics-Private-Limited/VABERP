@@ -89,10 +89,16 @@ export function EnterpriseLoginForm() {
           email_status: loginData.user.emailStatus ?? 0,
           mobile_status: loginData.user.mobileStatus ?? 0,
           status: loginData.user.status,
+          subscription_status: loginData.user.subscriptionStatus,
+          plan_id: loginData.user.planId,
+          subscription_start_date: loginData.user.subscriptionStartDate,
         };
         login(mappedUser, 'enterprise', loginData.token);
         message.success(response.message || 'Login successful!');
-        router.push('/dashboard');
+        const isActive = mappedUser.plan_id && mappedUser.expiry_date &&
+          new Date(mappedUser.expiry_date) >= new Date() &&
+          mappedUser.subscription_status === 'active';
+        router.push(isActive ? '/dashboard' : '/activate');
       } else {
         message.error(response.message || 'Invalid password');
       }

@@ -44,19 +44,19 @@ export class RawMaterial {
   @Column({ name: 'unit_of_measure', nullable: true })
   unitOfMeasure: string;
 
-  @Column({ name: 'current_stock', type: 'decimal', precision: 10, scale: 2, default: 0 })
+  @Column({ name: 'current_stock', type: 'decimal', precision: 15, scale: 2, default: 0 })
   currentStock: number;
 
-  @Column({ name: 'reserved_stock', type: 'decimal', precision: 10, scale: 2, default: 0 })
+  @Column({ name: 'reserved_stock', type: 'decimal', precision: 15, scale: 2, default: 0 })
   reservedStock: number;
 
-  @Column({ name: 'available_stock', type: 'decimal', precision: 10, scale: 2, default: 0 })
+  @Column({ name: 'available_stock', type: 'decimal', precision: 15, scale: 2, default: 0 })
   availableStock: number;
 
-  @Column({ name: 'min_stock_level', type: 'decimal', precision: 10, scale: 2, default: 0 })
+  @Column({ name: 'min_stock_level', type: 'decimal', precision: 15, scale: 2, default: 0 })
   minStockLevel: number;
 
-  @Column({ name: 'cost_per_unit', type: 'decimal', precision: 10, scale: 2, nullable: true })
+  @Column({ name: 'cost_per_unit', type: 'decimal', precision: 18, scale: 2, nullable: true })
   costPerUnit: number;
 
   @Column({ default: RawMaterialStatus.ACTIVE })

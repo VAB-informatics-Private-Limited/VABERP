@@ -33,6 +33,12 @@ export class SuperAdminController {
   }
 
   @UseGuards(SuperAdminGuard)
+  @Get('analytics')
+  getAnalytics() {
+    return this.superAdminService.getAnalytics();
+  }
+
+  @UseGuards(SuperAdminGuard)
   @Get('enterprises')
   getAllEnterprises() {
     return this.superAdminService.getAllEnterprises();
@@ -75,6 +81,18 @@ export class SuperAdminController {
   @Get('enterprises/:id')
   getEnterprise(@Param('id', ParseIntPipe) id: number) {
     return this.superAdminService.getEnterprise(id);
+  }
+
+  @UseGuards(SuperAdminGuard)
+  @Patch('enterprises/:id/lock')
+  lockEnterprise(@Param('id', ParseIntPipe) id: number) {
+    return this.superAdminService.lockProfile(id, 'enterprise');
+  }
+
+  @UseGuards(SuperAdminGuard)
+  @Patch('enterprises/:id/unlock')
+  unlockEnterprise(@Param('id', ParseIntPipe) id: number) {
+    return this.superAdminService.unlockProfile(id, 'enterprise');
   }
 
   @UseGuards(SuperAdminGuard)
@@ -178,9 +196,13 @@ export class SuperAdminController {
       name: string;
       description?: string;
       price: number;
-      durationDays: number;
+      durationDays?: number;
+      durationType?: string;
+      durationValue?: number;
       maxEmployees: number;
       features?: string;
+      numberOfServicesAllowed?: number;
+      serviceIds?: number[];
     },
   ) {
     return this.superAdminService.createPlan(body);
@@ -196,8 +218,12 @@ export class SuperAdminController {
       description?: string;
       price?: number;
       durationDays?: number;
+      durationType?: string;
+      durationValue?: number;
       maxEmployees?: number;
       features?: string;
+      numberOfServicesAllowed?: number;
+      serviceIds?: number[];
     },
   ) {
     return this.superAdminService.updatePlan(id, body);
@@ -220,7 +246,93 @@ export class SuperAdminController {
   assignPlan(
     @Body('enterpriseId') enterpriseId: number,
     @Body('planId') planId: number,
+    @Body('couponCode') couponCode?: string,
   ) {
-    return this.superAdminService.assignPlan(enterpriseId, planId);
+    return this.superAdminService.assignPlan(enterpriseId, planId, couponCode);
+  }
+
+  @UseGuards(SuperAdminGuard)
+  @Patch('enterprises/:id/reseller')
+  reassignReseller(
+    @Param('id', ParseIntPipe) id: number,
+    @Body('resellerId') resellerId: number | null,
+  ) {
+    return this.superAdminService.reassignReseller(id, resellerId ?? null);
+  }
+
+  @UseGuards(SuperAdminGuard)
+  @Patch('resellers/:id/lock')
+  lockReseller(@Param('id', ParseIntPipe) id: number) {
+    return this.superAdminService.lockProfile(id, 'reseller');
+  }
+
+  @UseGuards(SuperAdminGuard)
+  @Patch('resellers/:id/unlock')
+  unlockReseller(@Param('id', ParseIntPipe) id: number) {
+    return this.superAdminService.unlockProfile(id, 'reseller');
+  }
+
+  @UseGuards(SuperAdminGuard)
+  @Get('resellers-list')
+  getAllResellers() {
+    return this.superAdminService.getAllResellers();
+  }
+
+  @UseGuards(SuperAdminGuard)
+  @Get('reseller-subscriptions-overview')
+  getResellersSubscriptionsOverview() {
+    return this.superAdminService.getResellersSubscriptionsOverview();
+  }
+
+  @UseGuards(SuperAdminGuard)
+  @Get('reseller-wallets-overview')
+  getResellersWalletsOverview() {
+    return this.superAdminService.getResellersWalletsOverview();
+  }
+
+  // ─── Reseller Plans CRUD ──────────────────────────────────────────────────
+
+  @UseGuards(SuperAdminGuard)
+  @Get('reseller-plans')
+  getResellerPlans() {
+    return this.superAdminService.getResellerPlans();
+  }
+
+  @UseGuards(SuperAdminGuard)
+  @Post('reseller-plans')
+  createResellerPlan(@Body() body: {
+    name: string;
+    description?: string;
+    price: number;
+    durationDays: number;
+    commissionPercentage: number;
+    maxTenants?: number;
+    features?: string;
+  }) {
+    return this.superAdminService.createResellerPlan(body);
+  }
+
+  @UseGuards(SuperAdminGuard)
+  @Patch('reseller-plans/:id')
+  updateResellerPlan(
+    @Param('id') id: string,
+    @Body() body: {
+      name?: string;
+      description?: string;
+      price?: number;
+      durationDays?: number;
+      commissionPercentage?: number;
+      maxTenants?: number;
+      features?: string;
+      isActive?: boolean;
+    },
+  ) {
+    return this.superAdminService.updateResellerPlan(Number(id), body);
+  }
+
+  @UseGuards(SuperAdminGuard)
+  @Delete('reseller-plans/:id')
+  deleteResellerPlan(@Param('id') id: string) {
+    return this.superAdminService.deleteResellerPlan(Number(id));
   }
 }

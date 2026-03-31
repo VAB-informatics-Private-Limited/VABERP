@@ -1,12 +1,13 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { Typography, Card, Descriptions, Tag, Button, Space, Table, Divider, Spin, Row, Col, message, Modal, Alert, Steps } from 'antd';
-import { ArrowLeftOutlined, EditOutlined, FilePdfOutlined, SendOutlined, PrinterOutlined, MailOutlined, DownloadOutlined, CheckCircleOutlined, LockOutlined, FileTextOutlined, ShoppingCartOutlined, CloseCircleOutlined, HistoryOutlined } from '@ant-design/icons';
+import { Typography, Card, Descriptions, Tag, Button, Space, Table, Divider, Spin, Row, Col, message, Modal, Alert, Steps, DatePicker, Input } from 'antd';
+import { ArrowLeftOutlined, EditOutlined, FilePdfOutlined, SendOutlined, PrinterOutlined, MailOutlined, DownloadOutlined, CheckCircleOutlined, LockOutlined, FileTextOutlined, ShoppingCartOutlined, CloseCircleOutlined, HistoryOutlined, CalendarOutlined } from '@ant-design/icons';
 import { useRouter, useParams } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getQuotationById, updateQuotationStatus, acceptQuotation } from '@/lib/api/quotations';
-import { useAuthStore } from '@/stores/authStore';
+import { getQuotationById, updateQuotationStatus, acceptQuotation, updateQuotationETA } from '@/lib/api/quotations';
+import dayjs from 'dayjs';
+import { useAuthStore, usePermissions } from '@/stores/authStore';
 import { QUOTATION_STATUS_OPTIONS, QuotationItem } from '@/types/quotation';
 import { downloadPdf, printPage } from '@/lib/utils/printPdf';
 import { SendEmailModal } from '@/components/common/SendEmailModal';
@@ -22,6 +23,7 @@ export default function ViewQuotationPage() {
   const queryClient = useQueryClient();
   const { getEnterpriseId } = useAuthStore();
   const enterpriseId = getEnterpriseId();
+  const { hasPermission } = usePermissions();
 
   const { data, isLoading } = useQuery({
     queryKey: ['quotation', quotationId],
@@ -29,12 +31,18 @@ export default function ViewQuotationPage() {
     enabled: !!enterpriseId && !!quotationId,
   });
 
+  const [rejectionReason, setRejectionReason] = useState('');
+
   const statusMutation = useMutation({
-    mutationFn: (status: string) => updateQuotationStatus(quotationId, status, enterpriseId!),
-    onSuccess: () => {
+    mutationFn: ({ status, reason }: { status: string; reason?: string }) =>
+      updateQuotationStatus(quotationId, status, enterpriseId!, reason),
+    onSuccess: (_, variables) => {
       message.success('Status updated successfully');
       queryClient.invalidateQueries({ queryKey: ['quotation', quotationId] });
       queryClient.invalidateQueries({ queryKey: ['quotations'] });
+      if (variables.status === 'rejected') {
+        queryClient.invalidateQueries({ queryKey: ['enquiry'] });
+      }
     },
     onError: () => {
       message.error('Failed to update status');
@@ -66,6 +74,19 @@ export default function ViewQuotationPage() {
 
   const [acceptModalOpen, setAcceptModalOpen] = useState(false);
   const [rejectModalOpen, setRejectModalOpen] = useState(false);
+  const [etaModalOpen, setEtaModalOpen] = useState(false);
+  const [etaValue, setEtaValue] = useState<dayjs.Dayjs | null>(null);
+
+  const etaMutation = useMutation({
+    mutationFn: (expectedDelivery: string) => updateQuotationETA(quotationId, expectedDelivery),
+    onSuccess: () => {
+      message.success('ETA updated');
+      setEtaModalOpen(false);
+      queryClient.invalidateQueries({ queryKey: ['quotation', quotationId] });
+      queryClient.invalidateQueries({ queryKey: ['quotations'] });
+    },
+    onError: () => message.error('Failed to update ETA'),
+  });
 
   const quotation = data?.data;
 
@@ -209,12 +230,12 @@ export default function ViewQuotationPage() {
           }}>
             Send Email
           </Button>
-          {!quotation.is_locked && (
+          {!quotation.is_locked && hasPermission('sales', 'quotations', 'edit') && (
             <>
               {quotation.status === 'draft' && (
                 <Button
                   icon={<SendOutlined />}
-                  onClick={() => statusMutation.mutate('sent')}
+                  onClick={() => statusMutation.mutate({ status: 'sent' })}
                   loading={statusMutation.isPending}
                 >
                   Mark as Sent
@@ -228,7 +249,7 @@ export default function ViewQuotationPage() {
               </Button>
             </>
           )}
-          {(quotation.status === 'sent' || quotation.status === 'draft') && !quotation.is_locked && (
+          {(quotation.status === 'sent' || quotation.status === 'draft') && !quotation.is_locked && hasPermission('sales', 'quotations', 'edit') && (
             <>
               <Button
                 danger
@@ -298,6 +319,49 @@ export default function ViewQuotationPage() {
         </div>
       )}
 
+      {/* Post-rejection actions — hidden from print */}
+      {quotation.status === 'rejected' && !quotation.is_locked && (
+        <div className="mb-4 print:hidden">
+          <Alert
+            type="warning"
+            showIcon
+            message="Quotation Rejected"
+            description={
+              quotation.enquiry_id
+                ? 'The linked enquiry has been moved back to Follow Up status.'
+                : 'This quotation has been rejected.'
+            }
+            action={
+              quotation.enquiry_id ? (
+                <Space direction="vertical" size="small">
+                  <Button
+                    size="small"
+                    icon={<EditOutlined />}
+                    onClick={() => router.push(`/quotations/${quotationId}/edit`)}
+                  >
+                    Revise Quotation
+                  </Button>
+                  <Button
+                    size="small"
+                    onClick={() => router.push(`/enquiries/${quotation.enquiry_id}`)}
+                  >
+                    Schedule Follow-up
+                  </Button>
+                </Space>
+              ) : (
+                <Button
+                  size="small"
+                  icon={<EditOutlined />}
+                  onClick={() => router.push(`/quotations/${quotationId}/edit`)}
+                >
+                  Revise Quotation
+                </Button>
+              )
+            }
+          />
+        </div>
+      )}
+
       <div ref={printRef} className="printable-area">
       <Card className="card-shadow mb-4 print:shadow-none print:border">
         <div className="print:mb-8">
@@ -311,6 +375,19 @@ export default function ViewQuotationPage() {
               {quotation.valid_until && (
                 <div className="text-gray-600">Valid Until: {quotation.valid_until}</div>
               )}
+              <div className="mt-1 print:hidden">
+                <Space>
+                  <CalendarOutlined className="text-gray-500" />
+                  <span className="text-gray-500 text-sm">ETA:</span>
+                  {quotation.expected_delivery ? (
+                    <Text type={dayjs(quotation.expected_delivery).isBefore(dayjs(), 'day') ? 'danger' : undefined} className="text-sm">
+                      {dayjs(quotation.expected_delivery).format('DD MMM YYYY')}
+                      {dayjs(quotation.expected_delivery).isBefore(dayjs(), 'day') && ' (Overdue)'}
+                    </Text>
+                  ) : <Text type="secondary" className="text-sm">Not set</Text>}
+                  <Button size="small" onClick={() => { setEtaValue(quotation.expected_delivery ? dayjs(quotation.expected_delivery) : null); setEtaModalOpen(true); }}>Set</Button>
+                </Space>
+              </div>
             </Col>
           </Row>
         </div>
@@ -437,6 +514,7 @@ export default function ViewQuotationPage() {
               <ul className="mt-1 list-disc list-inside text-sm">
                 <li>Mark the quotation as <strong>Accepted</strong></li>
                 <li>Create a <strong>Purchase Order</strong> automatically</li>
+                {quotation.enquiry_id && <li><strong>Convert the linked enquiry</strong> to a Customer record</li>}
                 <li><strong>Lock</strong> this quotation — it cannot be edited after acceptance</li>
               </ul>
             }
@@ -456,10 +534,11 @@ export default function ViewQuotationPage() {
           </div>
         }
         open={rejectModalOpen}
-        onCancel={() => setRejectModalOpen(false)}
+        onCancel={() => { setRejectModalOpen(false); setRejectionReason(''); }}
         onOk={() => {
           setRejectModalOpen(false);
-          statusMutation.mutate('rejected');
+          statusMutation.mutate({ status: 'rejected', reason: rejectionReason });
+          setRejectionReason('');
         }}
         okText="Yes, Reject"
         okButtonProps={{ danger: true, loading: statusMutation.isPending }}
@@ -470,9 +549,21 @@ export default function ViewQuotationPage() {
             Are you sure you want to reject <strong>{quotation.quotation_number}</strong> for{' '}
             <strong>{quotation.customer_name}</strong>?
           </p>
-          <p className="mt-2 text-gray-500 text-sm">
-            The quotation status will be set to <strong>Rejected</strong>. This action can be undone by updating the status manually.
-          </p>
+          {quotation.enquiry_id && (
+            <p className="mt-2 text-orange-600 text-sm">
+              The linked enquiry will be moved back to <strong>Follow Up</strong> status.
+            </p>
+          )}
+          <div className="mt-3">
+            <label className="text-sm font-medium text-gray-700">Rejection Reason (optional)</label>
+            <Input.TextArea
+              rows={3}
+              placeholder="e.g. Price too high, need to revise scope..."
+              value={rejectionReason}
+              onChange={(e) => setRejectionReason(e.target.value)}
+              className="mt-1"
+            />
+          </div>
         </div>
       </Modal>
 
@@ -524,6 +615,23 @@ export default function ViewQuotationPage() {
             </Button>
           </div>
         </div>
+      </Modal>
+
+      <Modal
+        title="Set ETA"
+        open={etaModalOpen}
+        onCancel={() => setEtaModalOpen(false)}
+        onOk={() => etaMutation.mutate(etaValue ? etaValue.format('YYYY-MM-DD') : '')}
+        okText="Save"
+        confirmLoading={etaMutation.isPending}
+      >
+        <DatePicker
+          value={etaValue}
+          onChange={(d) => setEtaValue(d)}
+          format="DD MMM YYYY"
+          style={{ width: '100%' }}
+          placeholder="Select ETA date"
+        />
       </Modal>
     </div>
   );

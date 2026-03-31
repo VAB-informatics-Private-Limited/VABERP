@@ -219,12 +219,17 @@ export async function updateManufacturingDetails(poId: number, data: {
   return response.data;
 }
 
-export async function startProductionForItem(poId: number, itemId: number): Promise<ApiResponse> {
-  const response = await apiClient.post(`/manufacturing/purchase-orders/${poId}/start-production-item`, { itemId });
+export async function startProductionForItem(poId: number, itemId: number, force?: boolean): Promise<ApiResponse> {
+  const response = await apiClient.post(`/manufacturing/purchase-orders/${poId}/start-production-item`, { itemId, force });
   return response.data;
 }
 
 export async function requestInventoryForItem(poId: number, itemId: number): Promise<ApiResponse> {
   const response = await apiClient.post(`/manufacturing/purchase-orders/${poId}/request-inventory-item`, { itemId });
+  return response.data;
+}
+
+export async function recheckJobCardMaterials(jobCardId: number): Promise<ApiResponse> {
+  const response = await apiClient.post(`/manufacturing/jobs/${jobCardId}/recheck-materials`);
   return response.data;
 }

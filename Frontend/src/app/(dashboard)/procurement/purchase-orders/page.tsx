@@ -101,7 +101,7 @@ export default function ProcurementPurchaseOrdersPage() {
             icon={<EyeOutlined />}
             onClick={() => router.push(`/procurement/purchase-orders/${record.id}`)}
           />
-          {hasPermission('orders', 'delete') && record.status === 'draft' && (
+          {hasPermission('orders', 'purchase_orders', 'delete') && record.status === 'draft' && (
             <Popconfirm title="Delete this purchase order?" onConfirm={() => deleteMutation.mutate(record.id)}>
               <Button type="link" danger icon={<DeleteOutlined />} />
             </Popconfirm>

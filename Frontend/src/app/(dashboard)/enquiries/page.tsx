@@ -63,7 +63,7 @@ export default function EnquiriesPage() {
             title="Enquiries"
             disabled={!data?.data?.length}
           />
-          {hasPermission('enquiry', 'create') && (
+          {hasPermission('enquiry', 'enquiries', 'create') && (
             <Button type="primary" icon={<PlusOutlined />} onClick={() => router.push('/enquiries/add')}>
               Add Enquiry
             </Button>

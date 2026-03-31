@@ -64,7 +64,7 @@ export default function ProductsPage() {
             title="Products"
             disabled={!data?.data?.length}
           />
-          {hasPermission('catalog', 'create') && (
+          {hasPermission('catalog', 'products', 'create') && (
             <Button type="primary" icon={<PlusOutlined />} onClick={() => router.push('/products/add')}>
               Add Product
             </Button>

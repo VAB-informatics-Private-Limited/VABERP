@@ -10,6 +10,7 @@ import { Employee } from '../employees/entities/employee.entity';
 import { Enterprise } from '../enterprises/entities/enterprise.entity';
 import { MenuPermission } from '../employees/entities/menu-permission.entity';
 import { SuperAdmin } from '../super-admin/entities/super-admin.entity';
+import { Reseller } from '../resellers/entities/reseller.entity';
 
 @Module({
   imports: [
@@ -24,7 +25,7 @@ import { SuperAdmin } from '../super-admin/entities/super-admin.entity';
         },
       }),
     }),
-    TypeOrmModule.forFeature([Employee, Enterprise, MenuPermission, SuperAdmin]),
+    TypeOrmModule.forFeature([Employee, Enterprise, MenuPermission, SuperAdmin, Reseller]),
   ],
   controllers: [AuthController],
   providers: [AuthService, JwtStrategy],

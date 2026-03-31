@@ -17,9 +17,16 @@ function mapIndentFromBackend(data: any): Indent {
       ? `${data.requestedByEmployee.firstName} ${data.requestedByEmployee.lastName || ''}`.trim()
       : undefined,
     request_date: data.requestDate,
+    expected_delivery: data.expectedDelivery,
     source: data.source,
     status: data.status,
     notes: data.notes,
+    grn: data.grn ? {
+      id: data.grn.id,
+      grn_number: data.grn.grnNumber,
+      status: data.grn.status,
+      received_date: data.grn.receivedDate,
+    } : null,
     purchase_orders: data.purchaseOrders?.map((p: any) => ({
       id: p.id,
       po_number: p.poNumber,
@@ -45,8 +52,24 @@ function mapIndentFromBackend(data: any): Indent {
       unit_of_measure: i.unitOfMeasure || i.rawMaterial?.unitOfMeasure,
       status: i.status,
       notes: i.notes,
+      grn_rejected_qty: i.grnRejectedQty !== undefined ? Number(i.grnRejectedQty) : undefined,
+      grn_rejection_reason: i.grnRejectionReason,
+      grn_rejection_notes: i.grnRejectionNotes,
+      grn_rtv_status: i.grnRtvStatus,
+      grn_item_status: i.grnItemStatus,
     })),
     created_date: data.createdDate,
+    parent_indent_id: data.parentIndent?.id ?? data.parentIndentId ?? null,
+    parent_indent_number: data.parentIndent?.indentNumber,
+    parent_indent_status: data.parentIndent?.status,
+    is_replacement: data.isReplacement ?? false,
+    rejection_reason: data.rejectionReason ?? null,
+    replacement_indents: (data.replacementIndents || []).map((r: any) => ({
+      id: r.id,
+      indent_number: r.indentNumber,
+      status: r.status,
+      created_date: r.createdDate,
+    })),
   };
 }
 
@@ -132,8 +155,35 @@ export async function releaseAllIndentItems(indentId: number): Promise<ReleaseAl
   };
 }
 
+export async function reorderRejectedIndentItems(indentId: number): Promise<ApiResponse<Indent> & { reorderedCount?: number }> {
+  const response = await apiClient.post(`/indents/${indentId}/reorder-rejected`);
+  const d = response.data as any;
+  return { message: d.message, data: d.data ? mapIndentFromBackend(d.data) : undefined, reorderedCount: d.reorderedCount };
+}
+
 export async function cancelIndent(id: number): Promise<ApiResponse<Indent>> {
   const response = await apiClient.post(`/indents/${id}/cancel`);
+  const d = response.data as any;
+  return { message: d.message, data: d.data ? mapIndentFromBackend(d.data) : undefined };
+}
+
+export async function createReplacementIndent(
+  indentId: number,
+  rejectionReason?: string,
+): Promise<ApiResponse<Indent>> {
+  const response = await apiClient.post(`/indents/${indentId}/create-replacement`, { rejectionReason });
+  const d = response.data as any;
+  return { message: d.message, data: d.data ? mapIndentFromBackend(d.data) : undefined };
+}
+
+export async function reissueRejectedItems(indentId: number): Promise<{ message: string; releasedItems: Array<{ name: string; qty: number; unit?: string }>; skippedItems: any[] }> {
+  const response = await apiClient.post(`/indents/${indentId}/reissue-rejected`);
+  const d = response.data as any;
+  return { message: d.message, releasedItems: d.releasedItems || [], skippedItems: d.skippedItems || [] };
+}
+
+export async function updateIndentETA(id: number, expectedDelivery: string): Promise<ApiResponse<Indent>> {
+  const response = await apiClient.patch(`/indents/${id}/eta`, { expectedDelivery });
   const d = response.data as any;
   return { message: d.message, data: d.data ? mapIndentFromBackend(d.data) : undefined };
 }

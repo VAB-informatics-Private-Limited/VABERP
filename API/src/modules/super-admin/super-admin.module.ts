@@ -14,6 +14,7 @@ import { Employee } from '../employees/entities/employee.entity';
 import { SupportTicket } from './entities/support-ticket.entity';
 import { SubscriptionPlan } from './entities/subscription-plan.entity';
 import { PlatformPayment } from './entities/platform-payment.entity';
+import { Coupon } from '../coupons/entities/coupon.entity';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { PlatformPayment } from './entities/platform-payment.entity';
       SupportTicket,
       SubscriptionPlan,
       PlatformPayment,
+      Coupon,
     ]),
     JwtModule.registerAsync({
       imports: [ConfigModule],

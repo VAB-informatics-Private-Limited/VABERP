@@ -1,5 +1,5 @@
 import {
-  Controller, Get, Post, Param, Query, Body, ParseIntPipe,
+  Controller, Get, Post, Patch, Param, Query, Body, ParseIntPipe,
 } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiQuery } from '@nestjs/swagger';
 import { GoodsReceiptsService } from './goods-receipts.service';
@@ -20,8 +20,8 @@ export class GoodsReceiptsController {
   async findAll(
     @EnterpriseId() enterpriseId: number,
     @Query('status') status?: string,
-    @Query('page') page?: number,
-    @Query('limit') limit?: number,
+    @Query('page', new ParseIntPipe({ optional: true })) page?: number,
+    @Query('limit', new ParseIntPipe({ optional: true })) limit?: number,
   ) {
     return this.service.findAll(enterpriseId, status, page, limit);
   }
@@ -61,5 +61,17 @@ export class GoodsReceiptsController {
     @Body() body: { notes?: string },
   ) {
     return this.service.rejectReceipt(id, enterpriseId, body?.notes);
+  }
+
+  @Patch(':id/items/:itemId/mark-returned')
+  @ApiOperation({ summary: 'Mark a rejected GRN item as physically returned to vendor' })
+  @RequirePermission('inventory', 'goods_receipts', 'edit')
+  async markItemReturned(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('itemId', ParseIntPipe) itemId: number,
+    @EnterpriseId() enterpriseId: number,
+    @CurrentUser() user: any,
+  ) {
+    return this.service.markItemReturned(id, itemId, enterpriseId, user?.id);
   }
 }

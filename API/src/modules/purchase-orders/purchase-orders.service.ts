@@ -14,6 +14,7 @@ import { RawMaterial } from '../raw-materials/entities/raw-material.entity';
 import { RawMaterialLedger } from '../raw-materials/entities/raw-material-ledger.entity';
 import { CreatePurchaseOrderDto } from './dto/create-purchase-order.dto';
 import { IndentsService } from '../indents/indents.service';
+import { AuditLogsService } from '../audit-logs/audit-logs.service';
 
 @Injectable()
 export class PurchaseOrdersService {
@@ -41,6 +42,7 @@ export class PurchaseOrdersService {
     @InjectRepository(RawMaterialLedger)
     private rawMaterialLedgerRepository: Repository<RawMaterialLedger>,
     private indentsService: IndentsService,
+    private auditLogsService: AuditLogsService,
   ) {}
 
   async findAll(enterpriseId: number, page = 1, limit = 20, status?: string) {
@@ -81,9 +83,6 @@ export class PurchaseOrdersService {
   }
 
   async create(enterpriseId: number, dto: CreatePurchaseOrderDto, userId?: number) {
-    const count = await this.poRepository.count({ where: { enterpriseId } });
-    const poNumber = `PO-${String(count + 1).padStart(6, '0')}`;
-
     let subTotal = 0;
     let taxAmount = 0;
     const calculatedItems = dto.items.map((item) => {
@@ -96,7 +95,7 @@ export class PurchaseOrdersService {
 
     const po = this.poRepository.create({
       enterpriseId,
-      poNumber,
+      poNumber: 'DRAFT',
       materialRequestId: dto.materialRequestId,
       indentId: (dto as any).indentId,
       supplierId: (dto as any).supplierId,
@@ -117,6 +116,11 @@ export class PurchaseOrdersService {
     const savedResult = await this.poRepository.save(po);
     const savedPo = Array.isArray(savedResult) ? savedResult[0] : savedResult;
 
+    // Use the DB-assigned auto-increment ID for the PO number — guarantees uniqueness
+    const poNumber = `PO-${String(savedPo.id).padStart(6, '0')}`;
+    await this.poRepository.update(savedPo.id, { poNumber });
+    savedPo.poNumber = poNumber;
+
     const itemEntities = calculatedItems.map((item, idx) =>
       this.poItemRepository.create({
         ...item,
@@ -126,7 +130,15 @@ export class PurchaseOrdersService {
     );
     await this.poItemRepository.save(itemEntities);
 
-    return this.findOne(savedPo.id, enterpriseId);
+    const createResult = await this.findOne(savedPo.id, enterpriseId);
+    this.auditLogsService.log({
+      action: 'create',
+      entityType: 'purchase_order',
+      entityId: savedPo.id,
+      userId,
+      enterpriseId,
+    }).catch(() => {});
+    return createResult;
   }
 
   async createFromMaterialRequest(mrId: number, enterpriseId: number, supplierName: string, userId?: number) {
@@ -195,9 +207,6 @@ export class PurchaseOrdersService {
       });
     }
 
-    const count = await this.poRepository.count({ where: { enterpriseId } });
-    const poNumber = `PO-${String(count + 1).padStart(6, '0')}`;
-
     let subTotal = 0;
     let taxAmount = 0;
     const calculatedItems = poItems.map((item) => {
@@ -210,7 +219,7 @@ export class PurchaseOrdersService {
 
     const po = this.poRepository.create({
       enterpriseId,
-      poNumber,
+      poNumber: 'DRAFT',
       indentId,
       supplierId: supplier?.id || undefined,
       supplierName: supplier?.supplierName || 'TBD',
@@ -230,6 +239,10 @@ export class PurchaseOrdersService {
 
     const savedResult = await this.poRepository.save(po);
     const savedPo = Array.isArray(savedResult) ? savedResult[0] : savedResult;
+
+    // Use the DB-assigned auto-increment ID for the PO number — guarantees uniqueness
+    const poNumber = `PO-${String(savedPo.id).padStart(6, '0')}`;
+    await this.poRepository.update(savedPo.id, { poNumber });
 
     const itemEntities = calculatedItems.map((item, idx) =>
       this.poItemRepository.create({
@@ -253,7 +266,15 @@ export class PurchaseOrdersService {
       await this.indentsService.updateItemOrderedQty(item.indentItemId, item.quantity);
     }
 
-    return this.findOne(savedPo.id, enterpriseId);
+    const createFromIndentResult = await this.findOne(savedPo.id, enterpriseId);
+    this.auditLogsService.log({
+      action: 'create',
+      entityType: 'purchase_order',
+      entityId: savedPo.id,
+      userId,
+      enterpriseId,
+    }).catch(() => {});
+    return createFromIndentResult;
   }
 
   async approve(id: number, enterpriseId: number, userId?: number) {
@@ -266,7 +287,15 @@ export class PurchaseOrdersService {
       approvedDate: new Date(),
     });
 
-    return this.findOne(id, enterpriseId);
+    const approveResult = await this.findOne(id, enterpriseId);
+    this.auditLogsService.log({
+      action: 'update',
+      entityType: 'purchase_order',
+      entityId: id,
+      userId,
+      enterpriseId,
+    }).catch(() => {});
+    return approveResult;
   }
 
   async receive(id: number, enterpriseId: number, userId?: number) {
@@ -363,7 +392,15 @@ export class PurchaseOrdersService {
 
     await this.poRepository.update(id, { status: 'received' });
 
-    return this.findOne(id, enterpriseId);
+    const receiveResult = await this.findOne(id, enterpriseId);
+    this.auditLogsService.log({
+      action: 'receive',
+      entityType: 'purchase_order',
+      entityId: id,
+      userId,
+      enterpriseId,
+    }).catch(() => {});
+    return receiveResult;
   }
 
   async updateETA(id: number, enterpriseId: number, expectedDelivery: string) {
@@ -377,12 +414,20 @@ export class PurchaseOrdersService {
     return this.findOne(id, enterpriseId);
   }
 
-  async delete(id: number, enterpriseId: number) {
+  async delete(id: number, enterpriseId: number, user?: { id: number; type: string; name?: string }) {
     const po = await this.poRepository.findOne({ where: { id, enterpriseId } });
     if (!po) throw new NotFoundException('Purchase order not found');
 
     await this.poItemRepository.delete({ purchaseOrderId: id });
     await this.poRepository.delete(id);
+
+    this.auditLogsService.log({
+      action: 'delete',
+      entityType: 'purchase_order',
+      entityId: id,
+      userId: user?.id,
+      enterpriseId,
+    }).catch(() => {});
 
     return { message: 'Purchase order deleted successfully', data: null };
   }

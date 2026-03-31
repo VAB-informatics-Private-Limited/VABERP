@@ -7,10 +7,11 @@ import { InvoiceItem } from './entities/invoice-item.entity';
 import { Payment } from './entities/payment.entity';
 import { Quotation } from '../quotations/entities/quotation.entity';
 import { QuotationItem } from '../quotations/entities/quotation-item.entity';
+import { SalesOrder } from '../sales-orders/entities/sales-order.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Invoice, InvoiceItem, Payment, Quotation, QuotationItem]),
+    TypeOrmModule.forFeature([Invoice, InvoiceItem, Payment, Quotation, QuotationItem, SalesOrder]),
   ],
   controllers: [InvoicesController],
   providers: [InvoicesService],

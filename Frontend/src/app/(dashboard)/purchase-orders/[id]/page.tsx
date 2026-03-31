@@ -171,6 +171,22 @@ export default function PurchaseOrderDetailPage() {
       message.error(err?.response?.data?.message || 'Failed to forward to manufacturing'),
   });
 
+  // ── Cancel PO ─────────────────────────────────────────────────────────────
+  const [cancelModalOpen, setCancelModalOpen] = useState(false);
+  const [cancelReason, setCancelReason] = useState('');
+
+  const cancelMutation = useMutation({
+    mutationFn: (reason: string) => updateSOStatus(poId, 'cancelled', reason || undefined),
+    onSuccess: () => {
+      message.success('Purchase order cancelled');
+      queryClient.invalidateQueries({ queryKey: ['purchase-order', poId] });
+      queryClient.invalidateQueries({ queryKey: ['purchase-orders-list'] });
+      setCancelModalOpen(false);
+      setCancelReason('');
+    },
+    onError: (err: any) => message.error(err?.response?.data?.message || 'Failed to cancel purchase order'),
+  });
+
   // ── Delete PO ─────────────────────────────────────────────────────────────
   const deleteMutation = useMutation({
     mutationFn: () => deleteSalesOrder(poId),
@@ -711,6 +727,16 @@ export default function PurchaseOrderDetailPage() {
           >
             {po.status === 'on_hold' ? 'Resume Order' : 'Hold Order'}
           </Button>
+          {!['cancelled', 'delivered'].includes(po.status) && (
+            <Button
+              danger
+              icon={<StopOutlined />}
+              loading={cancelMutation.isPending}
+              onClick={() => setCancelModalOpen(true)}
+            >
+              Cancel Order
+            </Button>
+          )}
           <Popconfirm
             title="Delete Purchase Order"
             description="This will permanently delete the PO and all its items. Are you sure?"
@@ -1670,6 +1696,53 @@ export default function PurchaseOrderDetailPage() {
             placeholder="e.g. Customer requested changes, Payment pending, Material shortage..."
             value={holdReason}
             onChange={(e) => setHoldReason(e.target.value)}
+          />
+        </div>
+      </Modal>
+
+      {/* Cancel Order Modal */}
+      <Modal
+        title={
+          <span>
+            <StopOutlined className="text-red-500 mr-2" />
+            Cancel Purchase Order — {po?.order_number}
+          </span>
+        }
+        open={cancelModalOpen}
+        onCancel={() => { setCancelModalOpen(false); setCancelReason(''); }}
+        onOk={() => cancelMutation.mutate(cancelReason)}
+        okText="Cancel Order"
+        okButtonProps={{ danger: true, loading: cancelMutation.isPending }}
+        cancelText="Go Back"
+      >
+        {po?.sent_to_manufacturing ? (
+          <Alert
+            type="error"
+            showIcon
+            className="mb-4"
+            message="Manufacturing team will be notified"
+            description="This order has been sent to manufacturing. Cancelling will halt all job cards and send an email notification to the manufacturing team and all assigned employees."
+          />
+        ) : (
+          <Alert
+            type="warning"
+            showIcon
+            className="mb-4"
+            message="This action cannot be undone"
+            description={
+              po?.enquiry_id
+                ? 'Cancelling this order will revert the linked enquiry back to Follow Up, so a new quotation can be created.'
+                : 'The purchase order will be permanently cancelled.'
+            }
+          />
+        )}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Reason for cancellation (optional)</label>
+          <Input.TextArea
+            rows={3}
+            placeholder="e.g. Customer withdrew order, Price dispute, Changed requirements..."
+            value={cancelReason}
+            onChange={(e) => setCancelReason(e.target.value)}
           />
         </div>
       </Modal>

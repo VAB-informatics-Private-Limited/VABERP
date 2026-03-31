@@ -7,7 +7,9 @@ import { QuotationVersion } from './entities/quotation-version.entity';
 import { Enquiry } from '../enquiries/entities/enquiry.entity';
 import { SalesOrder } from '../sales-orders/entities/sales-order.entity';
 import { SalesOrderItem } from '../sales-orders/entities/sales-order-item.entity';
+import { Customer } from '../customers/entities/customer.entity';
 import { CreateQuotationDto, QuotationItemDto } from './dto';
+import { AuditLogsService } from '../audit-logs/audit-logs.service';
 
 @Injectable()
 export class QuotationsService {
@@ -24,6 +26,9 @@ export class QuotationsService {
     private soRepository: Repository<SalesOrder>,
     @InjectRepository(SalesOrderItem)
     private soItemRepository: Repository<SalesOrderItem>,
+    @InjectRepository(Customer)
+    private customerRepository: Repository<Customer>,
+    private auditLogsService: AuditLogsService,
   ) {}
 
   async findAll(
@@ -34,6 +39,9 @@ export class QuotationsService {
     status?: string,
     fromDate?: string,
     toDate?: string,
+    dataStartDate?: Date | null,
+    ownDataOnly = false,
+    currentUserId?: number,
   ) {
     const query = this.quotationRepository
       .createQueryBuilder('quotation')
@@ -61,6 +69,13 @@ export class QuotationsService {
       query.andWhere('quotation.quotationDate <= :toDate', { toDate });
     }
 
+    if (dataStartDate) {
+      query.andWhere('quotation.quotationDate >= :dataStartDate', { dataStartDate });
+    }
+    if (ownDataOnly && currentUserId) {
+      query.andWhere('quotation.createdBy = :currentUserId', { currentUserId });
+    }
+
     const pageNum = Number(page) || 1;
     const limitNum = Number(limit) || 20;
 
@@ -77,6 +92,15 @@ export class QuotationsService {
       page: pageNum,
       limit: limitNum,
     };
+  }
+
+  async updateETA(id: number, enterpriseId: number, expectedDelivery: string) {
+    const quotation = await this.quotationRepository.findOne({ where: { id, enterpriseId } });
+    if (!quotation) throw new NotFoundException('Quotation not found');
+    await this.quotationRepository.update(id, {
+      expectedDelivery: expectedDelivery ? new Date(expectedDelivery) : null,
+    });
+    return this.findOne(id, enterpriseId);
   }
 
   async findOne(id: number, enterpriseId: number) {
@@ -187,6 +211,16 @@ export class QuotationsService {
       });
     }
 
+    this.auditLogsService.log({
+      enterpriseId,
+      userId,
+      entityType: 'quotation',
+      entityId: savedQuotation.id,
+      action: 'create',
+      description: `Created quotation ${savedQuotation.quotationNumber} for "${savedQuotation.customerName}"`,
+      newValues: { status: savedQuotation.status, grandTotal: Number(savedQuotation.grandTotal) },
+    }).catch(() => {});
+
     return this.findOne(savedQuotation.id, enterpriseId);
   }
 
@@ -269,12 +303,26 @@ export class QuotationsService {
     }
 
     // ── 3. Persist update + bump version number ────────────────────────────
+    // If the quotation was previously rejected, revising it resets to draft
+    if (quotation.status === 'rejected') {
+      updateData.status = 'draft';
+    }
+
     await this.quotationRepository.update(id, {
       ...updateData,
       updatedBy: userId ?? null,
       currentVersion: () => 'current_version + 1',
     });
     // ──────────────────────────────────────────────────────────────────────
+
+    this.auditLogsService.log({
+      enterpriseId,
+      userId,
+      entityType: 'quotation',
+      entityId: id,
+      action: 'update',
+      description: `Updated quotation ${quotation.quotationNumber}`,
+    }).catch(() => {});
 
     return this.findOne(id, enterpriseId);
   }
@@ -368,11 +416,64 @@ export class QuotationsService {
       salesOrderId: savedSo.id,
     });
 
-    // ── 3. Update linked enquiry if exists ─────────────────────────────────
+    this.auditLogsService.log({
+      enterpriseId,
+      userId,
+      entityType: 'quotation',
+      entityId: id,
+      action: 'convert',
+      description: `Quotation ${quotation.quotationNumber} accepted and converted to Sales Order ${savedSo.orderNumber}`,
+      newValues: { status: 'accepted', salesOrderId: savedSo.id, orderNumber: savedSo.orderNumber },
+    }).catch(() => {});
+
+    // ── 3. Update linked enquiry and auto-convert to customer ─────────────
     if (quotation.enquiryId) {
-      await this.enquiryRepository.update(quotation.enquiryId, {
-        interestStatus: 'Sale Closed',
+      const enquiry = await this.enquiryRepository.findOne({
+        where: { id: quotation.enquiryId },
       });
+
+      if (enquiry && !enquiry.convertedCustomerId) {
+        // Find or create customer from enquiry data
+        let customer: Customer | null = null;
+        if (enquiry.mobile) {
+          customer = await this.customerRepository.findOne({
+            where: { mobile: enquiry.mobile, enterpriseId },
+          });
+        }
+
+        if (!customer) {
+          const count = await this.customerRepository.count({ where: { enterpriseId } });
+          const customerNumber = `CUS-${String(count + 1).padStart(6, '0')}`;
+          const newCustomer = this.customerRepository.create({
+            enterpriseId,
+            customerName: enquiry.customerName,
+            mobile: enquiry.mobile,
+            email: enquiry.email,
+            businessName: enquiry.businessName,
+            address: enquiry.address,
+            city: enquiry.city,
+            state: enquiry.state,
+            pincode: enquiry.pincode,
+            sourceEnquiryId: enquiry.id,
+            customerNumber,
+            status: 'active',
+          });
+          const savedCustomer = await this.customerRepository.save(newCustomer);
+          customer = Array.isArray(savedCustomer) ? savedCustomer[0] : savedCustomer;
+        } else if (!customer.sourceEnquiryId) {
+          await this.customerRepository.update(customer.id, { sourceEnquiryId: enquiry.id });
+        }
+
+        // Mark enquiry as converted
+        await this.enquiryRepository.update(quotation.enquiryId, {
+          interestStatus: 'Converted',
+          convertedCustomerId: customer!.id,
+        });
+      } else if (enquiry) {
+        await this.enquiryRepository.update(quotation.enquiryId, {
+          interestStatus: 'Sale Closed',
+        });
+      }
     }
 
     return this.findOne(id, enterpriseId);
@@ -392,13 +493,21 @@ export class QuotationsService {
     await this.itemRepository.delete({ quotationId: id });
     await this.quotationRepository.delete(id);
 
+    this.auditLogsService.log({
+      enterpriseId,
+      entityType: 'quotation',
+      entityId: id,
+      action: 'delete',
+      description: `Deleted quotation ${quotation.quotationNumber}`,
+    }).catch(() => {});
+
     return {
       message: 'Quotation deleted successfully',
       data: null,
     };
   }
 
-  async updateStatus(id: number, enterpriseId: number, status: string) {
+  async updateStatus(id: number, enterpriseId: number, status: string, userId?: number, rejectionReason?: string) {
     const quotation = await this.quotationRepository.findOne({
       where: { id, enterpriseId },
     });
@@ -407,12 +516,61 @@ export class QuotationsService {
       throw new NotFoundException('Quotation not found');
     }
 
-    await this.quotationRepository.update(id, { status });
-
-    if (status === 'accepted' && quotation.enquiryId) {
-      await this.enquiryRepository.update(quotation.enquiryId, {
-        interestStatus: 'Sale Closed',
+    if (status === 'rejected') {
+      // Save snapshot of current state as a rejected version
+      const currentItems = await this.itemRepository.find({
+        where: { quotationId: id },
+        order: { sortOrder: 'ASC' },
       });
+      const snapshot = this.buildSnapshot(quotation, currentItems);
+
+      const versionEntity = new QuotationVersion();
+      versionEntity.quotationId = id;
+      versionEntity.versionNumber = quotation.currentVersion;
+      versionEntity.snapshot = snapshot;
+      if (userId !== undefined) versionEntity.changedBy = userId;
+      versionEntity.changeNotes = `[REJECTED] ${rejectionReason || ''}`.trim();
+      await this.versionRepository.save(versionEntity);
+
+      // Update status only — do NOT bump version here.
+      // Version increments when the salesperson actually revises the content.
+      await this.quotationRepository.update(id, {
+        status: 'rejected',
+      });
+
+      this.auditLogsService.log({
+        enterpriseId,
+        userId,
+        entityType: 'quotation',
+        entityId: id,
+        action: 'status_change',
+        description: `Quotation ${quotation.quotationNumber} rejected${rejectionReason ? ': ' + rejectionReason : ''}`,
+        newValues: { status: 'rejected', rejectionReason },
+      }).catch(() => {});
+
+      if (quotation.enquiryId) {
+        await this.enquiryRepository.update(quotation.enquiryId, {
+          interestStatus: 'Follow Up',
+        });
+      }
+    } else {
+      await this.quotationRepository.update(id, { status });
+
+      this.auditLogsService.log({
+        enterpriseId,
+        userId,
+        entityType: 'quotation',
+        entityId: id,
+        action: 'status_change',
+        description: `Quotation ${quotation.quotationNumber} status changed to "${status}"`,
+        newValues: { status },
+      }).catch(() => {});
+
+      if (status === 'accepted' && quotation.enquiryId) {
+        await this.enquiryRepository.update(quotation.enquiryId, {
+          interestStatus: 'Sale Closed',
+        });
+      }
     }
 
     return this.findOne(id, enterpriseId);

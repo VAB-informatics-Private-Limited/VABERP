@@ -37,6 +37,9 @@ export function TodayFollowupList({ data, loading }: TodayFollowupListProps) {
 
       if (outcome === 'sale_closed') {
         message.success('Sale closed! Customer created successfully.');
+        queryClient.invalidateQueries({ queryKey: ['customers'] });
+        queryClient.invalidateQueries({ queryKey: ['today-followups'] });
+        queryClient.invalidateQueries({ queryKey: ['enquiries'] });
         const customerId = response?.data?.customer?.id;
         if (customerId) {
           setActionModal({ open: false, followup: null, mode: 'complete' });

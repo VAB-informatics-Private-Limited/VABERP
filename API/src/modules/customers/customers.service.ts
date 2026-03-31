@@ -2,15 +2,17 @@ import { Injectable, NotFoundException, BadRequestException } from '@nestjs/comm
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Customer } from './entities/customer.entity';
+import { AuditLogsService } from '../audit-logs/audit-logs.service';
 
 @Injectable()
 export class CustomersService {
   constructor(
     @InjectRepository(Customer)
     private customerRepository: Repository<Customer>,
+    private auditLogsService: AuditLogsService,
   ) {}
 
-  async findAll(enterpriseId: number, page = 1, limit = 20, search?: string, dataStartDate?: Date | null) {
+  async findAll(enterpriseId: number, page = 1, limit = 20, search?: string, dataStartDate?: Date | null, ownDataOnly = false, currentUserId?: number) {
     const pageNum = Number(page) || 1;
     const limitNum = Number(limit) || 20;
 
@@ -27,6 +29,13 @@ export class CustomersService {
 
     if (dataStartDate) {
       query.andWhere('customer.createdDate >= :dataStartDate', { dataStartDate });
+    }
+
+    if (ownDataOnly && currentUserId) {
+      query.andWhere(
+        `EXISTS (SELECT 1 FROM enquiries e WHERE e.id = customer.sourceEnquiryId AND e.assigned_to = :currentUserId)`,
+        { currentUserId }
+      );
     }
 
     const [data, total] = await query
@@ -59,13 +68,26 @@ export class CustomersService {
     };
   }
 
-  async create(enterpriseId: number, createDto: any) {
+  async create(enterpriseId: number, createDto: any, user?: { id: number; type: string; name?: string }) {
     const customer = this.customerRepository.create({
       ...createDto,
       enterpriseId,
     });
 
-    const savedCustomer = await this.customerRepository.save(customer);
+    const savedResult = await this.customerRepository.save(customer);
+    const savedCustomer = Array.isArray(savedResult) ? savedResult[0] : savedResult;
+
+    this.auditLogsService.log({
+      enterpriseId,
+      userId: user?.id,
+      userType: user?.type,
+      userName: user?.name,
+      entityType: 'customer',
+      entityId: savedCustomer.id,
+      action: 'create',
+      description: `Created customer "${savedCustomer.customerName}"`,
+      newValues: { customerName: savedCustomer.customerName, mobile: savedCustomer.mobile },
+    }).catch(() => {});
 
     return {
       message: 'Customer created successfully',
@@ -73,7 +95,7 @@ export class CustomersService {
     };
   }
 
-  async update(id: number, enterpriseId: number, updateDto: any) {
+  async update(id: number, enterpriseId: number, updateDto: any, user?: { id: number; type: string; name?: string }) {
     const customer = await this.customerRepository.findOne({
       where: { id, enterpriseId },
     });
@@ -106,10 +128,22 @@ export class CustomersService {
       throw new BadRequestException('Failed to update customer: ' + (error?.message || 'Unknown error'));
     }
 
+    this.auditLogsService.log({
+      enterpriseId,
+      userId: user?.id,
+      userType: user?.type,
+      userName: user?.name,
+      entityType: 'customer',
+      entityId: id,
+      action: 'update',
+      description: `Updated customer "${customer.customerName}"`,
+      newValues: sanitized,
+    }).catch(() => {});
+
     return this.findOne(id, enterpriseId);
   }
 
-  async delete(id: number, enterpriseId: number) {
+  async delete(id: number, enterpriseId: number, user?: { id: number; type: string; name?: string }) {
     const customer = await this.customerRepository.findOne({
       where: { id, enterpriseId },
     });
@@ -119,6 +153,17 @@ export class CustomersService {
     }
 
     await this.customerRepository.delete(id);
+
+    this.auditLogsService.log({
+      enterpriseId,
+      userId: user?.id,
+      userType: user?.type,
+      userName: user?.name,
+      entityType: 'customer',
+      entityId: id,
+      action: 'delete',
+      description: `Deleted customer "${customer.customerName}"`,
+    }).catch(() => {});
 
     return {
       message: 'Customer deleted successfully',

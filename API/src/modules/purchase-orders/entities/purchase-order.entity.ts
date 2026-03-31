@@ -65,13 +65,13 @@ export class PurchaseOrder {
   @Column({ name: 'expected_delivery', type: 'date', nullable: true })
   expectedDelivery: Date | null;
 
-  @Column({ name: 'subtotal', type: 'decimal', precision: 12, scale: 2, default: 0 })
+  @Column({ name: 'subtotal', type: 'decimal', precision: 18, scale: 2, default: 0 })
   subTotal: number;
 
-  @Column({ name: 'tax_amount', type: 'decimal', precision: 12, scale: 2, default: 0 })
+  @Column({ name: 'tax_amount', type: 'decimal', precision: 18, scale: 2, default: 0 })
   taxAmount: number;
 
-  @Column({ name: 'total_amount', type: 'decimal', precision: 12, scale: 2, default: 0 })
+  @Column({ name: 'total_amount', type: 'decimal', precision: 18, scale: 2, default: 0 })
   grandTotal: number;
 
   @Column({ default: 'draft' })

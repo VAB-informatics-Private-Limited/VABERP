@@ -2,10 +2,10 @@
 
 import { useState, useMemo } from 'react';
 import { Typography, Button, Card, Modal, Form, Input, Select, Table, Space, Popconfirm, message } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, ArrowLeftOutlined, SearchOutlined } from '@ant-design/icons';
+import { PlusOutlined, EditOutlined, DeleteOutlined, ArrowLeftOutlined, SearchOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getDepartments, addDepartment, updateDepartment, deleteDepartment } from '@/lib/api/employees';
+import { getDepartments, addDepartment, updateDepartment, deleteDepartment, seedDefaultDepartments } from '@/lib/api/employees';
 import { useAuthStore } from '@/stores/authStore';
 import { Department, DepartmentFormData } from '@/types/employee';
 import ExportDropdown from '@/components/common/ExportDropdown';
@@ -74,6 +74,23 @@ export default function DepartmentsPage() {
     },
     onError: () => {
       message.error('Failed to delete department');
+    },
+  });
+
+  const seedMutation = useMutation({
+    mutationFn: () => seedDefaultDepartments(),
+    onSuccess: (res: any) => {
+      const d = res?.data;
+      message.success(
+        d
+          ? `Loaded ${d.createdDepartments} departments and ${d.createdDesignations} designations`
+          : 'Default departments loaded successfully'
+      );
+      queryClient.invalidateQueries({ queryKey: ['departments'] });
+      queryClient.invalidateQueries({ queryKey: ['designations'] });
+    },
+    onError: () => {
+      message.error('Failed to load default departments');
     },
   });
 
@@ -176,6 +193,16 @@ export default function DepartmentsPage() {
             title="Departments"
             disabled={!data?.data?.length}
           />
+          {(data?.data?.length === 0) && (
+            <Button
+              icon={<ThunderboltOutlined />}
+              onClick={() => seedMutation.mutate()}
+              loading={seedMutation.isPending}
+              style={{ borderColor: '#722ed1', color: '#722ed1' }}
+            >
+              Load Default Departments
+            </Button>
+          )}
           <Button type="primary" icon={<PlusOutlined />} onClick={() => handleOpenModal()}>
             Add Department
           </Button>
