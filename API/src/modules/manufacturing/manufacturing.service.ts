@@ -1454,9 +1454,9 @@ export class ManufacturingService {
 
   async getRawMaterialsForBom(enterpriseId: number) {
     const materials = await this.rawMaterialRepository.find({
-      where: { enterpriseId, isActive: true },
-      select: ['id', 'name', 'unitOfMeasure', 'availableStock', 'category'],
-      order: { name: 'ASC' },
+      where: { enterpriseId, status: 'active' },
+      select: ['id', 'materialName', 'unitOfMeasure', 'availableStock', 'category'],
+      order: { materialName: 'ASC' },
     });
     return { message: 'Raw materials fetched', data: materials };
   }

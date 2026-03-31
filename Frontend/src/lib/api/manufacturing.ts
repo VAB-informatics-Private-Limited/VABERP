@@ -439,7 +439,7 @@ export async function getBomRawMaterials(): Promise<ApiResponse<RawMaterial[]>> 
     message: backendData.message,
     data: (backendData.data || []).map((m: any) => ({
       id: m.id,
-      name: m.name,
+      name: m.materialName,
       unit_of_measure: m.unitOfMeasure,
       available_stock: Number(m.availableStock || 0),
       category: m.category,
