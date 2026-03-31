@@ -8,6 +8,7 @@ import { Reflector } from '@nestjs/core';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { PERMISSION_KEY, PermissionMeta } from '../decorators/require-permission.decorator';
+import { ENTERPRISE_ONLY_KEY } from '../decorators/require-enterprise.decorator';
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
 import { MenuPermission } from '../../modules/employees/entities/menu-permission.entity';
 
@@ -36,13 +37,22 @@ export class PermissionGuard implements CanActivate {
     const request = context.switchToHttp().getRequest();
     const user = request.user;
 
-    if (!required) return true;
-
     // No user yet — let JwtAuthGuard handle authentication
     if (!user) return true;
 
     // Enterprise users have full access
     if (user.type === 'enterprise') return true;
+
+    // Block employees from enterprise-only routes
+    const enterpriseOnly = this.reflector.getAllAndOverride<boolean>(ENTERPRISE_ONLY_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
+    if (enterpriseOnly && user.type === 'employee') {
+      throw new ForbiddenException('This action requires enterprise administrator access');
+    }
+
+    if (!required) return true;
 
     // Employee users — check granular permission
     if (user.type === 'employee') {

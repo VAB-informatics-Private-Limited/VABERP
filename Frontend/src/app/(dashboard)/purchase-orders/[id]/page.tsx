@@ -1346,62 +1346,40 @@ export default function PurchaseOrderDetailPage() {
               )}
             </Card>
 
-            {/* Payment summary — PO-level */}
+            {/* Payment summary — per-invoice */}
             <Card size="small" title="Payment Summary" className="card-shadow">
               <div className="space-y-2">
                 <div className="flex justify-between text-sm">
-                  <span className="text-gray-500">This Invoice</span>
+                  <span className="text-gray-500">Invoice Amount</span>
                   <span className="font-semibold">{fmt(invoice.grand_total)}</span>
                 </div>
-                {invoice.payments && invoice.payments.length > 0 && (
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-500">Payment Mode</span>
-                    <span className="font-semibold capitalize">
-                      {invoice.payments[0]?.payment_method?.replace(/_/g, ' ') || '—'}
-                    </span>
-                  </div>
-                )}
-                <Divider className="my-1" />
                 <div className="flex justify-between text-sm">
-                  <span className="text-gray-500">PO Total</span>
-                  <span className="font-semibold text-blue-700">{fmt(poTotal)}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-500">Total Paid (cumulative)</span>
-                  <span className="font-semibold text-green-600">{fmt(poTotal - poBalanceDueAtDrawer)}</span>
+                  <span className="text-gray-500">Total Paid</span>
+                  <span className="font-semibold text-green-600">{fmt(invoice.total_paid)}</span>
                 </div>
                 <Divider className="my-1" />
                 <div className="flex justify-between text-base font-bold">
                   <span>Balance Due</span>
-                  <span className={poBalanceDueAtDrawer > 0.005 ? 'text-red-600' : 'text-green-600'}>
-                    {fmt(poBalanceDueAtDrawer)}
+                  <span className={Number(invoice.balance_due) > 0.005 ? 'text-red-600' : 'text-green-600'}>
+                    {fmt(invoice.balance_due)}
                   </span>
                 </div>
                 <div className="text-center mt-1">
-                  <Tag color={poBalanceDueAtDrawer <= 0.005 ? 'green' : 'orange'}>
-                    {poBalanceDueAtDrawer <= 0.005 ? '✓ Fully Paid' : 'Partial Payment'}
+                  <Tag color={Number(invoice.balance_due) <= 0.005 ? 'green' : 'orange'}>
+                    {Number(invoice.balance_due) <= 0.005 ? '✓ Fully Paid' : 'Partial Payment'}
                   </Tag>
                 </div>
               </div>
             </Card>
 
-            {/* Payment history — all payments across all invoices for this PO */}
-            <Card size="small" title={`Payment History (${allPoPayments.length})`} className="card-shadow">
-              {allPoPayments.length === 0 ? (
+            {/* Payment history — payments for this invoice */}
+            <Card size="small" title={`Payment History (${(invoice.payments || []).length})`} className="card-shadow">
+              {(invoice.payments || []).length === 0 ? (
                 <div className="text-center text-gray-400 py-4">No payments recorded yet</div>
               ) : (
                 <Table
-                  dataSource={allPoPayments}
-                  columns={[
-                    ...paymentColumns.slice(0, 1),
-                    {
-                      title: 'Invoice',
-                      dataIndex: '_invoice_number',
-                      key: '_invoice_number',
-                      render: (v: string) => <Text type="secondary" className="text-xs">{v}</Text>,
-                    },
-                    ...paymentColumns.slice(1),
-                  ]}
+                  dataSource={invoice.payments || []}
+                  columns={paymentColumns as any}
                   rowKey="id"
                   pagination={false}
                   size="small"

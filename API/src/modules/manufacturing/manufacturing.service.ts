@@ -1450,6 +1450,17 @@ export class ManufacturingService {
     });
   }
 
+  // ========== BOM Raw Materials Helper ==========
+
+  async getRawMaterialsForBom(enterpriseId: number) {
+    const materials = await this.rawMaterialRepository.find({
+      where: { enterpriseId, isActive: true },
+      select: ['id', 'name', 'unitOfMeasure', 'availableStock', 'category'],
+      order: { name: 'ASC' },
+    });
+    return { message: 'Raw materials fetched', data: materials };
+  }
+
   // ========== Purchase Orders for Manufacturing ==========
 
   async getPurchaseOrdersForManufacturing(

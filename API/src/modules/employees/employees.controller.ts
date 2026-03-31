@@ -11,7 +11,7 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { EmployeesService } from './employees.service';
-import { EnterpriseId, CurrentUser, RequirePermission } from '../../common/decorators';
+import { EnterpriseId, CurrentUser, RequirePermission, RequireEnterprise } from '../../common/decorators';
 
 @ApiTags('Employees')
 @Controller('employees')
@@ -178,6 +178,7 @@ export class EmployeesController {
   }
 
   @Get(':id/permissions')
+  @RequireEnterprise()
   @ApiOperation({ summary: 'Get employee permissions' })
   @RequirePermission('employees', 'permissions', 'view')
   async getPermissions(
@@ -188,6 +189,7 @@ export class EmployeesController {
   }
 
   @Patch(':id/permissions')
+  @RequireEnterprise()
   @ApiOperation({ summary: 'Update employee permissions' })
   @RequirePermission('employees', 'permissions', 'edit')
   async updatePermissions(

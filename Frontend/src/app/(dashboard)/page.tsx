@@ -45,6 +45,33 @@ export default function DashboardPage() {
     return (user as { business_name: string }).business_name;
   };
 
+  if (userType === 'employee') {
+    return (
+      <div>
+        <div className="mb-6">
+          <Title level={4} className="!mb-1">
+            {getUserGreeting()}, {getUserName()}!
+          </Title>
+          <p className="text-gray-500">Welcome back. Use the sidebar to navigate to your assigned modules.</p>
+        </div>
+        <Row gutter={[16, 16]}>
+          <Col xs={24} lg={14}>
+            <TodayFollowups />
+          </Col>
+          <Col xs={24} lg={10}>
+            <KpiCard
+              title="Today's Follow-ups"
+              value={dashboard?.todayFollowups || 0}
+              icon={<UserOutlined />}
+              loading={isLoading}
+              color="#fa8c16"
+            />
+          </Col>
+        </Row>
+      </div>
+    );
+  }
+
   return (
     <div>
       <div className="mb-6">

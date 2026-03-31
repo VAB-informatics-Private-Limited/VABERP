@@ -1,5 +1,6 @@
 import apiClient from './client';
 import { ApiResponse, PaginatedResponse } from '@/types/api';
+import { RawMaterial } from '@/types/raw-material';
 import {
   JobCard,
   JobCardFormData,
@@ -426,5 +427,22 @@ export async function getStageHistory(id: number): Promise<ApiResponse<JobCardSt
   return {
     message: d.message,
     data: d.data || [],
+  };
+}
+
+export async function getBomRawMaterials(): Promise<ApiResponse<RawMaterial[]>> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const response = await apiClient.get<ApiResponse<any>>('/manufacturing/bom-raw-materials');
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const backendData = response.data as any;
+  return {
+    message: backendData.message,
+    data: (backendData.data || []).map((m: any) => ({
+      id: m.id,
+      name: m.name,
+      unit_of_measure: m.unitOfMeasure,
+      available_stock: Number(m.availableStock || 0),
+      category: m.category,
+    })),
   };
 }

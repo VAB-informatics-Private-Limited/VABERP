@@ -26,6 +26,7 @@ import {
   jobCardDispatchAction,
   moveToNextStage,
   getJobCardProcesses,
+  getBomRawMaterials,
 } from '@/lib/api/manufacturing';
 import {
   getManufacturingPurchaseOrders,
@@ -38,7 +39,7 @@ import {
   requestInventoryForItem,
 } from '@/lib/api/bom';
 import { getMaterialRequestById, issueMaterials, issueSingleItem, issuePartialItem, confirmMaterialsReceived } from '@/lib/api/material-requests';
-import { getRawMaterialList } from '@/lib/api/raw-materials';
+import { getRawMaterialList } from '@/lib/api/raw-materials'; // kept for other usages
 import { getStageMasters } from '@/lib/api/stage-masters';
 import { useAuthStore } from '@/stores/authStore';
 import { JobCard, JOB_CARD_STATUS_OPTIONS } from '@/types/manufacturing';
@@ -175,7 +176,7 @@ export default function ManufacturingPODetailPage() {
 
   const { data: rawMaterialsData } = useQuery({
     queryKey: ['raw-materials-for-bom'],
-    queryFn: () => getRawMaterialList({ page: 1, pageSize: 500 }),
+    queryFn: () => getBomRawMaterials(),
   });
   const rawMaterials: RawMaterial[] = rawMaterialsData?.data || [];
 

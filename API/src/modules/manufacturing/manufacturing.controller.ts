@@ -406,6 +406,13 @@ export class ManufacturingController {
     return this.manufacturingService.delete(id, enterpriseId);
   }
 
+  @Get('bom-raw-materials')
+  @ApiOperation({ summary: 'Get raw materials list for BOM creation' })
+  @RequirePermission('orders', 'bom', 'view')
+  async getBomRawMaterials(@EnterpriseId() enterpriseId: number) {
+    return this.manufacturingService.getRawMaterialsForBom(enterpriseId);
+  }
+
   // ========== Process Stages ==========
 
   @Get('jobs/:jobId/stages')

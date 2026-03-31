@@ -902,6 +902,13 @@ export default function ViewJobCardPage() {
                       )}
                     </div>
 
+                    {stage.assigned_to_name && (
+                      <div className="flex items-center gap-1.5 text-xs text-gray-500 mb-2">
+                        <UserOutlined className="text-gray-400" />
+                        <span>Assigned: <span className="font-medium text-gray-700">{stage.assigned_to_name}</span></span>
+                      </div>
+                    )}
+
                     {/* Completed stage details */}
                     {isDone && (
                       <div>
