@@ -91,12 +91,15 @@ export class ManufacturingService {
     status?: string,
     assignedTo?: number,
     purchaseOrderId?: number,
+    currentEmployeeId?: number,
+    myTeam = false,
   ) {
     const query = this.jobCardRepository
       .createQueryBuilder('job')
       .leftJoinAndSelect('job.product', 'product')
       .leftJoinAndSelect('job.assignedEmployee', 'assignedEmployee')
-      .leftJoinAndSelect('job.quotation', 'quotation')
+      .leftJoin('job.quotation', 'quotation')
+      .addSelect(['quotation.id', 'quotation.quotationNumber'])
       .leftJoinAndSelect('job.customer', 'customer')
       .leftJoinAndSelect('job.purchaseOrder', 'purchaseOrder')
       .where('job.enterpriseId = :enterpriseId', { enterpriseId })
@@ -113,7 +116,12 @@ export class ManufacturingService {
       query.andWhere('job.status = :status', { status });
     }
 
-    if (assignedTo) {
+    if (myTeam && currentEmployeeId) {
+      query.andWhere(
+        '(job.assignedTo = :uid OR job.assignedTo IN (SELECT id FROM employees WHERE reporting_to = :uid AND enterprise_id = :enterpriseId))',
+        { uid: currentEmployeeId, enterpriseId },
+      );
+    } else if (assignedTo) {
       query.andWhere('job.assignedTo = :assignedTo', { assignedTo });
     }
 
@@ -152,10 +160,16 @@ export class ManufacturingService {
   }
 
   async findOne(id: number, enterpriseId: number) {
-    const jobCard = await this.jobCardRepository.findOne({
-      where: { id, enterpriseId },
-      relations: ['product', 'assignedEmployee', 'quotation', 'customer'],
-    });
+    const jobCard = await this.jobCardRepository
+      .createQueryBuilder('job')
+      .leftJoinAndSelect('job.product', 'product')
+      .leftJoinAndSelect('job.assignedEmployee', 'assignedEmployee')
+      .leftJoin('job.quotation', 'quotation')
+      .addSelect(['quotation.id', 'quotation.quotationNumber'])
+      .leftJoinAndSelect('job.customer', 'customer')
+      .where('job.id = :id', { id })
+      .andWhere('job.enterpriseId = :enterpriseId', { enterpriseId })
+      .getOne();
 
     if (!jobCard) {
       throw new NotFoundException('Job card not found');
@@ -1547,6 +1561,52 @@ export class ManufacturingService {
       totalRecords: total,
       page: pageNum,
       limit: limitNum,
+    };
+  }
+
+  async getPurchaseOrderById(id: number, enterpriseId: number) {
+    const po = await this.salesOrderRepository
+      .createQueryBuilder('so')
+      .leftJoinAndSelect('so.customer', 'customer')
+      .where('so.id = :id', { id })
+      .andWhere('so.enterpriseId = :enterpriseId', { enterpriseId })
+      .andWhere('so.sentToManufacturing = :sent', { sent: true })
+      .getOne();
+
+    if (!po) throw new NotFoundException('Purchase order not found');
+
+    const poItems = await this.salesOrderItemRepository.find({
+      where: { salesOrderId: po.id },
+      relations: ['product'],
+      order: { sortOrder: 'ASC' },
+    });
+    const bomCount = await this.bomRepository.count({ where: { purchaseOrderId: po.id, enterpriseId } });
+    const jobCardCount = await this.jobCardRepository
+      .createQueryBuilder('jc')
+      .where('jc.purchaseOrderId = :poId', { poId: po.id })
+      .andWhere('jc.enterpriseId = :enterpriseId', { enterpriseId })
+      .andWhere('jc.parentJobCardId IS NULL')
+      .getCount();
+    const jobCards = await this.jobCardRepository
+      .createQueryBuilder('jc')
+      .select(['jc.id', 'jc.jobNumber', 'jc.status', 'jc.quantity', 'jc.quantityCompleted', 'jc.productId'])
+      .where('jc.purchaseOrderId = :poId', { poId: po.id })
+      .andWhere('jc.enterpriseId = :enterpriseId', { enterpriseId })
+      .andWhere('jc.parentJobCardId IS NULL')
+      .getMany();
+
+    let manufacturingStatus = 'no_bom';
+    if (bomCount > 0 && jobCardCount === 0) manufacturingStatus = 'bom_created';
+    else if (jobCardCount > 0) {
+      const allDone = jobCards.every((j) =>
+        ['completed_production', 'ready_for_dispatch', 'dispatched'].includes(j.status),
+      );
+      manufacturingStatus = allDone ? 'completed' : 'in_progress';
+    }
+
+    return {
+      message: 'Purchase order fetched successfully',
+      data: { ...po, items: poItems, bomCount, jobCardCount, jobCards, manufacturingStatus },
     };
   }
 

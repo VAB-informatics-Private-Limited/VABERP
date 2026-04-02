@@ -35,6 +35,8 @@ export interface Product {
   description?: string;
   unit?: string;
   price?: number;
+  gst_rate?: number;
+  max_discount_percent?: number;
   image?: string;
   status: 'active' | 'inactive';
   created_date: string;
@@ -74,5 +76,7 @@ export interface ProductFormData {
   description?: string;
   unit?: string;
   price?: number;
+  gst_rate?: number;
+  max_discount_percent?: number;
   status?: 'active' | 'inactive';
 }

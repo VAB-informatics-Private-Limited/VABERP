@@ -22,7 +22,7 @@ export interface Payment {
   payment_number: string;
   payment_date: string;
   amount: number;
-  payment_method: string;
+  payment_method?: string | null;
   reference_number?: string;
   notes?: string;
   received_by?: number;
@@ -84,7 +84,6 @@ export interface InvoiceFormData {
 
 export interface PaymentFormData {
   amount: number;
-  payment_method: string;
   payment_date?: string;
   reference_number?: string;
   notes?: string;

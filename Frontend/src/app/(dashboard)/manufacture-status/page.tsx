@@ -12,7 +12,7 @@ import {
   StopOutlined, EyeOutlined, RocketOutlined,
   ToolOutlined, ClockCircleOutlined,
   FileTextOutlined,
-  CalendarOutlined, UserOutlined,
+  CalendarOutlined, UserOutlined, TeamOutlined,
 } from '@ant-design/icons';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -71,13 +71,17 @@ interface ExpandedOrderData {
 
 export default function ManufactureStatusPage() {
   const router = useRouter();
-  const { getEnterpriseId } = useAuthStore();
+  const { getEnterpriseId, user } = useAuthStore();
   const enterpriseId = getEnterpriseId();
   const queryClient = useQueryClient();
   const [searchText, setSearchText] = useState('');
   const [activeTab, setActiveTab] = useState<ViewTab>('all');
   const [expandedData, setExpandedData] = useState<Record<number, ExpandedOrderData>>({});
   const [expandedKeys, setExpandedKeys] = useState<number[]>([]);
+  const [myTeam, setMyTeam] = useState(false);
+
+  const isReportingHead = !!(user as any)?.isReportingHead;
+  const currentEmployeeId = (user as any)?.id;
 
   // ── Queries ──
   const { data: poData, isLoading } = useQuery({
@@ -88,8 +92,8 @@ export default function ManufactureStatusPage() {
   });
 
   const { data: jobData } = useQuery({
-    queryKey: ['all-job-cards', enterpriseId],
-    queryFn: () => getJobCardList({ enterpriseId: enterpriseId!, pageSize: 500 }),
+    queryKey: ['all-job-cards', enterpriseId, myTeam],
+    queryFn: () => getJobCardList({ enterpriseId: enterpriseId!, pageSize: 500, myTeam: myTeam || undefined }),
     enabled: !!enterpriseId,
     refetchInterval: 30000,
   });
@@ -209,6 +213,15 @@ export default function ManufactureStatusPage() {
           Manufacturing Status
         </Title>
         <Space>
+          {isReportingHead && (
+            <Button
+              type={myTeam ? 'primary' : 'default'}
+              icon={<TeamOutlined />}
+              onClick={() => setMyTeam(v => !v)}
+            >
+              {myTeam ? 'My Team' : 'My Team'}
+            </Button>
+          )}
           <Button
             icon={<CheckCircleOutlined />}
             onClick={() => router.push('/manufacture-status/dispatched')}
@@ -330,6 +343,9 @@ export default function ManufactureStatusPage() {
                                     <Tag color={getStatusColor(jc.status)}>{getStatusLabel(jc.status)}</Tag>
                                     {jc.dispatch_on_hold && <Tag color="red" icon={<StopOutlined />}>Hold</Tag>}
                                     {isDispatched && <Tag color="green" icon={<CheckCircleOutlined />}>DISPATCHED</Tag>}
+                                    {myTeam && jc.assigned_to !== currentEmployeeId && jc.assigned_to_name && (
+                                      <Tag color="purple" icon={<TeamOutlined />}>{jc.assigned_to_name}</Tag>
+                                    )}
                                   </div>
                                   <div className="flex items-center gap-3">
                                     <Text className="text-sm">{jc.product_name}</Text>

@@ -38,8 +38,8 @@ export class Payment {
   @Column({ type: 'decimal', precision: 12, scale: 2 })
   amount: number;
 
-  @Column({ name: 'payment_method' })
-  paymentMethod: string; // 'cash', 'bank_transfer', 'cheque', 'upi', 'card', 'other'
+  @Column({ name: 'payment_method', nullable: true })
+  paymentMethod: string | null;
 
   @Column({ name: 'reference_number', nullable: true })
   referenceNumber: string;

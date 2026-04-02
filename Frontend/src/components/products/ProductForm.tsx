@@ -41,6 +41,8 @@ export function ProductForm({ initialData, onSubmit, loading, submitText = 'Save
       description: initialData?.description || '',
       unit: initialData?.unit || '',
       price: initialData?.price,
+      gst_rate: initialData?.gst_rate,
+      max_discount_percent: initialData?.max_discount_percent,
       status: initialData?.status || 'active',
     },
   });
@@ -217,6 +219,57 @@ export function ProductForm({ initialData, onSubmit, loading, submitText = 'Save
                     className="w-full"
                     min={0}
                     precision={2}
+                  />
+                )}
+              />
+            </Form.Item>
+          </Col>
+        </Row>
+
+        <Row gutter={16}>
+          <Col xs={24} md={8}>
+            <Form.Item
+              label="GST Rate (%)"
+              validateStatus={errors.gst_rate ? 'error' : ''}
+              help={errors.gst_rate?.message}
+            >
+              <Controller
+                name="gst_rate"
+                control={control}
+                render={({ field }) => (
+                  <InputNumber
+                    {...field}
+                    placeholder="e.g. 18"
+                    size="large"
+                    className="w-full"
+                    min={0}
+                    max={100}
+                    precision={2}
+                    addonAfter="%"
+                  />
+                )}
+              />
+            </Form.Item>
+          </Col>
+          <Col xs={24} md={8}>
+            <Form.Item
+              label="Max Discount (%)"
+              validateStatus={errors.max_discount_percent ? 'error' : ''}
+              help={errors.max_discount_percent?.message ?? 'Max discount allowed on quotations'}
+            >
+              <Controller
+                name="max_discount_percent"
+                control={control}
+                render={({ field }) => (
+                  <InputNumber
+                    {...field}
+                    placeholder="e.g. 15"
+                    size="large"
+                    className="w-full"
+                    min={0}
+                    max={100}
+                    precision={2}
+                    addonAfter="%"
                   />
                 )}
               />

@@ -96,7 +96,8 @@ export function QuotationBuilder({ initialData, initialEnquiryData, onSubmit, lo
       quantity: 1,
       unit_price: Number(product.price) || 0,
       discount_percent: 0,
-      tax_percent: 18, // Default GST
+      max_discount_percent: product.max_discount_percent != null ? Number(product.max_discount_percent) : 100,
+      tax_percent: product.gst_rate != null ? Number(product.gst_rate) : 18,
       total_amount: Number(product.price) || 0,
     };
 
@@ -135,7 +136,7 @@ export function QuotationBuilder({ initialData, initialEnquiryData, onSubmit, lo
 
   const totals = calculateTotals();
 
-  const handleFinish = (values: QuotationFormData & { quotation_date?: dayjs.Dayjs; valid_until?: dayjs.Dayjs }) => {
+  const handleFinish = (values: QuotationFormData & { quotation_date?: dayjs.Dayjs; valid_until?: dayjs.Dayjs; expected_delivery?: dayjs.Dayjs }) => {
     if (items.length === 0) {
       message.error('Please add at least one item');
       return;
@@ -145,6 +146,7 @@ export function QuotationBuilder({ initialData, initialEnquiryData, onSubmit, lo
       ...values,
       quotation_date: values.quotation_date?.format('YYYY-MM-DD') || dayjs().format('YYYY-MM-DD'),
       valid_until: values.valid_until?.format('YYYY-MM-DD'),
+      expected_delivery: values.expected_delivery?.format('YYYY-MM-DD'),
       // In drawer mode, action buttons control the status directly
       status: onCancel ? submitAction : (values.status || 'draft'),
       items,
@@ -207,22 +209,16 @@ export function QuotationBuilder({ initialData, initialEnquiryData, onSubmit, lo
       title: 'Qty',
       dataIndex: 'quantity',
       key: 'quantity',
-      width: 90,
+      width: 100,
       render: (_, record, index) => (
         <InputNumber
           min={1}
-          max={99999}
+          max={999999}
           value={record.quantity}
-          onChange={(value) => handleUpdateItem(index, 'quantity', Math.min(value || 1, 99999))}
-          onKeyDown={(e) => {
-            const input = e.currentTarget.querySelector('input') as HTMLInputElement | null;
-            const currentVal = input?.value?.replace(/[^0-9]/g, '') || '';
-            if (currentVal.length >= 5 && !['Backspace','Delete','ArrowLeft','ArrowRight','Tab'].includes(e.key)) {
-              e.preventDefault();
-            }
-          }}
+          onChange={(value) => handleUpdateItem(index, 'quantity', Math.min(value || 1, 999999))}
+          parser={(val) => val?.replace(/[^\d]/g, '') as any}
           size="small"
-          style={{ width: 80 }}
+          style={{ width: 88 }}
         />
       ),
     },
@@ -230,48 +226,37 @@ export function QuotationBuilder({ initialData, initialEnquiryData, onSubmit, lo
       title: 'Unit Price',
       dataIndex: 'unit_price',
       key: 'unit_price',
-      width: 130,
-      render: (_, record, index) => (
-        <InputNumber
-          min={0}
-          max={9999999}
-          value={record.unit_price}
-          onChange={(value) => handleUpdateItem(index, 'unit_price', Math.min(value || 0, 9999999))}
-          prefix="₹"
-          size="small"
-          style={{ width: 110 }}
-        />
+      width: 120,
+      render: (price) => (
+        <span className="font-medium">₹{Number(price).toLocaleString('en-IN')}</span>
       ),
     },
     {
       title: 'Disc %',
       dataIndex: 'discount_percent',
       key: 'discount_percent',
-      width: 80,
-      render: (_, record, index) => (
-        <InputNumber
-          min={0}
-          max={100}
-          value={record.discount_percent}
-          onChange={(value) => handleUpdateItem(index, 'discount_percent', value || 0)}
-          size="small"
-        />
-      ),
+      width: 100,
+      render: (_, record, index) => {
+        const cap = record.max_discount_percent ?? 100;
+        return (
+          <InputNumber
+            min={0}
+            max={cap}
+            value={record.discount_percent}
+            onChange={(value) => handleUpdateItem(index, 'discount_percent', Math.min(value || 0, cap))}
+            title={`Max allowed: ${cap}%`}
+            size="small"
+            style={{ width: 80 }}
+          />
+        );
+      },
     },
     {
       title: 'Tax %',
       dataIndex: 'tax_percent',
       key: 'tax_percent',
-      width: 80,
-      render: (_, record, index) => (
-        <InputNumber
-          min={0}
-          max={100}
-          value={record.tax_percent}
-          onChange={(value) => handleUpdateItem(index, 'tax_percent', value || 0)}
-          size="small"
-        />
-      ),
+      width: 70,
+      render: (tax) => <span>{tax ?? 0}%</span>,
     },
     {
       title: 'Total',
@@ -304,6 +289,7 @@ export function QuotationBuilder({ initialData, initialEnquiryData, onSubmit, lo
         ...initialData,
         quotation_date: initialData.quotation_date ? dayjs(initialData.quotation_date) : dayjs(),
         valid_until: initialData.valid_until ? dayjs(initialData.valid_until) : undefined,
+        expected_delivery: initialData.expected_delivery ? dayjs(initialData.expected_delivery) : undefined,
       }
     : {
         quotation_date: dayjs(),
@@ -324,26 +310,28 @@ export function QuotationBuilder({ initialData, initialEnquiryData, onSubmit, lo
       <Row gutter={16}>
         <Col xs={24} lg={16}>
           <Card title="Customer Details" className="card-shadow mb-4">
-            <Row gutter={16}>
-              <Col xs={24} md={12}>
-                <Form.Item label="Select Existing Customer">
-                  <Select
-                    placeholder="Select customer"
-                    showSearch
-                    optionFilterProp="children"
-                    onChange={handleCustomerSelect}
-                    allowClear
-                    listHeight={192}
-                  >
-                    {customers?.data?.map((customer) => (
-                      <Select.Option key={customer.id} value={customer.id}>
-                        {customer.customer_name} - {customer.mobile}
-                      </Select.Option>
-                    ))}
-                  </Select>
-                </Form.Item>
-              </Col>
-            </Row>
+            {!initialEnquiryData && (
+              <Row gutter={16}>
+                <Col xs={24} md={12}>
+                  <Form.Item label="Select Existing Customer">
+                    <Select
+                      placeholder="Select customer"
+                      showSearch
+                      optionFilterProp="children"
+                      onChange={handleCustomerSelect}
+                      allowClear
+                      listHeight={192}
+                    >
+                      {customers?.data?.map((customer) => (
+                        <Select.Option key={customer.id} value={customer.id}>
+                          {customer.customer_name} - {customer.mobile}
+                        </Select.Option>
+                      ))}
+                    </Select>
+                  </Form.Item>
+                </Col>
+              </Row>
+            )}
 
             <Row gutter={16}>
               <Col xs={24} md={12}>
@@ -466,6 +454,10 @@ export function QuotationBuilder({ initialData, initialEnquiryData, onSubmit, lo
 
             <Form.Item name="valid_until" label="Valid Until">
               <DatePicker className="w-full" format="DD-MM-YYYY" />
+            </Form.Item>
+
+            <Form.Item name="expected_delivery" label="Expected Delivery Date">
+              <DatePicker className="w-full" format="DD-MM-YYYY" disabledDate={(d) => d && d < dayjs().startOf('day')} />
             </Form.Item>
 
             {!onCancel && (

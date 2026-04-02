@@ -97,6 +97,8 @@ export class AuthService {
           departmentId: employee.departmentId,
           designationId: employee.designationId,
           status: employee.status,
+          isReportingHead: employee.isReportingHead,
+          reportingTo: employee.reportingTo,
         },
         permissions: record?.permissions || buildEmptyPermissions(),
         token: this.jwtService.sign(payload),

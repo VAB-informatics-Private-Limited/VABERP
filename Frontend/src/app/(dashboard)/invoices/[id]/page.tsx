@@ -1,13 +1,13 @@
 'use client';
 
-import { Typography, Card, Descriptions, Tag, Button, Space, Modal, Form, InputNumber, Select, Input, DatePicker, Table, message, Spin, Row, Col } from 'antd';
+import { Typography, Card, Descriptions, Tag, Button, Space, Modal, Form, InputNumber, Input, DatePicker, Table, message, Spin, Row, Col } from 'antd';
 import { ArrowLeftOutlined, DollarOutlined, PrinterOutlined } from '@ant-design/icons';
 import { useRouter, useParams } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import dayjs from 'dayjs';
 import { getInvoiceById, recordPayment, getCustomerBalance, getInvoiceList } from '@/lib/api/invoices';
-import { INVOICE_STATUS_OPTIONS, PAYMENT_METHOD_OPTIONS } from '@/types/invoice';
+import { INVOICE_STATUS_OPTIONS } from '@/types/invoice';
 import type { Invoice, Payment, PaymentFormData } from '@/types/invoice';
 import type { ColumnsType } from 'antd/es/table';
 import { useAuthStore } from '@/stores/authStore';
@@ -77,7 +77,6 @@ export default function InvoiceDetailPage() {
   const handlePaymentSubmit = (values: any) => {
     paymentMutation.mutate({
       amount: values.amount,
-      payment_method: values.payment_method,
       payment_date: values.payment_date?.format('YYYY-MM-DD'),
       reference_number: values.reference_number,
       notes: values.notes,
@@ -93,7 +92,6 @@ export default function InvoiceDetailPage() {
       key: 'amount',
       render: (val) => `₹${Number(val).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`,
     },
-    { title: 'Method', dataIndex: 'payment_method', key: 'payment_method', render: (v) => v?.replace(/_/g, ' ').toUpperCase() },
     { title: 'Reference', dataIndex: 'reference_number', key: 'reference_number', render: (v) => v || '—' },
     { title: 'Status', dataIndex: 'status', key: 'status', render: (s) => <Tag color={s === 'completed' ? 'green' : 'orange'}>{s}</Tag> },
   ];
@@ -513,13 +511,6 @@ export default function InvoiceDetailPage() {
               // @ts-ignore
               parser={(value) => Number((value || '').replace(/,/g, ''))}
             />
-          </Form.Item>
-          <Form.Item name="payment_method" label="Payment Method" rules={[{ required: true, message: 'Please select payment method' }]}>
-            <Select placeholder="Select method">
-              {PAYMENT_METHOD_OPTIONS.map((m) => (
-                <Select.Option key={m.value} value={m.value}>{m.label}</Select.Option>
-              ))}
-            </Select>
           </Form.Item>
           <Form.Item name="payment_date" label="Payment Date">
             <DatePicker className="w-full" format="DD-MM-YYYY" />

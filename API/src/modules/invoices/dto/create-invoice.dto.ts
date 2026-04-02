@@ -122,10 +122,6 @@ export class RecordPaymentDto {
   @IsNumber()
   amount: number;
 
-  @ApiProperty({ example: 'cash' })
-  @IsString()
-  paymentMethod: string;
-
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()

@@ -61,6 +61,9 @@ export class Product {
   @Column({ name: 'gst_rate', type: 'decimal', precision: 5, scale: 2, default: 0 })
   gstRate: number;
 
+  @Column({ name: 'max_discount_percent', type: 'decimal', precision: 5, scale: 2, nullable: true, default: 100 })
+  maxDiscountPercent: number;
+
   @Column({ name: 'min_stock_level', default: 0 })
   minStockLevel: number;
 

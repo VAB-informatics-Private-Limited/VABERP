@@ -200,7 +200,6 @@ export async function deleteInvoice(id: number): Promise<ApiResponse> {
 export async function recordPayment(invoiceId: number, data: PaymentFormData): Promise<ApiResponse<Invoice>> {
   const payload = {
     amount: data.amount,
-    paymentMethod: data.payment_method,
     paymentDate: data.payment_date,
     referenceNumber: data.reference_number,
     notes: data.notes,

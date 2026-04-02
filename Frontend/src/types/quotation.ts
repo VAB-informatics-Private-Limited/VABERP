@@ -57,6 +57,7 @@ export interface QuotationItem {
   unit_price: number;
   discount_percent?: number;
   discount_amount?: number;
+  max_discount_percent?: number;
   tax_percent?: number;
   tax_amount?: number;
   total_amount: number;
@@ -91,6 +92,8 @@ export interface Quotation {
   current_version: number;
   is_locked: boolean;
   sales_order_id?: number | null;
+  po_cancelled_at?: string | null;
+  cancelled_po_number?: string | null;
   created_date: string;
   modified_date?: string;
   items?: QuotationItem[];
@@ -109,6 +112,7 @@ export interface QuotationFormData {
   shipping_address?: string;
   quotation_date: string;
   valid_until?: string;
+  expected_delivery?: string;
   notes?: string;
   terms_conditions?: string;
   status?: 'draft' | 'sent' | 'accepted' | 'rejected' | 'expired';
@@ -132,4 +136,5 @@ export const QUOTATION_STATUS_OPTIONS = [
   { value: 'accepted', label: 'Accepted', color: 'green' },
   { value: 'rejected', label: 'Rejected', color: 'red' },
   { value: 'expired', label: 'Expired', color: 'orange' },
+  { value: 'po_cancelled', label: 'PO Cancelled', color: 'volcano' },
 ];

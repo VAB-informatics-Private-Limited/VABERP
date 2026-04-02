@@ -41,6 +41,16 @@ export class ManufacturingController {
     );
   }
 
+  @Get('purchase-orders/:id')
+  @ApiOperation({ summary: 'Get single manufacturing purchase order by ID' })
+  @RequirePermission('orders', 'manufacturing', 'view')
+  async getPurchaseOrderById(
+    @Param('id', ParseIntPipe) id: number,
+    @EnterpriseId() enterpriseId: number,
+  ) {
+    return this.manufacturingService.getPurchaseOrderById(id, enterpriseId);
+  }
+
   @Post('purchase-orders/:id/send-for-approval')
   @ApiOperation({ summary: 'Send PO for inventory approval (creates material request)' })
   @RequirePermission('orders', 'manufacturing', 'create')
@@ -194,14 +204,17 @@ export class ManufacturingController {
   @ApiQuery({ name: 'status', required: false })
   @ApiQuery({ name: 'assignedTo', required: false })
   @ApiQuery({ name: 'purchaseOrderId', required: false })
+  @ApiQuery({ name: 'myTeam', required: false })
   async findAll(
     @EnterpriseId() enterpriseId: number,
+    @CurrentUser() user: any,
     @Query('page') page?: number,
     @Query('limit') limit?: number,
     @Query('search') search?: string,
     @Query('status') status?: string,
     @Query('assignedTo') assignedTo?: number,
     @Query('purchaseOrderId') purchaseOrderId?: number,
+    @Query('myTeam') myTeam?: string,
   ) {
     return this.manufacturingService.findAll(
       enterpriseId,
@@ -211,6 +224,8 @@ export class ManufacturingController {
       status,
       assignedTo,
       purchaseOrderId,
+      user?.id,
+      myTeam === 'true',
     );
   }
 

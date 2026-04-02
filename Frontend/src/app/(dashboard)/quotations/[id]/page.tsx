@@ -280,6 +280,30 @@ export default function ViewQuotationPage() {
         </Space>
       </div>
 
+      {/* PO Cancelled alert */}
+      {quotation.po_cancelled_at && (
+        <div className="mb-4 print:hidden">
+          <Alert
+            type="error"
+            showIcon
+            icon={<CloseCircleOutlined />}
+            message={
+              <span>
+                Purchase Order <strong>{quotation.cancelled_po_number || 'linked PO'}</strong> was cancelled
+              </span>
+            }
+            description={
+              <span>
+                Cancelled on{' '}
+                <strong>
+                  {dayjs(quotation.po_cancelled_at).format('DD MMM YYYY [at] hh:mm A')}
+                </strong>
+              </span>
+            }
+          />
+        </div>
+      )}
+
       {/* Workflow progress — hidden from print */}
       {quotation.is_locked && (
         <div className="mb-4 print:hidden">
@@ -292,19 +316,7 @@ export default function ViewQuotationPage() {
                 <strong>This quotation is accepted and locked.</strong> A Purchase Order has been created from it.
               </span>
             }
-            action={
-              quotation.sales_order_id ? (
-                <Button
-                  size="small"
-                  type="primary"
-                  icon={<ShoppingCartOutlined />}
-                  onClick={() => router.push(`/purchase-orders/${quotation.sales_order_id}`)}
-                >
-                  View Purchase Order
-                </Button>
-              ) : undefined
-            }
-          />
+            />
           <div className="mt-3">
             <Steps
               size="small"
@@ -360,6 +372,19 @@ export default function ViewQuotationPage() {
             }
           />
         </div>
+      )}
+
+      {quotation.expected_delivery &&
+        new Date(quotation.expected_delivery.split('T')[0]) < new Date(new Date().toDateString()) &&
+        !['draft', 'rejected', 'expired'].includes(quotation.status) && (
+        <Alert
+          type="warning"
+          showIcon
+          banner
+          message="Delivery May Be Delayed"
+          description={`The expected delivery date (${dayjs(quotation.expected_delivery).format('DD MMM YYYY')}) has passed. Please inform the customer about the delay.`}
+          className="mb-4 print:hidden"
+        />
       )}
 
       <div ref={printRef} className="printable-area">

@@ -162,7 +162,7 @@ function mapJobCardProcessFromBackend(data: any): JobCardProcess {
 
 // ============ Job Cards ============
 
-export async function getJobCardList(params: Partial<JobCardListParams> & { salesOrderId?: number }): Promise<PaginatedResponse<JobCard>> {
+export async function getJobCardList(params: Partial<JobCardListParams> & { salesOrderId?: number; myTeam?: boolean }): Promise<PaginatedResponse<JobCard>> {
   const response = await apiClient.get<PaginatedResponse<JobCard>>('/manufacturing/jobs', {
     params: {
       page: params.page,
@@ -171,6 +171,7 @@ export async function getJobCardList(params: Partial<JobCardListParams> & { sale
       productId: params.productId,
       customerId: params.customerId,
       purchaseOrderId: params.salesOrderId,
+      myTeam: params.myTeam || undefined,
     },
   });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -439,10 +440,21 @@ export async function getBomRawMaterials(): Promise<ApiResponse<RawMaterial[]>> 
     message: backendData.message,
     data: (backendData.data || []).map((m: any) => ({
       id: m.id,
-      name: m.materialName,
+      material_name: m.materialName,
+      material_code: m.materialCode || null,
       unit_of_measure: m.unitOfMeasure,
       available_stock: Number(m.availableStock || 0),
+      current_stock: Number(m.currentStock || 0),
+      reserved_stock: Number(m.reservedStock || 0),
       category: m.category,
+      status: m.status || 'active',
+      enterprise_id: m.enterpriseId,
+      description: m.description || null,
+      subcategory: m.subcategory || null,
+      min_stock_level: Number(m.minStockLevel || 0),
+      cost_per_unit: m.costPerUnit || null,
+      created_date: m.createdDate,
+      modified_date: m.modifiedDate,
     })),
   };
 }

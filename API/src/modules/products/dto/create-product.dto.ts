@@ -51,6 +51,11 @@ export class CreateProductDto {
   @IsNumber()
   gstRate?: number;
 
+  @ApiPropertyOptional({ example: 15 })
+  @IsOptional()
+  @IsNumber()
+  maxDiscountPercent?: number;
+
   @ApiPropertyOptional({ example: 10 })
   @IsOptional()
   @IsNumber()
