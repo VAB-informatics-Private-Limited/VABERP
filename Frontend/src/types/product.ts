@@ -22,6 +22,11 @@ export interface SubCategory {
   created_date: string;
 }
 
+export interface DiscountTier {
+  minQty: number;
+  discountPercent: number;
+}
+
 export interface Product {
   id: number;
   enterprise_id: number;
@@ -37,6 +42,7 @@ export interface Product {
   price?: number;
   gst_rate?: number;
   max_discount_percent?: number;
+  discount_tiers?: DiscountTier[];
   image?: string;
   status: 'active' | 'inactive';
   created_date: string;
@@ -78,5 +84,6 @@ export interface ProductFormData {
   price?: number;
   gst_rate?: number;
   max_discount_percent?: number;
+  discount_tiers?: DiscountTier[];
   status?: 'active' | 'inactive';
 }

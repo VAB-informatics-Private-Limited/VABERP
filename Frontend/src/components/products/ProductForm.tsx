@@ -1,13 +1,14 @@
 'use client';
 
-import { Form, Input, Select, Button, Row, Col, Card, InputNumber } from 'antd';
+import { Form, Input, Select, Button, Row, Col, Card, InputNumber, Table } from 'antd';
+import { PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQuery } from '@tanstack/react-query';
 import { productSchema, ProductFormValues } from '@/lib/validations/product';
 import { getDropdownCategoryList, getDropdownSubCategoryList } from '@/lib/api/products';
 import { useAuthStore } from '@/stores/authStore';
-import { Product } from '@/types/product';
+import { Product, DiscountTier } from '@/types/product';
 import { useUnits } from '@/hooks/useUnits';
 import { useState, useEffect } from 'react';
 
@@ -23,6 +24,7 @@ export function ProductForm({ initialData, onSubmit, loading, submitText = 'Save
   const enterpriseId = getEnterpriseId();
   const { units } = useUnits();
   const [selectedCategory, setSelectedCategory] = useState<number | undefined>(initialData?.category_id);
+  const [discountTiers, setDiscountTiers] = useState<DiscountTier[]>(initialData?.discount_tiers || []);
 
   const {
     control,
@@ -43,6 +45,7 @@ export function ProductForm({ initialData, onSubmit, loading, submitText = 'Save
       price: initialData?.price,
       gst_rate: initialData?.gst_rate,
       max_discount_percent: initialData?.max_discount_percent,
+      discount_tiers: initialData?.discount_tiers || [],
       status: initialData?.status || 'active',
     },
   });
@@ -68,8 +71,30 @@ export function ProductForm({ initialData, onSubmit, loading, submitText = 'Save
     enabled: !!enterpriseId && !!selectedCategory,
   });
 
+  const addTier = () => {
+    const updated = [...discountTiers, { minQty: 1, discountPercent: 0 }];
+    setDiscountTiers(updated);
+    setValue('discount_tiers', updated);
+  };
+
+  const updateTier = (index: number, field: keyof DiscountTier, value: number) => {
+    const updated = discountTiers.map((t, i) => i === index ? { ...t, [field]: value } : t);
+    setDiscountTiers(updated);
+    setValue('discount_tiers', updated);
+  };
+
+  const removeTier = (index: number) => {
+    const updated = discountTiers.filter((_, i) => i !== index);
+    setDiscountTiers(updated);
+    setValue('discount_tiers', updated);
+  };
+
+  const handleFormSubmit = (data: ProductFormValues) => {
+    onSubmit({ ...data, discount_tiers: discountTiers });
+  };
+
   return (
-    <Form layout="vertical" onFinish={handleSubmit(onSubmit)}>
+    <Form layout="vertical" onFinish={handleSubmit(handleFormSubmit)}>
       <Card title="Product Information" className="mb-4">
         <Row gutter={16}>
           <Col xs={24} md={12}>
@@ -255,7 +280,7 @@ export function ProductForm({ initialData, onSubmit, loading, submitText = 'Save
             <Form.Item
               label="Max Discount (%)"
               validateStatus={errors.max_discount_percent ? 'error' : ''}
-              help={errors.max_discount_percent?.message ?? 'Max discount allowed on quotations'}
+              help={errors.max_discount_percent?.message ?? 'Overall cap on any discount'}
             >
               <Controller
                 name="max_discount_percent"
@@ -312,6 +337,77 @@ export function ProductForm({ initialData, onSubmit, loading, submitText = 'Save
             </Form.Item>
           </Col>
         </Row>
+      </Card>
+
+      {/* Volume Discount Tiers */}
+      <Card
+        title="Volume Discount Tiers"
+        className="mb-4"
+        extra={
+          <Button type="dashed" icon={<PlusOutlined />} onClick={addTier} size="small">
+            Add Tier
+          </Button>
+        }
+      >
+        {discountTiers.length === 0 ? (
+          <div className="text-gray-400 text-sm py-2">
+            No tiers added. Click &quot;Add Tier&quot; to set quantity-based discounts.
+            <br />
+            <span className="text-xs">Example: Qty ≥ 10 → 5%, Qty ≥ 50 → 8%, Qty ≥ 100 → 12%</span>
+          </div>
+        ) : (
+          <Table
+            dataSource={discountTiers.map((t, i) => ({ ...t, key: i }))}
+            pagination={false}
+            size="small"
+            columns={[
+              {
+                title: 'Min Quantity (≥)',
+                dataIndex: 'minQty',
+                render: (val, _, index) => (
+                  <InputNumber
+                    value={val}
+                    min={1}
+                    max={999999}
+                    precision={0}
+                    parser={(v) => v?.replace(/[^\d]/g, '') as any}
+                    onChange={(v) => updateTier(index, 'minQty', v || 1)}
+                    className="w-full"
+                    placeholder="e.g. 10"
+                  />
+                ),
+              },
+              {
+                title: 'Discount (%)',
+                dataIndex: 'discountPercent',
+                render: (val, _, index) => (
+                  <InputNumber
+                    value={val}
+                    min={0}
+                    max={100}
+                    precision={2}
+                    addonAfter="%"
+                    onChange={(v) => updateTier(index, 'discountPercent', v || 0)}
+                    className="w-full"
+                    placeholder="e.g. 5"
+                  />
+                ),
+              },
+              {
+                title: '',
+                width: 48,
+                render: (_, __, index) => (
+                  <Button
+                    type="text"
+                    danger
+                    icon={<DeleteOutlined />}
+                    onClick={() => removeTier(index)}
+                  />
+                ),
+              },
+            ]}
+          />
+        )}
       </Card>
 
       <div className="flex justify-end gap-3">

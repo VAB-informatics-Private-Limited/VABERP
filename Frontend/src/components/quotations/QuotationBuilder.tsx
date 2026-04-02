@@ -72,6 +72,13 @@ export function QuotationBuilder({ initialData, initialEnquiryData, onSubmit, lo
     return afterDiscount + taxAmount;
   };
 
+  const getTierDiscount = (tiers: { minQty: number; discountPercent: number }[] | undefined, qty: number): number | null => {
+    if (!tiers || tiers.length === 0) return null;
+    const sorted = [...tiers].sort((a, b) => b.minQty - a.minQty);
+    const match = sorted.find((t) => qty >= t.minQty);
+    return match ? match.discountPercent : null;
+  };
+
   const handleAddItem = () => {
     if (!selectedProduct) {
       message.warning('Please select a product');
@@ -87,6 +94,10 @@ export function QuotationBuilder({ initialData, initialEnquiryData, onSubmit, lo
       return;
     }
 
+    const tiers = product.discount_tiers || [];
+    const cap = product.max_discount_percent != null ? Number(product.max_discount_percent) : 100;
+    const tierDiscount = getTierDiscount(tiers, 1);
+
     const newItem: QuotationItem = {
       product_id: product.id,
       product_name: product.product_name,
@@ -95,8 +106,9 @@ export function QuotationBuilder({ initialData, initialEnquiryData, onSubmit, lo
       unit: product.unit,
       quantity: 1,
       unit_price: Number(product.price) || 0,
-      discount_percent: 0,
-      max_discount_percent: product.max_discount_percent != null ? Number(product.max_discount_percent) : 100,
+      discount_percent: tierDiscount != null ? Math.min(tierDiscount, cap) : 0,
+      max_discount_percent: cap,
+      discount_tiers: tiers,
       tax_percent: product.gst_rate != null ? Number(product.gst_rate) : 18,
       total_amount: Number(product.price) || 0,
     };
@@ -108,8 +120,19 @@ export function QuotationBuilder({ initialData, initialEnquiryData, onSubmit, lo
 
   const handleUpdateItem = (index: number, field: keyof QuotationItem, value: number) => {
     const updatedItems = [...items];
-    updatedItems[index] = { ...updatedItems[index], [field]: value };
-    updatedItems[index].total_amount = calculateItemTotal(updatedItems[index]);
+    const item = { ...updatedItems[index], [field]: value };
+
+    // Auto-apply tier discount when quantity changes
+    if (field === 'quantity' && item.discount_tiers && item.discount_tiers.length > 0) {
+      const cap = item.max_discount_percent ?? 100;
+      const tierDiscount = getTierDiscount(item.discount_tiers, value);
+      if (tierDiscount != null) {
+        item.discount_percent = Math.min(tierDiscount, cap);
+      }
+    }
+
+    item.total_amount = calculateItemTotal(item);
+    updatedItems[index] = item;
     setItems(updatedItems);
   };
 
@@ -209,18 +232,29 @@ export function QuotationBuilder({ initialData, initialEnquiryData, onSubmit, lo
       title: 'Qty',
       dataIndex: 'quantity',
       key: 'quantity',
-      width: 100,
-      render: (_, record, index) => (
-        <InputNumber
-          min={1}
-          max={999999}
-          value={record.quantity}
-          onChange={(value) => handleUpdateItem(index, 'quantity', Math.min(value || 1, 999999))}
-          parser={(val) => val?.replace(/[^\d]/g, '') as any}
-          size="small"
-          style={{ width: 88 }}
-        />
-      ),
+      width: 110,
+      render: (_, record, index) => {
+        const tiers = record.discount_tiers;
+        const nextTier = tiers && tiers.length > 0
+          ? [...tiers].sort((a, b) => a.minQty - b.minQty).find((t) => t.minQty > record.quantity)
+          : null;
+        return (
+          <div>
+            <InputNumber
+              min={1}
+              max={999999}
+              value={record.quantity}
+              onChange={(value) => handleUpdateItem(index, 'quantity', Math.min(value || 1, 999999))}
+              parser={(val) => val?.replace(/[^\d]/g, '') as any}
+              size="small"
+              style={{ width: 88 }}
+            />
+            {nextTier && (
+              <div className="text-xs text-blue-500 mt-0.5">≥{nextTier.minQty} → {nextTier.discountPercent}%</div>
+            )}
+          </div>
+        );
+      },
     },
     {
       title: 'Unit Price',
@@ -235,19 +269,26 @@ export function QuotationBuilder({ initialData, initialEnquiryData, onSubmit, lo
       title: 'Disc %',
       dataIndex: 'discount_percent',
       key: 'discount_percent',
-      width: 100,
+      width: 110,
       render: (_, record, index) => {
         const cap = record.max_discount_percent ?? 100;
+        const tierDiscount = getTierDiscount(record.discount_tiers, record.quantity);
+        const isTierApplied = tierDiscount != null && record.discount_percent === Math.min(tierDiscount, cap);
         return (
-          <InputNumber
-            min={0}
-            max={cap}
-            value={record.discount_percent}
-            onChange={(value) => handleUpdateItem(index, 'discount_percent', Math.min(value || 0, cap))}
-            title={`Max allowed: ${cap}%`}
-            size="small"
-            style={{ width: 80 }}
-          />
+          <div>
+            <InputNumber
+              min={0}
+              max={cap}
+              value={record.discount_percent}
+              onChange={(value) => handleUpdateItem(index, 'discount_percent', Math.min(value || 0, cap))}
+              title={`Max allowed: ${cap}%`}
+              size="small"
+              style={{ width: 80 }}
+            />
+            {isTierApplied && (
+              <div className="text-xs text-green-600 mt-0.5">Vol. discount</div>
+            )}
+          </div>
         );
       },
     },

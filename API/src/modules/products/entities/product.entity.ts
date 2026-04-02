@@ -64,6 +64,9 @@ export class Product {
   @Column({ name: 'max_discount_percent', type: 'decimal', precision: 5, scale: 2, nullable: true, default: 100 })
   maxDiscountPercent: number;
 
+  @Column({ name: 'discount_tiers', type: 'jsonb', nullable: true, default: '[]' })
+  discountTiers: { minQty: number; discountPercent: number }[];
+
   @Column({ name: 'min_stock_level', default: 0 })
   minStockLevel: number;
 

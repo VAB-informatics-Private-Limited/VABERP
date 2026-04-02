@@ -58,6 +58,7 @@ export interface QuotationItem {
   discount_percent?: number;
   discount_amount?: number;
   max_discount_percent?: number;
+  discount_tiers?: { minQty: number; discountPercent: number }[];
   tax_percent?: number;
   tax_amount?: number;
   total_amount: number;

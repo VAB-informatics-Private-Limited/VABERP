@@ -58,6 +58,7 @@ function mapProductFromBackend(data: any): Product {
     price: data.sellingPrice,
     gst_rate: data.gstRate,
     max_discount_percent: data.maxDiscountPercent,
+    discount_tiers: data.discountTiers || [],
     image: data.image,
     status: data.status || 'active',
     created_date: data.createdDate,
@@ -223,6 +224,7 @@ export async function addProduct(data: ProductFormData & { enterprise_id?: numbe
     sellingPrice: data.price,
     gstRate: data.gst_rate,
     maxDiscountPercent: data.max_discount_percent,
+    discountTiers: data.discount_tiers || [],
     status: data.status,
   };
   const response = await apiClient.post<ApiResponse>('/products', payload);
@@ -242,6 +244,7 @@ export async function updateProduct(data: ProductFormData & { id: number; enterp
     sellingPrice: data.price,
     gstRate: data.gst_rate,
     maxDiscountPercent: data.max_discount_percent,
+    discountTiers: data.discount_tiers || [],
     status: data.status,
   };
   const response = await apiClient.put<ApiResponse>(`/products/${id}`, payload);

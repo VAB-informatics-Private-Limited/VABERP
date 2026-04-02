@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsNumber } from 'class-validator';
+import { IsString, IsOptional, IsNumber, IsArray } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class CreateProductDto {
@@ -70,4 +70,9 @@ export class CreateProductDto {
   @IsOptional()
   @IsString()
   status?: string;
+
+  @ApiPropertyOptional({ example: [{ minQty: 10, discountPercent: 5 }] })
+  @IsOptional()
+  @IsArray()
+  discountTiers?: { minQty: number; discountPercent: number }[];
 }

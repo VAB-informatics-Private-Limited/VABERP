@@ -26,6 +26,7 @@ export const productSchema = z.object({
   price: z.number().optional(),
   gst_rate: z.number().min(0).max(100).optional(),
   max_discount_percent: z.number().min(0).max(100).optional(),
+  discount_tiers: z.array(z.object({ minQty: z.number().min(1), discountPercent: z.number().min(0).max(100) })).optional(),
   status: z.enum(['active', 'inactive']).optional().default('active'),
 });
 
