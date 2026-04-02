@@ -232,25 +232,33 @@ export function QuotationBuilder({ initialData, initialEnquiryData, onSubmit, lo
       title: 'Qty',
       dataIndex: 'quantity',
       key: 'quantity',
-      width: 110,
+      width: 120,
       render: (_, record, index) => {
         const tiers = record.discount_tiers;
-        const nextTier = tiers && tiers.length > 0
-          ? [...tiers].sort((a, b) => a.minQty - b.minQty).find((t) => t.minQty > record.quantity)
-          : null;
+        const sortedTiers = tiers && tiers.length > 0 ? [...tiers].sort((a, b) => a.minQty - b.minQty) : [];
+        const nextTier = sortedTiers.find((t) => t.minQty > record.quantity);
         return (
           <div>
             <InputNumber
               min={1}
               max={999999}
               value={record.quantity}
-              onChange={(value) => handleUpdateItem(index, 'quantity', Math.min(value || 1, 999999))}
-              parser={(val) => val?.replace(/[^\d]/g, '').slice(0, 6) as any}
+              onChange={(value) => {
+                const clamped = Math.min(Math.max(value || 1, 1), 999999);
+                handleUpdateItem(index, 'quantity', clamped);
+              }}
+              parser={(val) => {
+                const digits = (val || '').replace(/[^\d]/g, '').slice(0, 6);
+                return (digits || '1') as any;
+              }}
+              formatter={(val) => String(val || '').slice(0, 6)}
               size="small"
-              style={{ width: 88 }}
+              style={{ width: 90 }}
             />
             {nextTier && (
-              <div className="text-xs text-blue-500 mt-0.5">≥{nextTier.minQty} → {nextTier.discountPercent}%</div>
+              <div className="text-xs text-blue-500 mt-1 leading-tight">
+                Add {nextTier.minQty - record.quantity} more → {nextTier.discountPercent}% off
+              </div>
             )}
           </div>
         );
@@ -266,27 +274,45 @@ export function QuotationBuilder({ initialData, initialEnquiryData, onSubmit, lo
       ),
     },
     {
-      title: 'Disc %',
+      title: 'Discount %',
       dataIndex: 'discount_percent',
       key: 'discount_percent',
-      width: 110,
+      width: 155,
       render: (_, record, index) => {
         const cap = record.max_discount_percent ?? 100;
         const tierDiscount = getTierDiscount(record.discount_tiers, record.quantity);
-        const isTierApplied = tierDiscount != null && record.discount_percent === Math.min(tierDiscount, cap);
+        const effectiveTier = tierDiscount != null ? Math.min(tierDiscount, cap) : null;
+        const current = record.discount_percent || 0;
+        const isAtCap = current >= cap;
+        const isTierApplied = effectiveTier != null && current === effectiveTier;
+        const isManualOverride = effectiveTier != null && current !== effectiveTier;
         return (
           <div>
             <InputNumber
               min={0}
               max={cap}
-              value={record.discount_percent}
+              value={current}
               onChange={(value) => handleUpdateItem(index, 'discount_percent', Math.min(value || 0, cap))}
-              title={`Max allowed: ${cap}%`}
+              parser={(val) => val?.replace(/[^\d.]/g, '') as any}
+              addonAfter="%"
               size="small"
-              style={{ width: 80 }}
+              style={{ width: 110 }}
             />
+            {/* Always show the cap */}
+            <div className="text-xs mt-1 leading-tight" style={{ color: isAtCap ? '#ef4444' : '#6b7280' }}>
+              Max allowed: <strong>{cap}%</strong>
+              {isAtCap && ' ← at limit'}
+            </div>
+            {/* Tier status */}
             {isTierApplied && (
-              <div className="text-xs text-green-600 mt-0.5">Vol. discount</div>
+              <div className="text-xs text-green-600 leading-tight">
+                Auto-discount for qty {record.quantity}+
+              </div>
+            )}
+            {isManualOverride && effectiveTier != null && (
+              <div className="text-xs text-orange-500 leading-tight">
+                Qty {record.quantity}+ allows {effectiveTier}%
+              </div>
             )}
           </div>
         );
