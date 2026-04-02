@@ -374,7 +374,7 @@ export class InvoicesService {
       paymentNumber,
       paymentDate: dto.paymentDate ? new Date(dto.paymentDate) : new Date(),
       amount: dto.amount,
-      paymentMethod: null,
+      paymentMethod: undefined,
       referenceNumber: dto.referenceNumber,
       notes: dto.notes,
       receivedBy: userId,

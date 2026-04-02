@@ -38,8 +38,8 @@ export class Payment {
   @Column({ type: 'decimal', precision: 12, scale: 2 })
   amount: number;
 
-  @Column({ name: 'payment_method', nullable: true })
-  paymentMethod: string | null;
+  @Column({ name: 'payment_method', type: 'varchar', nullable: true })
+  paymentMethod: string | undefined;
 
   @Column({ name: 'reference_number', nullable: true })
   referenceNumber: string;
