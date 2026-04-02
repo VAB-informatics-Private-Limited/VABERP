@@ -14,6 +14,7 @@ import {
   FileDoneOutlined,
   ToolOutlined,
   ShoppingOutlined,
+  TeamOutlined,
 } from '@ant-design/icons';
 import { useRouter, usePathname } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
@@ -97,6 +98,12 @@ export function Sidebar({ collapsed, inDrawer, onMenuClick }: SidebarProps) {
     canView('sales',   'quotations')  && { key: '/quotations', label: 'Quotations' },
   ].filter(Boolean);
 
+  // ── CRM ──────────────────────────────────────────────────────────────────
+  const crmChildren = [
+    canView('crm', 'reports')    && { key: '/crm/reports',      label: 'Performance' },
+    canView('crm', 'settings')   && { key: '/crm/team',         label: 'Team'        },
+  ].filter(Boolean);
+
   // ── 2. ORDERS ────────────────────────────────────────────────────────────
   // Purchase Orders (sales-side) + Sales Orders
   const ordersChildren = [
@@ -176,6 +183,12 @@ export function Sidebar({ collapsed, inDrawer, onMenuClick }: SidebarProps) {
       icon: <ShoppingCartOutlined />,
       label: 'Sales',
       children: salesChildren,
+    },
+    crmChildren.length > 0 && {
+      key: 'crm-menu',
+      icon: <TeamOutlined />,
+      label: 'CRM',
+      children: crmChildren,
     },
     ordersChildren.length > 0 && {
       key: 'orders-menu',
