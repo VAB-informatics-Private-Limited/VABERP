@@ -349,64 +349,82 @@ export function ProductForm({ initialData, onSubmit, loading, submitText = 'Save
           </Button>
         }
       >
+        <div className="text-gray-500 text-xs mb-3">
+          Set automatic discounts based on order quantity. When a customer orders more, a higher discount is applied automatically in the quotation.
+        </div>
+
         {discountTiers.length === 0 ? (
-          <div className="text-gray-400 text-sm py-2">
-            No tiers added. Click &quot;Add Tier&quot; to set quantity-based discounts.
-            <br />
-            <span className="text-xs">Example: Qty ≥ 10 → 5%, Qty ≥ 50 → 8%, Qty ≥ 100 → 12%</span>
+          <div className="bg-gray-50 border border-dashed border-gray-300 rounded p-4 text-center text-gray-400 text-sm">
+            No tiers yet. Click <strong>Add Tier</strong> to set quantity-based discounts.
+            <div className="text-xs mt-1 text-gray-400">Example: Qty ≥ 10 → 5% &nbsp;|&nbsp; Qty ≥ 50 → 8% &nbsp;|&nbsp; Qty ≥ 100 → 12%</div>
           </div>
         ) : (
-          <Table
-            dataSource={discountTiers.map((t, i) => ({ ...t, key: i }))}
-            pagination={false}
-            size="small"
-            columns={[
-              {
-                title: 'Min Quantity (≥)',
-                dataIndex: 'minQty',
-                render: (val, _, index) => (
-                  <InputNumber
-                    value={val}
-                    min={1}
-                    max={999999}
-                    precision={0}
-                    parser={(v) => v?.replace(/[^\d]/g, '') as any}
-                    onChange={(v) => updateTier(index, 'minQty', v || 1)}
-                    className="w-full"
-                    placeholder="e.g. 10"
-                  />
-                ),
-              },
-              {
-                title: 'Discount (%)',
-                dataIndex: 'discountPercent',
-                render: (val, _, index) => (
-                  <InputNumber
-                    value={val}
-                    min={0}
-                    max={100}
-                    precision={2}
-                    addonAfter="%"
-                    onChange={(v) => updateTier(index, 'discountPercent', v || 0)}
-                    className="w-full"
-                    placeholder="e.g. 5"
-                  />
-                ),
-              },
-              {
-                title: '',
-                width: 48,
-                render: (_, __, index) => (
-                  <Button
-                    type="text"
-                    danger
-                    icon={<DeleteOutlined />}
-                    onClick={() => removeTier(index)}
-                  />
-                ),
-              },
-            ]}
-          />
+          <>
+            <Table
+              dataSource={[...discountTiers].sort((a, b) => a.minQty - b.minQty).map((t, i) => ({ ...t, key: i, _origIndex: discountTiers.indexOf(t) }))}
+              pagination={false}
+              size="small"
+              columns={[
+                {
+                  title: 'When customer orders at least…',
+                  dataIndex: 'minQty',
+                  render: (val, row: any) => (
+                    <InputNumber
+                      value={val}
+                      min={1}
+                      max={999999}
+                      precision={0}
+                      parser={(v) => v?.replace(/[^\d]/g, '') as any}
+                      onChange={(v) => updateTier(row._origIndex, 'minQty', v || 1)}
+                      addonAfter="units"
+                      style={{ width: 160 }}
+                      placeholder="e.g. 10"
+                    />
+                  ),
+                },
+                {
+                  title: 'Apply this discount',
+                  dataIndex: 'discountPercent',
+                  render: (val, row: any) => (
+                    <InputNumber
+                      value={val}
+                      min={0}
+                      max={100}
+                      precision={0}
+                      parser={(v) => v?.replace(/[^\d]/g, '') as any}
+                      addonAfter="%"
+                      onChange={(v) => updateTier(row._origIndex, 'discountPercent', v || 0)}
+                      style={{ width: 120 }}
+                      placeholder="e.g. 5"
+                    />
+                  ),
+                },
+                {
+                  title: 'What customer sees',
+                  render: (_, row: any) => (
+                    <span className="text-green-700 font-medium text-sm">
+                      Order {row.minQty}+ units → get {row.discountPercent}% off
+                    </span>
+                  ),
+                },
+                {
+                  title: '',
+                  width: 48,
+                  render: (_, row: any) => (
+                    <Button
+                      type="text"
+                      danger
+                      icon={<DeleteOutlined />}
+                      onClick={() => removeTier(row._origIndex)}
+                    />
+                  ),
+                },
+              ]}
+            />
+            <div className="mt-3 bg-blue-50 border border-blue-100 rounded p-3 text-xs text-blue-700">
+              <strong>How it works in quotations:</strong> When a salesperson selects this product and enters a quantity, the discount field auto-fills based on the above tiers. The salesperson can still manually change the discount, but it cannot exceed the <strong>Max Discount %</strong> set above.
+            </div>
+          </>
         )}
       </Card>
 
