@@ -245,7 +245,7 @@ export function QuotationBuilder({ initialData, initialEnquiryData, onSubmit, lo
               max={999999}
               value={record.quantity}
               onChange={(value) => handleUpdateItem(index, 'quantity', Math.min(value || 1, 999999))}
-              parser={(val) => val?.replace(/[^\d]/g, '') as any}
+              parser={(val) => val?.replace(/[^\d]/g, '').slice(0, 6) as any}
               size="small"
               style={{ width: 88 }}
             />
