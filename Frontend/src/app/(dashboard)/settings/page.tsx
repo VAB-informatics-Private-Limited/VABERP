@@ -93,14 +93,6 @@ export default function SettingsPage() {
     },
   ];
 
-  if (isLoading) {
-    return (
-      <div className="flex justify-center items-center h-64">
-        <Spin size="large" />
-      </div>
-    );
-  }
-
   return (
     <div>
       <Title level={4} className="mb-6">
@@ -111,14 +103,16 @@ export default function SettingsPage() {
         title="Business Profile"
         className="card-shadow mb-6"
         extra={
-          !isEditing && (
+          !isLoading && !isEditing && (
             <Button icon={<EditOutlined />} onClick={handleEdit}>
               Edit
             </Button>
           )
         }
       >
-        {isEditing ? (
+        {isLoading ? (
+          <div className="flex justify-center items-center py-8"><Spin /></div>
+        ) : isEditing ? (
           <Form form={form} layout="vertical" onFinish={handleSubmit}>
             <Row gutter={16}>
               <Col xs={24} md={12}>
@@ -231,6 +225,7 @@ export default function SettingsPage() {
           </Descriptions>
         )}
       </Card>
+
 
       <Title level={5} className="mb-4">
         Configuration

@@ -22,11 +22,12 @@ function mapQuotationVersionFromBackend(data: any): QuotationVersion {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function mapQuotationItemFromBackend(data: any): QuotationItem {
+  const product = data.product;
   return {
     id: data.id,
     product_id: data.productId,
-    product_name: data.itemName || data.product?.productName,
-    product_code: data.product?.productCode,
+    product_name: data.itemName || product?.productName,
+    product_code: product?.productCode,
     description: data.description,
     hsn_code: data.hsnCode,
     unit: data.unitOfMeasure,
@@ -34,6 +35,8 @@ function mapQuotationItemFromBackend(data: any): QuotationItem {
     unit_price: data.unitPrice,
     discount_percent: data.discountPercent,
     discount_amount: data.discountAmount,
+    max_discount_percent: product?.maxDiscountPercent != null ? Number(product.maxDiscountPercent) : 100,
+    discount_tiers: (product?.discountTiers || []).map((t: any) => ({ minQty: Number(t.minQty), discountPercent: Number(t.discountPercent) })),
     tax_percent: data.taxPercent,
     tax_amount: data.taxAmount,
     total_amount: data.lineTotal,
@@ -75,6 +78,8 @@ function mapQuotationFromBackend(data: any): Quotation {
     current_version: data.currentVersion ?? 1,
     is_locked: data.isLocked ?? false,
     sales_order_id: data.salesOrderId ?? null,
+    po_cancelled_at: data.poCancelledAt ?? null,
+    cancelled_po_number: data.cancelledPoNumber ?? null,
     created_date: data.createdDate,
     modified_date: data.modifiedDate,
     items: data.items?.map(mapQuotationItemFromBackend),
@@ -145,6 +150,7 @@ export async function addQuotation(
     shippingAddress: data.shipping_address,
     quotationDate: data.quotation_date,
     validUntil: data.valid_until,
+    expectedDelivery: data.expected_delivery || undefined,
     notes: data.notes,
     termsConditions: data.terms_conditions,
     status: data.status,
@@ -184,6 +190,7 @@ export async function updateQuotation(
     shippingAddress: data.shipping_address,
     quotationDate: data.quotation_date,
     validUntil: data.valid_until,
+    expectedDelivery: data.expected_delivery || undefined,
     notes: data.notes,
     termsConditions: data.terms_conditions,
     status: data.status,
