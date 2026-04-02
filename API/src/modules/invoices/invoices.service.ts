@@ -374,7 +374,7 @@ export class InvoicesService {
       paymentNumber,
       paymentDate: dto.paymentDate ? new Date(dto.paymentDate) : new Date(),
       amount: dto.amount,
-      paymentMethod: dto.paymentMethod,
+      paymentMethod: null,
       referenceNumber: dto.referenceNumber,
       notes: dto.notes,
       receivedBy: userId,
@@ -401,7 +401,7 @@ export class InvoicesService {
       entityId: invoiceId,
       action: 'payment',
       description: `Recorded payment ${paymentNumber} of ${dto.amount} for invoice ${invoice.invoiceNumber}`,
-      newValues: { amount: dto.amount, paymentMethod: dto.paymentMethod, paymentNumber, newStatus },
+      newValues: { amount: dto.amount, paymentNumber, newStatus },
     }).catch(() => {});
 
     return this.findOne(invoiceId, enterpriseId);

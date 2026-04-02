@@ -12,19 +12,20 @@ import {
   ToolOutlined, CheckCircleOutlined, PrinterOutlined, ShareAltOutlined,
   CheckOutlined, EditOutlined, CloseOutlined, SaveOutlined,
   MinusCircleOutlined, HistoryOutlined, CarOutlined, WarningOutlined,
-  StopOutlined, SyncOutlined, RocketOutlined, SendOutlined,
+  StopOutlined, SyncOutlined, RocketOutlined, SendOutlined, CalendarOutlined,
 } from '@ant-design/icons';
 import { useRouter, useParams } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState, useMemo } from 'react';
 import dayjs from 'dayjs';
 import { getSalesOrderById, createInvoiceFromSO, updateSOStatus, deleteSalesOrder, sendToManufacturing, updateSalesOrder } from '@/lib/api/sales-orders';
+import { updatePOExpectedDelivery } from '@/lib/api/purchase-orders';
 import { getInvoiceList, getInvoiceById, recordPayment } from '@/lib/api/invoices';
 import { getJobCardList, jobCardDispatchAction } from '@/lib/api/manufacturing';
 import apiClient from '@/lib/api/client';
 import { SO_STATUS_OPTIONS, SalesOrderItem } from '@/types/sales-order';
 import POVersionHistory from '@/components/purchase-orders/POVersionHistory';
-import { INVOICE_STATUS_OPTIONS, PAYMENT_METHOD_OPTIONS } from '@/types/invoice';
+import { INVOICE_STATUS_OPTIONS } from '@/types/invoice';
 import { JOB_CARD_STATUS_OPTIONS } from '@/types/manufacturing';
 import type { Invoice, Payment } from '@/types/invoice';
 import type { PaymentFormData } from '@/types/invoice';
@@ -56,6 +57,10 @@ export default function PurchaseOrderDetailPage() {
   // Add Invoice form modal
   const [addInvoiceOpen, setAddInvoiceOpen] = useState(false);
   const [addInvoiceForm] = Form.useForm();
+
+  // ETA modal state
+  const [etaModalOpen, setEtaModalOpen] = useState(false);
+  const [etaValue, setEtaValue] = useState<dayjs.Dayjs | null>(null);
 
   // Edit mode state
   const [editMode, setEditMode] = useState(false);
@@ -129,7 +134,7 @@ export default function PurchaseOrderDetailPage() {
 
   // ── Add Invoice ──────────────────────────────────────────────────────────
   const invoiceMutation = useMutation({
-    mutationFn: (data: { amount: number; invoiceDate?: string; notes?: string; paymentMethod: string }) =>
+    mutationFn: (data: { amount: number; invoiceDate?: string; notes?: string }) =>
       createInvoiceFromSO(poId, data),
     onSuccess: (res: any) => {
       queryClient.invalidateQueries({ queryKey: ['po-invoices', poId] });
@@ -213,6 +218,18 @@ export default function PurchaseOrderDetailPage() {
       message.error(err?.response?.data?.message || 'Failed to update purchase order'),
   });
 
+  // ── ETA update ───────────────────────────────────────────────────────────
+  const etaMutation = useMutation({
+    mutationFn: (expectedDelivery: string) => updatePOExpectedDelivery(poId, expectedDelivery),
+    onSuccess: () => {
+      message.success('Expected delivery date updated');
+      queryClient.invalidateQueries({ queryKey: ['purchase-order', poId] });
+      setEtaModalOpen(false);
+    },
+    onError: (err: any) =>
+      message.error(err?.response?.data?.message || 'Failed to update delivery date'),
+  });
+
   // ── Record payment ────────────────────────────────────────────────────────
   const paymentMutation = useMutation({
     mutationFn: (data: PaymentFormData) => recordPayment(drawerInvoiceId!, data),
@@ -291,7 +308,6 @@ export default function PurchaseOrderDetailPage() {
       amount: values.amount,
       invoiceDate: values.invoice_date?.format('YYYY-MM-DD'),
       notes: values.notes,
-      paymentMethod: values.payment_method,
     });
   };
 
@@ -501,12 +517,6 @@ export default function PurchaseOrderDetailPage() {
       dataIndex: 'amount',
       key: 'amount',
       render: (v) => <span className="font-semibold text-green-600">{fmt(v)}</span>,
-    },
-    {
-      title: 'Method',
-      dataIndex: 'payment_method',
-      key: 'payment_method',
-      render: (v) => v?.replace('_', ' ').toUpperCase() || '-',
     },
     { title: 'Reference', dataIndex: 'reference_number', key: 'reference_number', render: (v) => v || '-' },
     {
@@ -890,7 +900,18 @@ export default function PurchaseOrderDetailPage() {
               </Descriptions.Item>
               <Descriptions.Item label="Order Date">{po.order_date}</Descriptions.Item>
               <Descriptions.Item label="Customer">{po.customer_name}</Descriptions.Item>
-              <Descriptions.Item label="Expected Delivery">{po.expected_delivery || '—'}</Descriptions.Item>
+              <Descriptions.Item label="Expected Delivery">
+                <Space size={8}>
+                  <CalendarOutlined className="text-gray-400" />
+                  {po.expected_delivery ? (
+                    <Text type={dayjs(po.expected_delivery).isBefore(dayjs(), 'day') ? 'danger' : undefined}>
+                      {dayjs(po.expected_delivery).format('DD MMM YYYY')}
+                      {dayjs(po.expected_delivery).isBefore(dayjs(), 'day') && ' (Overdue)'}
+                    </Text>
+                  ) : <Text type="secondary">Not set</Text>}
+                  <Button size="small" icon={<EditOutlined />} onClick={() => { setEtaValue(po.expected_delivery ? dayjs(po.expected_delivery) : null); setEtaModalOpen(true); }}>Set</Button>
+                </Space>
+              </Descriptions.Item>
               {po.billing_address && (
                 <Descriptions.Item label="Billing Address" span={2}>{po.billing_address}</Descriptions.Item>
               )}
@@ -1408,7 +1429,6 @@ export default function PurchaseOrderDetailPage() {
         <Form form={paymentForm} layout="vertical" onFinish={(values) => {
           paymentMutation.mutate({
             amount: values.amount,
-            payment_method: values.payment_method,
             payment_date: values.payment_date?.format('YYYY-MM-DD'),
             reference_number: values.reference_number,
             notes: values.notes,
@@ -1443,17 +1463,6 @@ export default function PurchaseOrderDetailPage() {
               }}
               parser={(value) => value!.replace(/,/g, '') as unknown as number}
             />
-          </Form.Item>
-          <Form.Item
-            name="payment_method"
-            label="Payment Method"
-            rules={[{ required: true, message: 'Select payment method' }]}
-          >
-            <Select placeholder="Select method">
-              {PAYMENT_METHOD_OPTIONS.map((m) => (
-                <Select.Option key={m.value} value={m.value}>{m.label}</Select.Option>
-              ))}
-            </Select>
           </Form.Item>
           <Form.Item name="payment_date" label="Payment Date">
             <DatePicker className="w-full" format="DD-MM-YYYY" />
@@ -1552,18 +1561,6 @@ export default function PurchaseOrderDetailPage() {
             />
           </Form.Item>
 
-          <Form.Item
-            name="payment_method"
-            label="Payment Mode"
-            rules={[{ required: true, message: 'Please select a payment mode' }]}
-          >
-            <Select placeholder="Select payment mode">
-              {PAYMENT_METHOD_OPTIONS.map((m) => (
-                <Select.Option key={m.value} value={m.value}>{m.label}</Select.Option>
-              ))}
-            </Select>
-          </Form.Item>
-
           <Form.Item name="invoice_date" label="Invoice Date">
             <DatePicker className="w-full" format="DD-MM-YYYY" />
           </Form.Item>
@@ -1642,6 +1639,27 @@ export default function PurchaseOrderDetailPage() {
           >
             Confirm & Update PO
           </Button>
+        </div>
+      </Modal>
+
+      {/* ETA Modal */}
+      <Modal
+        title={<span><CalendarOutlined className="mr-2 text-blue-500" />Set Expected Delivery Date</span>}
+        open={etaModalOpen}
+        onCancel={() => setEtaModalOpen(false)}
+        onOk={() => etaMutation.mutate(etaValue ? etaValue.format('YYYY-MM-DD') : '')}
+        okText="Save"
+        confirmLoading={etaMutation.isPending}
+        width={360}
+      >
+        <div className="py-3">
+          <DatePicker
+            className="w-full"
+            format="DD MMM YYYY"
+            value={etaValue}
+            onChange={(date) => setEtaValue(date)}
+            placeholder="Select expected delivery date"
+          />
         </div>
       </Modal>
 
