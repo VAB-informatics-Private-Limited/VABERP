@@ -247,11 +247,18 @@ export function QuotationBuilder({ initialData, initialEnquiryData, onSubmit, lo
                 const clamped = Math.min(Math.max(value || 1, 1), 999999);
                 handleUpdateItem(index, 'quantity', clamped);
               }}
+              onKeyDown={(e) => {
+                const allowed = ['Backspace','Delete','ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Tab','Enter'];
+                if (!allowed.includes(e.key) && !/^\d$/.test(e.key)) e.preventDefault();
+                // block if already 6 digits and not a control key
+                const current = String(record.quantity || '');
+                if (current.length >= 6 && /^\d$/.test(e.key)) e.preventDefault();
+              }}
               parser={(val) => {
                 const digits = (val || '').replace(/[^\d]/g, '').slice(0, 6);
                 return (digits || '1') as any;
               }}
-              formatter={(val) => String(val || '').slice(0, 6)}
+              formatter={(val) => String(val || '').replace(/[^\d]/g, '').slice(0, 6)}
               size="small"
               style={{ width: 90 }}
             />
