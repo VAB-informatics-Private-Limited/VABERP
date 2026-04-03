@@ -172,6 +172,7 @@ export class QuotationsService {
       quotationNumber,
       quotationDate: createDto.quotationDate ? new Date(createDto.quotationDate) : new Date(),
       validUntil: createDto.validUntil ? new Date(createDto.validUntil) : null,
+      expectedDelivery: createDto.expectedDelivery ? new Date(createDto.expectedDelivery) : null,
       customerId: createDto.customerId,
       enquiryId: createDto.enquiryId,
       customerName: createDto.customerName,
@@ -300,6 +301,9 @@ export class QuotationsService {
     }
     if (updateDto.validUntil) {
       updateData.validUntil = new Date(updateDto.validUntil);
+    }
+    if (updateDto.expectedDelivery !== undefined) {
+      updateData.expectedDelivery = updateDto.expectedDelivery ? new Date(updateDto.expectedDelivery) : null;
     }
 
     // ── 3. Persist update + bump version number ────────────────────────────

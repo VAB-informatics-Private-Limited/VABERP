@@ -95,6 +95,7 @@ export interface InvoiceListParams {
   search?: string;
   status?: string;
   customerId?: number;
+  salesOrderId?: number;
   startDate?: string;
   endDate?: string;
 }

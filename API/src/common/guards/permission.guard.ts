@@ -68,6 +68,8 @@ export class PermissionGuard implements CanActivate {
       request.dataStartDate = record.dataStartDate ?? null;
       request.ownDataOnly = record.ownDataOnly ?? false;
       request.currentUserId = user.id;
+      // Attach full permissions to user so service layers can determine scope
+      request.user.permissions = record.permissions ?? {};
 
       const { module, submodule, action } = required;
       let allowed: boolean;

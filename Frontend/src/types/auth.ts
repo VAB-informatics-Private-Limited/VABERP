@@ -11,6 +11,8 @@ export interface Employee {
   hire_date: string;
   created_date: string;
   status: 'active' | 'inactive';
+  is_reporting_head?: boolean;
+  reporting_to?: number | null;
 }
 
 export interface Enterprise {

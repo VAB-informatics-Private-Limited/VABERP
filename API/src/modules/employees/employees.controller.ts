@@ -118,6 +118,13 @@ export class EmployeesController {
 
   // ============ Employees ============
 
+  @Get('sales-reps')
+  @ApiOperation({ summary: 'Get active employees with sales access' })
+  @RequireEnterprise()
+  async findSalesEmployees(@EnterpriseId() enterpriseId: number) {
+    return this.employeesService.findSalesEmployees(enterpriseId);
+  }
+
   @Get()
   @ApiOperation({ summary: 'Get all employees' })
   @RequirePermission('employees', 'all_employees', 'view')
@@ -131,6 +138,59 @@ export class EmployeesController {
     @Query('search') search?: string,
   ) {
     return this.employeesService.findAll(enterpriseId, page, limit, search);
+  }
+
+  @Get('reporting-managers')
+  @ApiOperation({ summary: 'Get reporting managers list' })
+  @RequirePermission('employees', 'all_employees', 'view')
+  async getReportingManagers(@EnterpriseId() enterpriseId: number) {
+    return this.employeesService.getReportingManagers(enterpriseId);
+  }
+
+  @Post('reporting-managers')
+  @ApiOperation({ summary: 'Create reporting manager' })
+  @RequirePermission('employees', 'all_employees', 'create')
+  async createReportingManager(@EnterpriseId() enterpriseId: number, @Body() body: any) {
+    return this.employeesService.createReportingManager(enterpriseId, body);
+  }
+
+  @Patch('reporting-managers/:id')
+  @ApiOperation({ summary: 'Update reporting manager' })
+  @RequirePermission('employees', 'all_employees', 'edit')
+  async updateReportingManager(
+    @Param('id', ParseIntPipe) id: number,
+    @EnterpriseId() enterpriseId: number,
+    @Body() body: any,
+  ) {
+    return this.employeesService.updateReportingManager(id, enterpriseId, body);
+  }
+
+  @Delete('reporting-managers/:id')
+  @ApiOperation({ summary: 'Delete reporting manager' })
+  @RequirePermission('employees', 'all_employees', 'delete')
+  async deleteReportingManager(
+    @Param('id', ParseIntPipe) id: number,
+    @EnterpriseId() enterpriseId: number,
+  ) {
+    return this.employeesService.deleteReportingManager(id, enterpriseId);
+  }
+
+  @Get('reporters')
+  @ApiOperation({ summary: 'Get designated reporting heads' })
+  @RequirePermission('employees', 'all_employees', 'view')
+  async getReporters(@EnterpriseId() enterpriseId: number) {
+    return this.employeesService.getReporters(enterpriseId);
+  }
+
+  @Patch(':id/reporting-head')
+  @ApiOperation({ summary: 'Set or unset employee as reporting head' })
+  @RequirePermission('employees', 'all_employees', 'edit')
+  async setReportingHead(
+    @Param('id', ParseIntPipe) id: number,
+    @EnterpriseId() enterpriseId: number,
+    @Body('value') value: boolean,
+  ) {
+    return this.employeesService.setReportingHead(id, enterpriseId, value);
   }
 
   @Get(':id')
@@ -175,6 +235,15 @@ export class EmployeesController {
     @CurrentUser() user: any,
   ) {
     return this.employeesService.delete(id, enterpriseId, user);
+  }
+
+  @Get('my-team')
+  @ApiOperation({ summary: 'Get team overview for the current manager' })
+  async getMyTeam(
+    @EnterpriseId() enterpriseId: number,
+    @CurrentUser() user: any,
+  ) {
+    return this.employeesService.getTeamOverview(user?.id, enterpriseId);
   }
 
   @Get(':id/permissions')

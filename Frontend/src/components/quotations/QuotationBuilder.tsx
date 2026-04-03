@@ -30,7 +30,17 @@ export function QuotationBuilder({ initialData, initialEnquiryData, onSubmit, lo
   const { getEnterpriseId } = useAuthStore();
   const enterpriseId = getEnterpriseId();
 
-  const [items, setItems] = useState<QuotationItem[]>(initialData?.items || []);
+  const [items, setItems] = useState<QuotationItem[]>(() => {
+    const raw = initialData?.items || [];
+    // Recalculate total_amount from discount_percent (not discount_amount) so edit view is accurate
+    return raw.map((item) => {
+      const subtotal = Number(item.quantity) * Number(item.unit_price);
+      const discountAmount = (subtotal * Number(item.discount_percent || 0)) / 100;
+      const afterDiscount = subtotal - discountAmount;
+      const taxAmount = Number(item.tax_percent || 0) > 0 ? (afterDiscount * Number(item.tax_percent)) / 100 : 0;
+      return { ...item, total_amount: afterDiscount + taxAmount };
+    });
+  });
   const [selectedProduct, setSelectedProduct] = useState<number | undefined>();
   const [mobileWarning, setMobileWarning] = useState<string | null>(null);
   const [submitAction, setSubmitAction] = useState<'draft' | 'sent'>('draft');
@@ -56,6 +66,8 @@ export function QuotationBuilder({ initialData, initialEnquiryData, onSubmit, lo
     queryKey: ['products-dropdown', enterpriseId],
     queryFn: () => getDropdownProductsList(enterpriseId!),
     enabled: !!enterpriseId,
+    refetchOnMount: 'always',
+    staleTime: 0,
   });
 
   const { data: customers } = useQuery({
@@ -65,10 +77,10 @@ export function QuotationBuilder({ initialData, initialEnquiryData, onSubmit, lo
   });
 
   const calculateItemTotal = (item: QuotationItem): number => {
-    const subtotal = item.quantity * item.unit_price;
-    const discountAmount = item.discount_percent ? (subtotal * item.discount_percent) / 100 : (item.discount_amount || 0);
+    const subtotal = Number(item.quantity) * Number(item.unit_price);
+    const discountAmount = (subtotal * Number(item.discount_percent || 0)) / 100;
     const afterDiscount = subtotal - discountAmount;
-    const taxAmount = item.tax_percent ? (afterDiscount * item.tax_percent) / 100 : 0;
+    const taxAmount = Number(item.tax_percent || 0) > 0 ? (afterDiscount * Number(item.tax_percent)) / 100 : 0;
     return afterDiscount + taxAmount;
   };
 
@@ -95,7 +107,6 @@ export function QuotationBuilder({ initialData, initialEnquiryData, onSubmit, lo
     }
 
     const tiers = product.discount_tiers || [];
-    const cap = product.max_discount_percent != null ? Number(product.max_discount_percent) : 100;
     const tierDiscount = getTierDiscount(tiers, 1);
 
     const newItem: QuotationItem = {
@@ -106,8 +117,7 @@ export function QuotationBuilder({ initialData, initialEnquiryData, onSubmit, lo
       unit: product.unit,
       quantity: 1,
       unit_price: Number(product.price) || 0,
-      discount_percent: tierDiscount != null ? Math.min(tierDiscount, cap) : 0,
-      max_discount_percent: cap,
+      discount_percent: 0,
       discount_tiers: tiers,
       tax_percent: product.gst_rate != null ? Number(product.gst_rate) : 18,
       total_amount: Number(product.price) || 0,
@@ -122,14 +132,6 @@ export function QuotationBuilder({ initialData, initialEnquiryData, onSubmit, lo
     const updatedItems = [...items];
     const item = { ...updatedItems[index], [field]: value };
 
-    // Auto-apply tier discount when quantity changes
-    if (field === 'quantity' && item.discount_tiers && item.discount_tiers.length > 0) {
-      const cap = item.max_discount_percent ?? 100;
-      const tierDiscount = getTierDiscount(item.discount_tiers, value);
-      if (tierDiscount != null) {
-        item.discount_percent = Math.min(tierDiscount, cap);
-      }
-    }
 
     item.total_amount = calculateItemTotal(item);
     updatedItems[index] = item;
@@ -144,13 +146,13 @@ export function QuotationBuilder({ initialData, initialEnquiryData, onSubmit, lo
     const subtotal = items.reduce((sum, item) => sum + Number(item.quantity) * Number(item.unit_price), 0);
     const discountAmount = items.reduce((sum, item) => {
       const itemSubtotal = Number(item.quantity) * Number(item.unit_price);
-      return sum + (item.discount_percent ? (itemSubtotal * Number(item.discount_percent)) / 100 : Number(item.discount_amount || 0));
+      return sum + (itemSubtotal * Number(item.discount_percent || 0)) / 100;
     }, 0);
     const taxAmount = items.reduce((sum, item) => {
       const itemSubtotal = Number(item.quantity) * Number(item.unit_price);
-      const itemDiscount = item.discount_percent ? (itemSubtotal * Number(item.discount_percent)) / 100 : Number(item.discount_amount || 0);
+      const itemDiscount = (itemSubtotal * Number(item.discount_percent || 0)) / 100;
       const afterDiscount = itemSubtotal - itemDiscount;
-      return sum + (item.tax_percent ? (afterDiscount * Number(item.tax_percent)) / 100 : 0);
+      return sum + (Number(item.tax_percent || 0) > 0 ? (afterDiscount * Number(item.tax_percent)) / 100 : 0);
     }, 0);
     const totalAmount = subtotal - discountAmount + taxAmount;
 
@@ -162,6 +164,22 @@ export function QuotationBuilder({ initialData, initialEnquiryData, onSubmit, lo
   const handleFinish = (values: QuotationFormData & { quotation_date?: dayjs.Dayjs; valid_until?: dayjs.Dayjs; expected_delivery?: dayjs.Dayjs }) => {
     if (items.length === 0) {
       message.error('Please add at least one item');
+      return;
+    }
+
+    // Block save if any item's discount exceeds the tier-allotted amount for that quantity
+    const violations = items.filter((item) => {
+      if (!item.discount_tiers || item.discount_tiers.length === 0) return false;
+      const allowed = getTierDiscount(item.discount_tiers, item.quantity);
+      if (allowed == null) return false; // no tier matches this qty — no restriction
+      return (item.discount_percent || 0) > allowed;
+    });
+
+    if (violations.length > 0) {
+      violations.forEach((item) => {
+        const allowed = getTierDiscount(item.discount_tiers!, item.quantity)!;
+        message.error(`"${item.product_name}": discount cannot exceed ${allowed}% for qty ${item.quantity}`, 5);
+      });
       return;
     }
 
@@ -244,21 +262,22 @@ export function QuotationBuilder({ initialData, initialEnquiryData, onSubmit, lo
               max={999999}
               value={record.quantity}
               onChange={(value) => {
-                const clamped = Math.min(Math.max(value || 1, 1), 999999);
-                handleUpdateItem(index, 'quantity', clamped);
+                if (value == null) return;
+                handleUpdateItem(index, 'quantity', value);
               }}
               onKeyDown={(e) => {
-                const allowed = ['Backspace','Delete','ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Tab','Enter'];
-                if (!allowed.includes(e.key) && !/^\d$/.test(e.key)) e.preventDefault();
-                // block if already 6 digits and not a control key
-                const current = String(record.quantity || '');
-                if (current.length >= 6 && /^\d$/.test(e.key)) e.preventDefault();
+                // Block anything that isn't a digit or control key
+                const control = ['Backspace','Delete','ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Tab','Enter'];
+                if (!control.includes(e.key) && !/^\d$/.test(e.key)) {
+                  e.preventDefault();
+                  return;
+                }
+                // Block a 7th digit by reading the live input text
+                if (/^\d$/.test(e.key)) {
+                  const digits = (e.target as HTMLInputElement).value.replace(/\D/g, '');
+                  if (digits.length >= 6) e.preventDefault();
+                }
               }}
-              parser={(val) => {
-                const digits = (val || '').replace(/[^\d]/g, '').slice(0, 6);
-                return (digits || '1') as any;
-              }}
-              formatter={(val) => String(val || '').replace(/[^\d]/g, '').slice(0, 6)}
               size="small"
               style={{ width: 90 }}
             />
@@ -284,41 +303,48 @@ export function QuotationBuilder({ initialData, initialEnquiryData, onSubmit, lo
       title: 'Discount %',
       dataIndex: 'discount_percent',
       key: 'discount_percent',
-      width: 155,
+      width: 160,
       render: (_, record, index) => {
-        const cap = record.max_discount_percent ?? 100;
         const tierDiscount = getTierDiscount(record.discount_tiers, record.quantity);
-        const effectiveTier = tierDiscount != null ? Math.min(tierDiscount, cap) : null;
         const current = record.discount_percent || 0;
-        const isAtCap = current >= cap;
-        const isTierApplied = effectiveTier != null && current === effectiveTier;
-        const isManualOverride = effectiveTier != null && current !== effectiveTier;
+        const isOverLimit = tierDiscount != null && current > tierDiscount;
         return (
           <div>
             <InputNumber
               min={0}
-              max={cap}
+              max={99}
+              precision={0}
               value={current}
-              onChange={(value) => handleUpdateItem(index, 'discount_percent', Math.min(value || 0, cap))}
-              parser={(val) => val?.replace(/[^\d.]/g, '') as any}
+              status={isOverLimit ? 'error' : undefined}
+              onChange={(value) => {
+                const v = value == null ? 0 : Math.min(Math.floor(value), 99);
+                handleUpdateItem(index, 'discount_percent', v);
+              }}
+              onKeyDown={(e) => {
+                const control = ['Backspace','Delete','ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Tab','Enter'];
+                if (!control.includes(e.key) && !/^\d$/.test(e.key)) {
+                  e.preventDefault();
+                  return;
+                }
+                if (/^\d$/.test(e.key)) {
+                  const input = e.target as HTMLInputElement;
+                  const selected = (input.selectionEnd || 0) - (input.selectionStart || 0);
+                  const digits = input.value.replace(/\D/g, '');
+                  if (digits.length >= 2 && selected === 0) e.preventDefault();
+                }
+              }}
               addonAfter="%"
               size="small"
               style={{ width: 110 }}
             />
-            {/* Always show the cap */}
-            <div className="text-xs mt-1 leading-tight" style={{ color: isAtCap ? '#ef4444' : '#6b7280' }}>
-              Max allowed: <strong>{cap}%</strong>
-              {isAtCap && ' ← at limit'}
-            </div>
-            {/* Tier status */}
-            {isTierApplied && (
-              <div className="text-xs text-green-600 leading-tight">
-                Auto-discount for qty {record.quantity}+
+            {isOverLimit && (
+              <div className="text-xs text-red-500 leading-tight mt-1">
+                Max allowed: {tierDiscount}% for this qty
               </div>
             )}
-            {isManualOverride && effectiveTier != null && (
-              <div className="text-xs text-orange-500 leading-tight">
-                Qty {record.quantity}+ allows {effectiveTier}%
+            {!isOverLimit && tierDiscount != null && current < tierDiscount && (
+              <div className="text-xs text-blue-500 leading-tight mt-1">
+                Tier allows up to {tierDiscount}%
               </div>
             )}
           </div>
@@ -498,10 +524,12 @@ export function QuotationBuilder({ initialData, initialEnquiryData, onSubmit, lo
                   <span>Subtotal:</span>
                   <span>₹{totals.subtotal.toLocaleString('en-IN')}</span>
                 </div>
-                <div className="flex justify-between py-1 text-red-600">
-                  <span>Discount:</span>
-                  <span>-₹{totals.discountAmount.toLocaleString('en-IN')}</span>
-                </div>
+                {totals.discountAmount > 0 && (
+                  <div className="flex justify-between py-1 text-red-600">
+                    <span>Discount:</span>
+                    <span>-₹{totals.discountAmount.toLocaleString('en-IN')}</span>
+                  </div>
+                )}
                 <div className="flex justify-between py-1">
                   <span>Tax:</span>
                   <span>₹{totals.taxAmount.toLocaleString('en-IN')}</span>

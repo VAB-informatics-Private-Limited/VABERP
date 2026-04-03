@@ -15,6 +15,9 @@ import {
   ToolOutlined,
   ShoppingOutlined,
   TeamOutlined,
+  CheckSquareOutlined,
+  BellOutlined,
+  SendOutlined,
 } from '@ant-design/icons';
 import { useRouter, usePathname } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
@@ -53,7 +56,9 @@ function buildHasPermission(permissions: MenuPermissions | null, userType: strin
 export function Sidebar({ collapsed, inDrawer, onMenuClick }: SidebarProps) {
   const router = useRouter();
   const pathname = usePathname();
-  const { userType, permissions: cachedPermissions, setPermissions } = useAuthStore();
+  const { userType, permissions: cachedPermissions, setPermissions, user } = useAuthStore();
+  const isReportingHead = userType === 'employee' && !!(user as any)?.is_reporting_head;
+  const hasManager = userType === 'employee' && !!(user as any)?.reporting_to;
 
   // Always fetch live permissions from server for employees so that
   // admin-granted permissions are reflected without requiring re-login
@@ -98,12 +103,6 @@ export function Sidebar({ collapsed, inDrawer, onMenuClick }: SidebarProps) {
     canView('sales',   'quotations')  && { key: '/quotations', label: 'Quotations' },
   ].filter(Boolean);
 
-  // ── CRM ──────────────────────────────────────────────────────────────────
-  const crmChildren = [
-    canView('crm', 'reports')    && { key: '/crm/reports',      label: 'Performance' },
-    canView('crm', 'settings')   && { key: '/crm/team',         label: 'Team'        },
-  ].filter(Boolean);
-
   // ── 2. ORDERS ────────────────────────────────────────────────────────────
   // Purchase Orders (sales-side) + Sales Orders
   const ordersChildren = [
@@ -112,13 +111,18 @@ export function Sidebar({ collapsed, inDrawer, onMenuClick }: SidebarProps) {
   ].filter(Boolean);
 
   // ── 3. MANUFACTURING ─────────────────────────────────────────────────────
-  // Overview, Job Cards, Process Templates, Dispatch Status, Dispatched Orders
+  // Overview, Job Cards, Process Templates
   const manufacturingChildren = [
-    canView('orders', 'manufacturing') && { key: '/manufacturing',                label: 'Overview' },
-    canView('orders', 'job_cards')     && { key: '/manufacturing/stages',         label: 'Job Cards' },
-    canView('orders', 'manufacturing') && { key: '/manufacturing/processes',      label: 'Process Templates' },
-    canView('orders', 'manufacturing') && { key: '/manufacture-status',           label: 'Dispatch Status' },
-    canView('orders', 'manufacturing') && { key: '/manufacture-status/dispatched',label: 'Dispatched Orders' },
+    canView('orders', 'manufacturing') && { key: '/manufacturing',           label: 'Overview' },
+    canView('orders', 'job_cards')     && { key: '/manufacturing/stages',    label: 'Job Cards' },
+    canView('orders', 'manufacturing') && { key: '/manufacturing/processes', label: 'Process Templates' },
+  ].filter(Boolean);
+
+  // ── DISPATCH ─────────────────────────────────────────────────────────────
+  // Dispatch Status, Dispatched Orders
+  const dispatchChildren = [
+    canView('orders', 'manufacturing') && { key: '/manufacture-status',            label: 'Dispatch Status' },
+    canView('orders', 'manufacturing') && { key: '/manufacture-status/dispatched', label: 'Dispatched Orders' },
   ].filter(Boolean);
 
   // ── 4. PRODUCTS ──────────────────────────────────────────────────────────
@@ -184,12 +188,6 @@ export function Sidebar({ collapsed, inDrawer, onMenuClick }: SidebarProps) {
       label: 'Sales',
       children: salesChildren,
     },
-    crmChildren.length > 0 && {
-      key: 'crm-menu',
-      icon: <TeamOutlined />,
-      label: 'CRM',
-      children: crmChildren,
-    },
     ordersChildren.length > 0 && {
       key: 'orders-menu',
       icon: <FileDoneOutlined />,
@@ -201,6 +199,12 @@ export function Sidebar({ collapsed, inDrawer, onMenuClick }: SidebarProps) {
       icon: <ToolOutlined />,
       label: 'Manufacturing',
       children: manufacturingChildren,
+    },
+    dispatchChildren.length > 0 && {
+      key: 'dispatch-menu',
+      icon: <SendOutlined />,
+      label: 'Dispatch',
+      children: dispatchChildren,
     },
     productsChildren.length > 0 && {
       key: 'products-menu',
@@ -237,6 +241,21 @@ export function Sidebar({ collapsed, inDrawer, onMenuClick }: SidebarProps) {
       icon: <BarChartOutlined />,
       label: 'Reports',
       children: reportsChildren,
+    },
+    canView('tasks') && {
+      key: '/tasks',
+      icon: <CheckSquareOutlined />,
+      label: 'Tasks',
+    },
+    isReportingHead && {
+      key: '/team',
+      icon: <TeamOutlined />,
+      label: 'My Team',
+    },
+    hasManager && {
+      key: '/manager-updates',
+      icon: <BellOutlined />,
+      label: 'Manager Updates',
     },
     canView('configurations') && {
       key: '/settings',

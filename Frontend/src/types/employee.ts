@@ -32,6 +32,9 @@ export interface EmployeeDetails {
   hire_date: string;
   status: 'active' | 'inactive';
   created_date: string;
+  reporting_to?: number | null;
+  is_reporting_head?: boolean;
+  reporting_manager_id?: number | null;
 }
 
 export interface DepartmentFormData {
@@ -47,6 +50,14 @@ export interface DesignationFormData {
   status?: 'active' | 'inactive';
 }
 
+export interface ReportingManager {
+  id: number;
+  enterprise_id: number;
+  name: string;
+  status: 'active' | 'inactive';
+  created_date: string;
+}
+
 export interface EmployeeFormData {
   department_id: number;
   designation_id: number;
@@ -57,4 +68,6 @@ export interface EmployeeFormData {
   phone_number: string;
   hire_date: string;
   status?: 'active' | 'inactive';
+  reporting_to?: number | null;
+  reporting_manager_id?: number | null;
 }

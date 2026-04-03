@@ -50,6 +50,7 @@ import {
   getAllResellersList,
   lockEnterprise,
   unlockEnterprise,
+  updateTaskVisibility,
 } from '@/lib/api/super-admin';
 
 const { Title, Text } = Typography;
@@ -82,6 +83,7 @@ interface Enterprise {
   expiryDate: string | null;
   createdDate: string;
   isLocked?: boolean;
+  taskVisibilityUnrestricted?: boolean;
 }
 
 interface DailyDataPoint {
@@ -746,6 +748,31 @@ export default function EnterpriseDetailPage() {
                 block
               >
                 {enterprise.isLocked ? 'Unlock Profile' : 'Lock Profile'}
+              </Button>
+            </Popconfirm>
+
+            <Popconfirm
+              title={enterprise.taskVisibilityUnrestricted ? 'Restrict task visibility?' : 'Allow all employees to see all tasks?'}
+              description={
+                enterprise.taskVisibilityUnrestricted
+                  ? 'Role-based task visibility will be enforced again.'
+                  : 'All employees in this tenant will see every task regardless of assignment.'
+              }
+              onConfirm={async () => {
+                try {
+                  const next = !enterprise.taskVisibilityUnrestricted;
+                  await updateTaskVisibility(id, next);
+                  message.success(next ? 'Task visibility set to unrestricted' : 'Task visibility restricted');
+                  setEnterprise(prev => prev ? { ...prev, taskVisibilityUnrestricted: next } : prev);
+                } catch {
+                  message.error('Failed to update task visibility');
+                }
+              }}
+              okText="Confirm"
+              cancelText="Cancel"
+            >
+              <Button block>
+                {enterprise.taskVisibilityUnrestricted ? 'Restrict Task Visibility' : 'Unrestrict Task Visibility'}
               </Button>
             </Popconfirm>
           </Space>

@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from 'react';
 import { Typography, Button, Card, Space, Input } from 'antd';
-import { PlusOutlined, TeamOutlined, IdcardOutlined, SearchOutlined } from '@ant-design/icons';
+import { PlusOutlined, TeamOutlined, IdcardOutlined, SearchOutlined, ApartmentOutlined } from '@ant-design/icons';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { EmployeeTable } from '@/components/employees/EmployeeTable';
@@ -87,6 +87,11 @@ export default function EmployeesPage() {
           {hasPermission('employees', 'designations', 'view') && (
             <Button icon={<IdcardOutlined />} onClick={() => router.push('/employees/designations')}>
               Manage Designations
+            </Button>
+          )}
+          {hasPermission('employees', 'all_employees', 'view') && (
+            <Button icon={<ApartmentOutlined />} onClick={() => router.push('/employees/reporters')}>
+              Manage Reporters
             </Button>
           )}
         </Space>

@@ -8,6 +8,7 @@ import {
   DepartmentFormData,
   DesignationFormData,
   EmployeeFormData,
+  ReportingManager,
 } from '@/types/employee';
 
 // Helper functions to map backend camelCase to frontend snake_case
@@ -53,6 +54,9 @@ function mapEmployeeFromBackend(data: any): EmployeeDetails {
     hire_date: data.hireDate,
     status: data.status || 'active',
     created_date: data.createdDate,
+    reporting_to: data.reportingTo ?? null,
+    is_reporting_head: data.isReportingHead ?? false,
+    reporting_manager_id: data.reportingManagerId ?? null,
   };
 }
 
@@ -154,6 +158,16 @@ export async function deleteDesignation(id: number, _enterpriseId?: number): Pro
 
 // ============ Employees ============
 
+export async function getSalesEmployees(): Promise<PaginatedResponse<EmployeeDetails>> {
+  const response = await apiClient.get<PaginatedResponse<EmployeeDetails>>('/employees/sales-reps');
+  const backendData = response.data as any;
+  return {
+    message: backendData.message,
+    data: (backendData.data || []).map(mapEmployeeFromBackend),
+    totalRecords: backendData.totalRecords,
+  };
+}
+
 export async function getEmployees(_enterpriseId?: number, page?: number, limit?: number, search?: string): Promise<PaginatedResponse<EmployeeDetails>> {
   const response = await apiClient.get<PaginatedResponse<EmployeeDetails>>('/employees', {
     params: { page, limit, search },
@@ -190,6 +204,8 @@ export async function addEmployee(data: EmployeeFormData & { enterprise_id?: num
     phoneNumber: data.phone_number,
     hireDate: data.hire_date,
     status: data.status,
+    reportingTo: data.reporting_to ?? null,
+    reportingManagerId: data.reporting_manager_id ?? null,
   };
   const response = await apiClient.post<ApiResponse>('/employees', payload);
   return response.data;
@@ -209,8 +225,58 @@ export async function updateEmployee(
     phoneNumber: data.phone_number,
     hireDate: data.hire_date,
     status: data.status,
+    reportingTo: data.reporting_to ?? null,
+    reportingManagerId: data.reporting_manager_id ?? null,
   };
   const response = await apiClient.patch<ApiResponse>(`/employees/${id}`, payload);
+  return response.data;
+}
+
+// ============ Reporting Managers ============
+
+export async function getReportingManagers(): Promise<ApiResponse<ReportingManager[]>> {
+  const response = await apiClient.get('/employees/reporting-managers');
+  const d = response.data as any;
+  return {
+    message: d.message,
+    data: (d.data || []).map((m: any) => ({
+      id: m.id,
+      enterprise_id: m.enterpriseId,
+      name: m.name,
+      status: m.status || 'active',
+      created_date: m.createdDate,
+    })),
+  };
+}
+
+export async function addReportingManager(data: { name: string; status?: string }): Promise<ApiResponse> {
+  const response = await apiClient.post('/employees/reporting-managers', data);
+  return response.data;
+}
+
+export async function updateReportingManager(data: { id: number; name?: string; status?: string }): Promise<ApiResponse> {
+  const { id, ...body } = data;
+  const response = await apiClient.patch(`/employees/reporting-managers/${id}`, body);
+  return response.data;
+}
+
+export async function deleteReportingManager(id: number): Promise<ApiResponse> {
+  const response = await apiClient.delete(`/employees/reporting-managers/${id}`);
+  return response.data;
+}
+
+export async function getReporters(): Promise<{ value: number; label: string; is_reporting_head: boolean }[]> {
+  const response = await apiClient.get('/employees/reporters');
+  const d = response.data as any;
+  return (d.data || []).map((e: any) => ({
+    value: e.id,
+    label: `${e.firstName} ${e.lastName}`,
+    is_reporting_head: true,
+  }));
+}
+
+export async function setReportingHead(id: number, value: boolean): Promise<ApiResponse> {
+  const response = await apiClient.patch(`/employees/${id}/reporting-head`, { value });
   return response.data;
 }
 
@@ -280,6 +346,38 @@ export async function updateEmployeePermissions(
   return response.data;
 }
 
+export interface TeamMember {
+  id: number;
+  firstName: string;
+  lastName: string;
+  email: string;
+  status: string;
+  designation: string | null;
+  department: string | null;
+  accessModules: string[];
+  activeTaskCount: number;
+  activeJobCardCount: number;
+  activeTasks: {
+    id: number;
+    taskNumber: string;
+    title: string;
+    status: string;
+    priority: string;
+    dueDate: string | null;
+  }[];
+  activeJobCards: {
+    id: number;
+    jobNumber: string;
+    jobName: string;
+    status: string;
+  }[];
+}
+
+export async function getTeamOverview(): Promise<ApiResponse<TeamMember[]>> {
+  const response = await apiClient.get('/employees/my-team');
+  return response.data;
+}
+
 export async function addEmployeeWithPermissions(
   employeeData: EmployeeFormData & { enterprise_id?: number },
   permissions?: MenuPermissions,
@@ -294,6 +392,8 @@ export async function addEmployeeWithPermissions(
     phoneNumber: employeeData.phone_number,
     hireDate: employeeData.hire_date,
     status: employeeData.status,
+    reportingTo: employeeData.reporting_to ?? null,
+    reportingManagerId: employeeData.reporting_manager_id ?? null,
     permissions,
   };
   const response = await apiClient.post<ApiResponse>('/employees', payload);

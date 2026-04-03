@@ -58,6 +58,19 @@ export class Employee {
   @Column({ default: 'active' })
   status: string;
 
+  @Column({ name: 'reporting_to', nullable: true, default: null })
+  reportingTo: number | null;
+
+  @Column({ name: 'is_reporting_head', default: false })
+  isReportingHead: boolean;
+
+  @Column({ name: 'reporting_manager_id', nullable: true, type: 'int' })
+  reportingManagerId: number | null;
+
+  @ManyToOne(() => Employee, { nullable: true })
+  @JoinColumn({ name: 'reporting_to' })
+  manager: Employee;
+
   @CreateDateColumn({ name: 'created_date' })
   createdDate: Date;
 

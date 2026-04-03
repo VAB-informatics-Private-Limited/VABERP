@@ -1,6 +1,6 @@
 'use client';
 
-import { Typography, Card, Descriptions, Tag, Button, Space, Modal, message, Spin, Row, Col, Select, Form, Alert, Drawer } from 'antd';
+import { Typography, Card, Descriptions, Tag, Button, Space, Modal, message, Spin, Row, Col, Alert, Drawer } from 'antd';
 import {
   ArrowLeftOutlined,
   EditOutlined,
@@ -13,15 +13,13 @@ import {
   InfoCircleOutlined,
   CalendarOutlined,
   TagOutlined,
-  TeamOutlined,
   FileTextOutlined,
   FormOutlined,
 } from '@ant-design/icons';
 import { useRouter, useParams } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import { getEnquiryById, getFollowupHistory, addFollowup, assignEnquiry, getEnquiryQuotations } from '@/lib/api/enquiries';
-import { getEmployees } from '@/lib/api/employees';
+import { getEnquiryById, getFollowupHistory, addFollowup, getEnquiryQuotations } from '@/lib/api/enquiries';
 import { addQuotation } from '@/lib/api/quotations';
 import { useAuthStore } from '@/stores/authStore';
 import { FollowupTimeline } from '@/components/enquiries/FollowupTimeline';
@@ -42,8 +40,6 @@ export default function ViewEnquiryPage() {
   const employeeId = getEmployeeId();
 
   const [followupModalOpen, setFollowupModalOpen] = useState(false);
-  const [assignModalOpen, setAssignModalOpen] = useState(false);
-  const [selectedEmployee, setSelectedEmployee] = useState<number | undefined>();
   const [quotationDrawerOpen, setQuotationDrawerOpen] = useState(false);
 
   const { data: enquiryData, isLoading: enquiryLoading } = useQuery({
@@ -58,29 +54,10 @@ export default function ViewEnquiryPage() {
     enabled: !!enterpriseId && !!enquiryId,
   });
 
-  const { data: employeesData } = useQuery({
-    queryKey: ['employees-dropdown'],
-    queryFn: () => getEmployees(undefined, 1, 1000),
-  });
-
   const { data: linkedQuotationsData } = useQuery({
     queryKey: ['enquiry-quotations', enquiryId],
     queryFn: () => getEnquiryQuotations(enquiryId),
     enabled: !!enquiryId,
-  });
-
-  const assignMutation = useMutation({
-    mutationFn: (employeeId: number) => assignEnquiry(enquiryId, employeeId),
-    onSuccess: () => {
-      message.success('Enquiry assigned successfully');
-      queryClient.invalidateQueries({ queryKey: ['enquiry', enquiryId] });
-      queryClient.invalidateQueries({ queryKey: ['enquiries'] });
-      setAssignModalOpen(false);
-      setSelectedEmployee(undefined);
-    },
-    onError: () => {
-      message.error('Failed to assign enquiry');
-    },
   });
 
   const followupMutation = useMutation({
@@ -173,15 +150,6 @@ export default function ViewEnquiryPage() {
         <Space wrap>
           <Button icon={<PrinterOutlined />} onClick={handlePrint}>
             Print
-          </Button>
-          <Button
-            icon={<TeamOutlined />}
-            onClick={() => {
-              setSelectedEmployee(enquiry?.employee_id ?? undefined);
-              setAssignModalOpen(true);
-            }}
-          >
-            Assign
           </Button>
           {enquiry?.converted_customer_id && (
             <Button
@@ -413,12 +381,6 @@ export default function ViewEnquiryPage() {
                   )}
                 </div>
               </Descriptions.Item>
-              <Descriptions.Item label={<Text type="secondary">Assigned To</Text>}>
-                <div className="flex items-center gap-1.5">
-                  <UserOutlined className="text-blue-400" />
-                  <Text>{enquiry.employee_name || '-'}</Text>
-                </div>
-              </Descriptions.Item>
               <Descriptions.Item label={<Text type="secondary">Created Date</Text>}>
                 <Text>{enquiry.created_date}</Text>
               </Descriptions.Item>
@@ -576,54 +538,6 @@ export default function ViewEnquiryPage() {
         />
       </Modal>
 
-      <Modal
-        title={
-          <span className="flex items-center gap-2">
-            <TeamOutlined className="text-blue-500" />
-            Assign Enquiry
-          </span>
-        }
-        open={assignModalOpen}
-        onCancel={() => {
-          setAssignModalOpen(false);
-          setSelectedEmployee(undefined);
-        }}
-        onOk={() => {
-          if (!selectedEmployee) {
-            message.warning('Please select an employee to assign');
-            return;
-          }
-          assignMutation.mutate(selectedEmployee);
-        }}
-        okText="Assign"
-        cancelText="Cancel"
-        confirmLoading={assignMutation.isPending}
-        centered
-        width={440}
-      >
-        <div className="py-4">
-          <Form layout="vertical">
-            <Form.Item label="Assign To" required>
-              <Select
-                showSearch
-                placeholder="Select employee or admin"
-                value={selectedEmployee}
-                onChange={(val) => setSelectedEmployee(val)}
-                filterOption={(input, option) =>
-                  String(option?.label ?? '').toLowerCase().includes(input.toLowerCase())
-                }
-                style={{ width: '100%' }}
-                options={(employeesData?.data || [])
-                  .filter((e) => e.status === 'active')
-                  .map((e) => ({
-                    value: e.id,
-                    label: `${e.first_name} ${e.last_name || ''}`.trim(),
-                  }))}
-              />
-            </Form.Item>
-          </Form>
-        </div>
-      </Modal>
     </div>
   );
 }

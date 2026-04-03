@@ -12,7 +12,7 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiQuery } from '@nestjs/swagger';
 import { SalesOrdersService } from './sales-orders.service';
-import { EnterpriseId, CurrentUser, RequirePermission, DataStartDate } from '../../common/decorators';
+import { EnterpriseId, CurrentUser, RequirePermission, DataStartDate, OwnDataOnly, CurrentUserId } from '../../common/decorators';
 import { CreateSalesOrderDto, UpdateSalesOrderDto } from './dto/create-sales-order.dto';
 
 @ApiTags('Sales Orders')
@@ -31,12 +31,16 @@ export class SalesOrdersController {
   async findAll(
     @EnterpriseId() enterpriseId: number,
     @DataStartDate() dataStartDate: Date | null,
+    @OwnDataOnly() ownDataOnly: boolean,
+    @CurrentUserId() currentUserId: number,
+    @CurrentUser() user: any,
     @Query('page') page?: number,
     @Query('limit') limit?: number,
     @Query('search') search?: string,
     @Query('status') status?: string,
   ) {
-    return this.service.findAll(enterpriseId, page, limit, search, status, dataStartDate);
+    // Purchase Orders are visible to all employees with access — no own-data filtering
+    return this.service.findAll(enterpriseId, page, limit, search, status, dataStartDate, false, currentUserId);
   }
 
   @Get(':id')

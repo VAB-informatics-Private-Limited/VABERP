@@ -32,7 +32,7 @@ export default function DashboardLayout({
 
   return (
     <ProtectedRoute>
-      <Layout className="min-h-screen">
+      <Layout style={{ height: '100vh', overflow: 'hidden' }}>
         {!isMobile && (
           <div className="no-print">
             <Sidebar collapsed={collapsed} />
@@ -70,7 +70,8 @@ export default function DashboardLayout({
             />
           </div>
           <Content
-            className="p-3 md:p-6 bg-[#f0f4f8] min-h-[calc(100vh-64px)]"
+            className="p-3 md:p-6 bg-[#f0f4f8]"
+            style={{ height: 'calc(100vh - 64px)', overflowY: 'auto' }}
           >
             {children}
           </Content>

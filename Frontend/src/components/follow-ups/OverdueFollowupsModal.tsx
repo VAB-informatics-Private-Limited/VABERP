@@ -7,7 +7,7 @@ import {
 import {
   CheckCircleOutlined, CalendarOutlined, PhoneOutlined, WarningFilled,
   UserOutlined, ClockCircleOutlined, CloseCircleOutlined,
-  ArrowRightOutlined, StarOutlined,
+  ArrowRightOutlined, FileTextOutlined,
 } from '@ant-design/icons';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
@@ -40,15 +40,6 @@ const OUTCOMES = [
     border: '#ffd591',
   },
   {
-    value: 'sale_closed',
-    label: 'Sale Closed',
-    icon: <StarOutlined />,
-    description: 'Convert this lead to a customer',
-    color: '#389e0d',
-    bg: '#f6ffed',
-    border: '#b7eb8f',
-  },
-  {
     value: 'not_interested',
     label: 'Not Interested',
     icon: <CloseCircleOutlined />,
@@ -67,7 +58,7 @@ export function OverdueFollowupsModal({ overdueItems }: OverdueFollowupsModalPro
   const [open, setOpen] = useState(false);
   const [actionedIds, setActionedIds] = useState<Set<number>>(new Set());
   const [actionItem, setActionItem] = useState<TodayFollowup | null>(null);
-  const [selectedOutcome, setSelectedOutcome] = useState<string>('follow_up');
+  const [selectedOutcome, setSelectedOutcome] = useState<string>('not_interested');
   const [form] = Form.useForm();
 
   const activeItems = useMemo(
@@ -101,18 +92,6 @@ export function OverdueFollowupsModal({ overdueItems }: OverdueFollowupsModalPro
     onSuccess: (response) => {
       const actioned = actionItem;
       const outcome = response?.data?.outcomeStatus;
-
-      if (outcome === 'sale_closed') {
-        message.success('Sale closed! Customer created successfully.');
-        queryClient.invalidateQueries({ queryKey: ['customers'] });
-        queryClient.invalidateQueries({ queryKey: ['today-followups'] });
-        queryClient.invalidateQueries({ queryKey: ['enquiries'] });
-        const customerId = response?.data?.customer?.id;
-        closeAction();
-        setOpen(false);
-        if (customerId) router.push(`/customers/${customerId}`);
-        return;
-      }
 
       const msgs: Record<string, string> = {
         not_interested: 'Enquiry marked as not interested',
@@ -161,8 +140,7 @@ export function OverdueFollowupsModal({ overdueItems }: OverdueFollowupsModalPro
   const optionalNextDate = selectedOutcome === 'not_available';
 
   const submitLabel =
-    selectedOutcome === 'sale_closed' ? 'Close Sale & Convert Lead'
-    : selectedOutcome === 'not_interested' ? 'Mark as Not Interested'
+    selectedOutcome === 'not_interested' ? 'Mark as Not Interested'
     : selectedOutcome === 'follow_up' ? 'Schedule Follow-up'
     : 'Save & Continue';
 
@@ -269,17 +247,17 @@ export function OverdueFollowupsModal({ overdueItems }: OverdueFollowupsModalPro
                     type="primary"
                     icon={<CheckCircleOutlined />}
                     style={{ background: '#52c41a', borderColor: '#52c41a', borderRadius: 8, flex: 1 }}
-                    onClick={() => openAction(item, 'sale_closed')}
+                    onClick={() => openAction(item, 'not_interested')}
                   >
-                    Complete Call
+                    Complete
                   </Button>
                   <Button
                     size="small"
-                    icon={<CalendarOutlined />}
+                    icon={<FileTextOutlined />}
                     style={{ borderRadius: 8, flex: 1 }}
-                    onClick={() => openAction(item, 'follow_up')}
+                    onClick={() => router.push(`/quotations/create?enquiryId=${item.enquiry_id}`)}
                   >
-                    Reschedule
+                    Create Quotation
                   </Button>
                   <Button
                     size="small"
@@ -420,14 +398,6 @@ export function OverdueFollowupsModal({ overdueItems }: OverdueFollowupsModalPro
               </div>
 
               {/* Contextual alert */}
-              {selectedOutcome === 'sale_closed' && (
-                <Alert
-                  type="success"
-                  showIcon
-                  message="This will convert the lead into a customer and close all follow-ups."
-                  style={{ marginBottom: 14, borderRadius: 8 }}
-                />
-              )}
               {selectedOutcome === 'not_interested' && (
                 <Alert
                   type="warning"
@@ -443,8 +413,7 @@ export function OverdueFollowupsModal({ overdueItems }: OverdueFollowupsModalPro
                   <Input.TextArea
                     rows={3}
                     placeholder={
-                      selectedOutcome === 'sale_closed' ? 'Add sale notes (optional)…'
-                      : selectedOutcome === 'not_interested' ? 'Reason for disinterest (optional)…'
+                      selectedOutcome === 'not_interested' ? 'Reason for disinterest (optional)…'
                       : selectedOutcome === 'not_available' ? 'e.g. Phone was off, will retry…'
                       : 'What was discussed on the call?…'
                     }

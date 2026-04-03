@@ -96,6 +96,15 @@ export class SuperAdminController {
   }
 
   @UseGuards(SuperAdminGuard)
+  @Patch('enterprises/:id/task-visibility')
+  updateTaskVisibility(
+    @Param('id', ParseIntPipe) id: number,
+    @Body('unrestricted') unrestricted: boolean,
+  ) {
+    return this.superAdminService.updateTaskVisibility(id, unrestricted);
+  }
+
+  @UseGuards(SuperAdminGuard)
   @Patch('enterprises/:id/status')
   updateStatus(
     @Param('id', ParseIntPipe) id: number,

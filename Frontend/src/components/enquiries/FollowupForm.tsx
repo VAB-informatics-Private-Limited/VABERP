@@ -9,7 +9,6 @@ const OUTCOME_OPTIONS = [
   { value: 'follow_up', label: 'Follow Up', color: 'cyan' },
   { value: 'not_available', label: 'Not Available', color: 'orange' },
   { value: 'not_interested', label: 'Not Interested', color: 'red' },
-  { value: 'sale_closed', label: 'Sale Closed', color: 'green' },
 ];
 
 interface FollowupFormProps {
@@ -34,7 +33,7 @@ export function FollowupForm({
 }: FollowupFormProps) {
   const [form] = Form.useForm();
   const [selectedOutcome, setSelectedOutcome] = useState<string>(
-    mode === 'complete' ? 'sale_closed' : mode === 'reschedule' ? 'follow_up' : ''
+    mode === 'complete' ? 'not_interested' : mode === 'reschedule' ? 'follow_up' : ''
   );
 
   // ---- Outcome-based workflow ----
@@ -42,7 +41,7 @@ export function FollowupForm({
     const needsNextDate = selectedOutcome === 'follow_up';
     const optionalNextDate = selectedOutcome === 'not_available';
     const showNextDate = needsNextDate || optionalNextDate;
-    const isClosed = selectedOutcome === 'sale_closed' || selectedOutcome === 'not_interested';
+    const isClosed = selectedOutcome === 'not_interested';
 
     const handleOutcomeFinish = (values: any) => {
       onOutcomeSubmit({
@@ -53,8 +52,7 @@ export function FollowupForm({
     };
 
     const submitLabel =
-      selectedOutcome === 'sale_closed' ? 'Close Sale & Convert'
-      : selectedOutcome === 'not_interested' ? 'Mark Not Interested'
+      selectedOutcome === 'not_interested' ? 'Mark Not Interested'
       : selectedOutcome === 'follow_up' ? 'Schedule Follow-up'
       : selectedOutcome === 'not_available' ? 'Save & Continue'
       : 'Submit';
@@ -75,8 +73,7 @@ export function FollowupForm({
             placeholder="What happened on the call?"
             onChange={(val) => {
               setSelectedOutcome(val);
-              // Clear next date when switching to a closed status
-              if (val === 'sale_closed' || val === 'not_interested') {
+              if (val === 'not_interested') {
                 form.setFieldValue('next_followup_date', undefined);
               }
             }}
@@ -88,15 +85,6 @@ export function FollowupForm({
             ))}
           </Select>
         </Form.Item>
-
-        {selectedOutcome === 'sale_closed' && (
-          <Alert
-            type="success"
-            showIcon
-            message="This will convert the lead into a customer and close all follow-ups."
-            className="mb-4"
-          />
-        )}
 
         {selectedOutcome === 'not_interested' && (
           <Alert
@@ -110,8 +98,7 @@ export function FollowupForm({
         <Form.Item name="remarks" label="Remarks">
           <Input.TextArea
             placeholder={
-              selectedOutcome === 'sale_closed' ? 'Sale notes (optional)'
-              : selectedOutcome === 'not_interested' ? 'Reason for not interested (optional)'
+              selectedOutcome === 'not_interested' ? 'Reason for not interested (optional)'
               : 'Call notes (optional)'
             }
             rows={4}
@@ -139,7 +126,6 @@ export function FollowupForm({
             htmlType="submit"
             loading={loading}
             danger={selectedOutcome === 'not_interested'}
-            className={selectedOutcome === 'sale_closed' ? 'bg-[#52c41a] hover:bg-[#73d13d] border-[#52c41a] hover:border-[#73d13d]' : ''}
           >
             {submitLabel}
           </Button>
@@ -169,7 +155,7 @@ export function FollowupForm({
 
   const getInitialValues = () => {
     if (mode === 'complete') {
-      return { followup_date: dayjs(), interest_status: 'sale_closed' };
+      return { followup_date: dayjs(), interest_status: 'not_interested' };
     }
     if (mode === 'reschedule') {
       return { followup_date: dayjs(), interest_status: 'follow_up' };

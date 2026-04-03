@@ -114,11 +114,19 @@ export class Quotation {
 
   /** Sales Order ID created when this quotation was accepted. */
   @Column({ name: 'sales_order_id', nullable: true, type: 'int' })
-  salesOrderId: number;
+  salesOrderId: number | null;
 
   /** Last employee who performed an update (null when created by enterprise owner) */
   @Column({ name: 'updated_by', nullable: true })
   updatedBy: number;
+
+  /** Timestamp when the linked Purchase Order was cancelled/deleted */
+  @Column({ name: 'po_cancelled_at', type: 'timestamptz', nullable: true, default: null })
+  poCancelledAt: Date | null;
+
+  /** PO number of the cancelled Purchase Order (stored for display after PO deletion) */
+  @Column({ name: 'cancelled_po_number', type: 'varchar', nullable: true, default: null })
+  cancelledPoNumber: string | null;
 
   @ManyToOne(() => Employee, { nullable: true })
   @JoinColumn({ name: 'updated_by' })

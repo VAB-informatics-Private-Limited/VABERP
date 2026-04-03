@@ -364,6 +364,13 @@ export class MaterialRequestsService {
     );
     if (allIssuedOrRejected) {
       await this.mrRepository.update(id, { status: 'fulfilled' });
+      // Sync the linked PO's materialApprovalStatus to 'approved' so the workflow advances
+      try {
+        const mr = await this.mrRepository.findOne({ where: { id } });
+        if (mr?.salesOrderId) {
+          await this.salesOrderRepository.update(mr.salesOrderId, { materialApprovalStatus: 'approved' });
+        }
+      } catch { /* non-blocking */ }
       // Auto-update any linked job cards that are still waiting for materials
       await this.updateLinkedJobCardsOnFulfill(id);
     } else {

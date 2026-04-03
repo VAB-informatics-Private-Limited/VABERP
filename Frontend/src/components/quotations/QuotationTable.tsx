@@ -104,7 +104,10 @@ export function QuotationTable({ data, loading, pagination }: QuotationTableProp
           >
             v{record.current_version}
           </Tag>
-          {record.sales_order_id && (
+          {record.po_cancelled_at && (
+            <Tag color="volcano" className="text-xs font-semibold">PO Cancelled</Tag>
+          )}
+          {!record.po_cancelled_at && record.sales_order_id && (
             <Tag color="green" icon={<CheckCircleOutlined />} className="text-xs font-semibold">
               In PO
             </Tag>
@@ -168,9 +171,12 @@ export function QuotationTable({ data, loading, pagination }: QuotationTableProp
       key: 'status',
       filters: QUOTATION_STATUS_OPTIONS.map((s) => ({ text: s.label, value: s.value })),
       onFilter: (value, record) => record.status === value,
-      render: (status) => (
-        <Tag color={getStatusColor(status)}>{getStatusLabel(status)}</Tag>
-      ),
+      render: (status, record) => {
+        if (record.po_cancelled_at) {
+          return <Tag color="volcano">PO Cancelled</Tag>;
+        }
+        return <Tag color={getStatusColor(status)}>{getStatusLabel(status)}</Tag>;
+      },
     },
     {
       title: 'Created By',

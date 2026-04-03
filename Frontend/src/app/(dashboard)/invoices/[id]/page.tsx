@@ -1,12 +1,12 @@
 'use client';
 
-import { Typography, Card, Descriptions, Tag, Button, Space, Modal, Form, InputNumber, Input, DatePicker, Table, message, Spin, Row, Col } from 'antd';
-import { ArrowLeftOutlined, DollarOutlined, PrinterOutlined } from '@ant-design/icons';
+import { Typography, Card, Descriptions, Tag, Button, Space, Modal, Form, InputNumber, Input, DatePicker, Table, message, Spin, Row, Col, Popconfirm } from 'antd';
+import { ArrowLeftOutlined, DollarOutlined, PrinterOutlined, EditOutlined, DeleteOutlined, StopOutlined } from '@ant-design/icons';
 import { useRouter, useParams } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import dayjs from 'dayjs';
-import { getInvoiceById, recordPayment, getCustomerBalance, getInvoiceList } from '@/lib/api/invoices';
+import { getInvoiceById, recordPayment, getCustomerBalance, getInvoiceList, deleteInvoice, updateInvoice } from '@/lib/api/invoices';
 import { INVOICE_STATUS_OPTIONS } from '@/types/invoice';
 import type { Invoice, Payment, PaymentFormData } from '@/types/invoice';
 import type { ColumnsType } from 'antd/es/table';
@@ -53,6 +53,25 @@ export default function InvoiceDetailPage() {
     queryKey: ['customerInvoices', invoice?.customer_name],
     queryFn: () => getInvoiceList({ search: invoice!.customer_name, pageSize: 200 }),
     enabled: !!invoice?.customer_name,
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: () => deleteInvoice(invoiceId),
+    onSuccess: () => {
+      message.success('Invoice deleted');
+      router.push('/invoices');
+    },
+    onError: () => message.error('Failed to delete invoice'),
+  });
+
+  const cancelMutation = useMutation({
+    mutationFn: () => updateInvoice(invoiceId, { status: 'cancelled' }),
+    onSuccess: () => {
+      message.success('Invoice cancelled');
+      queryClient.invalidateQueries({ queryKey: ['invoice', invoiceId] });
+      queryClient.invalidateQueries({ queryKey: ['invoices'] });
+    },
+    onError: () => message.error('Failed to cancel invoice'),
   });
 
   const paymentMutation = useMutation({
@@ -171,7 +190,32 @@ export default function InvoiceDetailPage() {
         </div>
         <Space>
           <Button icon={<PrinterOutlined />} onClick={() => window.print()}>Print</Button>
-          {invoice.status !== 'fully_paid' && invoice.status !== 'cancelled' && balanceDue > 0 && (
+          {Number(invoice.total_paid) === 0 && invoice.status !== 'cancelled' && (
+            <Button icon={<EditOutlined />} onClick={() => router.push(`/invoices/${invoiceId}/edit`)}>Edit</Button>
+          )}
+          {invoice.status !== 'cancelled' && ['unpaid', 'partially_paid'].includes(invoice.status) && (
+            <Popconfirm
+              title="Cancel this invoice?"
+              description="Status will be set to cancelled."
+              onConfirm={() => cancelMutation.mutate()}
+              okText="Cancel Invoice"
+              okButtonProps={{ danger: true }}
+            >
+              <Button icon={<StopOutlined />} danger loading={cancelMutation.isPending}>Cancel</Button>
+            </Popconfirm>
+          )}
+          {Number(invoice.total_paid) === 0 && (
+            <Popconfirm
+              title={`Delete ${invoice.invoice_number}?`}
+              description="This cannot be undone."
+              onConfirm={() => deleteMutation.mutate()}
+              okText="Delete"
+              okButtonProps={{ danger: true }}
+            >
+              <Button icon={<DeleteOutlined />} danger loading={deleteMutation.isPending}>Delete</Button>
+            </Popconfirm>
+          )}
+          {invoice.status !== 'cancelled' && balanceDue > 0 && (
             <Button type="primary" icon={<DollarOutlined />} onClick={() => {
               form.setFieldsValue({ payment_date: dayjs() });
               setPaymentModalOpen(true);
@@ -513,7 +557,7 @@ export default function InvoiceDetailPage() {
             />
           </Form.Item>
           <Form.Item name="payment_date" label="Payment Date">
-            <DatePicker className="w-full" format="DD-MM-YYYY" />
+            <DatePicker className="w-full" format="DD-MM-YYYY" disabled />
           </Form.Item>
           <Form.Item name="reference_number" label="Reference Number">
             <Input placeholder="Cheque No. / Transaction ID" />

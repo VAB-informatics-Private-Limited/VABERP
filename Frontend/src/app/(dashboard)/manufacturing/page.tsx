@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from 'react';
 import {
-  Typography, Button, Input, Space, Table, Tag, Badge, Tabs,
+  Typography, Button, Input, Space, Table, Tag, Tabs,
   Modal, Form, InputNumber, Progress, message, Card, Alert,
   Select, Spin, Statistic, Row, Col, DatePicker,
 } from 'antd';
@@ -490,7 +490,7 @@ export default function ManufacturingPage() {
         ].map((s, i) => (
           <Col xs={12} sm={6} key={i}>
             <Card size="small" className={`card-shadow cursor-pointer ${activeTab === s.key ? 'border-blue-500 border-2' : ''}`}
-              onClick={() => setActiveTab(activeTab === s.key ? 'all' : s.key)} bodyStyle={{ padding: '12px 8px' }}>
+              onClick={() => setActiveTab(activeTab === s.key ? 'all' : s.key)} styles={{ body: { padding: '12px 8px' } }}>
               <Statistic title={<span className="text-xs">{s.label}</span>} value={s.count} prefix={s.icon} valueStyle={{ color: s.color, fontSize: 22 }} />
             </Card>
           </Col>
@@ -554,74 +554,129 @@ export default function ManufacturingPage() {
         { key: 'done', label: <span><CheckCircleOutlined /> Done ({groupCounts.done})</span> },
       ]} />
 
-      {/* Orders List */}
+      {/* Orders Table */}
       <Card className="card-shadow">
-          <div className="flex justify-between items-center mb-3">
-            <Text type="secondary" className="text-xs">{filteredPOs.length} order(s)</Text>
-          </div>
-          {filteredPOs.length === 0 ? (
-            <div className="text-center py-16 text-gray-400">{searchText ? 'No matching orders.' : 'No orders in this category.'}</div>
-          ) : (
-            <div className="space-y-3">
-              {filteredPOs.map(po => {
-                const ws = WORKFLOW_STATUS_MAP[po.workflow_status];
-                const jcs = po.job_cards || [];
-                const completedJobs = jcs.filter(j => ['completed_production', 'ready_for_approval', 'approved_for_dispatch', 'dispatched'].includes(j.status)).length;
-                const pct = jcs.length > 0 ? Math.round((completedJobs / jcs.length) * 100) : 0;
-                const priority = PRIORITY_LABELS[po.manufacturing_priority || 0];
-
-                return (
-                  <div key={po.id} className={`border rounded-lg p-4 hover:shadow-md transition-shadow cursor-pointer ${
-                    po.workflow_status === 'on_hold' ? 'border-orange-300 bg-orange-50 border-2' :
-                    po.workflow_status === 'rejected' ? 'border-red-200 bg-red-50' :
-                    po.workflow_status === 'dispatched' ? 'border-green-200 bg-green-50' :
-                    po.workflow_status === 'approved_for_dispatch' ? 'border-purple-200 bg-purple-50' :
-                    po.workflow_status === 'ready_for_approval' ? 'border-yellow-200 bg-yellow-50' :
-                    'border-gray-200'
-                  }`} onClick={() => router.push(`/manufacturing/po/${po.id}`)}>
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="font-bold text-blue-600 text-base">{po.order_number}</span>
-                          <Tag color={ws.color}>{ws.label}</Tag>
-                          {(po.manufacturing_priority || 0) > 0 && <Tag color={priority.color}>{priority.label}</Tag>}
-                        </div>
-                        <div className="text-sm text-gray-600 mb-1">{po.customer_name}</div>
-                        <div className="text-xs text-gray-400">
-                          {po.order_date ? dayjs(po.order_date).format('DD MMM YYYY') : ''}
-                          {po.expected_delivery && <span> · Due: {dayjs(po.expected_delivery).format('DD MMM YYYY')}</span>}
-                          <span> · {fmt(po.grand_total)}</span>
-                        </div>
-                        {po.workflow_status === 'on_hold' && (
-                          <div className="mt-1 px-2 py-1 bg-orange-100 rounded text-sm text-orange-700">
-                            <PauseCircleOutlined className="mr-1" />
-                            <strong>ON HOLD</strong>
-                            {po.hold_reason && <span> — {po.hold_reason}</span>}
-                          </div>
-                        )}
-                        <div className="mt-1 text-sm text-gray-500">
-                          {po.items.slice(0, 3).map((item, i) => (
-                            <span key={i}>{i > 0 && ' · '}{item.item_name} x{item.quantity}</span>
-                          ))}
-                          {po.items.length > 3 && <span className="text-gray-400"> +{po.items.length - 3} more</span>}
-                        </div>
-                      </div>
-                      {jcs.length > 0 && (
-                        <div className="w-32 text-center">
-                          <div className="text-xs text-gray-400 mb-1">{completedJobs}/{jcs.length} jobs</div>
-                          <Progress percent={pct} size="small" showInfo={false}
-                            strokeColor={po.workflow_status === 'dispatched' ? '#52c41a' : pct === 100 ? '#52c41a' : '#1677ff'} />
-                          <div className="text-xs text-gray-400">{pct}%</div>
-                        </div>
-                      )}
-                      <div className="flex items-center" onClick={e => e.stopPropagation()}>{getNextAction(po)}</div>
+        <Table
+          dataSource={filteredPOs}
+          rowKey="id"
+          size="middle"
+          scroll={{ x: 900 }}
+          pagination={{ pageSize: 20, showSizeChanger: true, showTotal: (t) => `${t} order(s)` }}
+          onRow={(po) => ({ onClick: () => router.push(`/manufacturing/po/${po.id}`), style: { cursor: 'pointer' } })}
+          rowClassName={(po) =>
+            po.workflow_status === 'on_hold' ? 'bg-orange-50' :
+            po.workflow_status === 'rejected' ? 'bg-red-50' :
+            po.workflow_status === 'dispatched' ? 'bg-green-50' :
+            po.workflow_status === 'approved_for_dispatch' ? 'bg-purple-50' :
+            po.workflow_status === 'ready_for_approval' ? 'bg-yellow-50' : ''
+          }
+          columns={[
+            {
+              title: 'PO #',
+              key: 'order_number',
+              width: 140,
+              render: (_, po) => (
+                <div>
+                  <div className="font-semibold text-blue-600">{po.order_number}</div>
+                  {(po.manufacturing_priority || 0) > 0 && (
+                    <Tag color={PRIORITY_LABELS[po.manufacturing_priority || 0].color} className="mt-0.5 text-xs">
+                      {PRIORITY_LABELS[po.manufacturing_priority || 0].label}
+                    </Tag>
+                  )}
+                </div>
+              ),
+            },
+            {
+              title: 'Customer',
+              key: 'customer',
+              width: 160,
+              render: (_, po) => (
+                <div>
+                  <div className="font-medium text-gray-800">{po.customer_name}</div>
+                  <div className="text-xs text-gray-400 mt-0.5">
+                    {po.order_date ? dayjs(po.order_date).format('DD MMM YYYY') : '—'}
+                  </div>
+                </div>
+              ),
+            },
+            {
+              title: 'Products',
+              key: 'items',
+              render: (_, po) => (
+                <div className="text-sm text-gray-600">
+                  {po.items.slice(0, 2).map((item, i) => (
+                    <div key={i} className="truncate max-w-xs">
+                      {item.item_name} <span className="text-gray-400">×{item.quantity}</span>
                     </div>
+                  ))}
+                  {po.items.length > 2 && (
+                    <div className="text-xs text-gray-400">+{po.items.length - 2} more</div>
+                  )}
+                </div>
+              ),
+            },
+            {
+              title: 'Due Date',
+              key: 'due_date',
+              width: 110,
+              render: (_, po) => po.expected_delivery ? (
+                <span className={dayjs(po.expected_delivery).isBefore(dayjs()) && !['dispatched'].includes(po.workflow_status) ? 'text-red-500 font-medium' : 'text-gray-600'}>
+                  {dayjs(po.expected_delivery).format('DD MMM YYYY')}
+                </span>
+              ) : <span className="text-gray-300">—</span>,
+            },
+            {
+              title: 'Amount',
+              key: 'grand_total',
+              width: 110,
+              align: 'right' as const,
+              render: (_, po) => <span className="font-medium">{fmt(po.grand_total)}</span>,
+            },
+            {
+              title: 'Status',
+              key: 'status',
+              width: 160,
+              render: (_, po) => {
+                const ws = WORKFLOW_STATUS_MAP[po.workflow_status];
+                return (
+                  <div>
+                    <Tag color={ws.color}>{ws.label}</Tag>
+                    {po.workflow_status === 'on_hold' && po.hold_reason && (
+                      <div className="text-xs text-orange-600 mt-0.5 truncate max-w-36">{po.hold_reason}</div>
+                    )}
                   </div>
                 );
-              })}
-            </div>
-          )}
-        </Card>
+              },
+            },
+            {
+              title: 'Progress',
+              key: 'progress',
+              width: 110,
+              render: (_, po) => {
+                const jcs = po.job_cards || [];
+                if (jcs.length === 0) return <span className="text-gray-300 text-xs">—</span>;
+                const completedJobs = jcs.filter(j => ['completed_production', 'ready_for_approval', 'approved_for_dispatch', 'dispatched'].includes(j.status)).length;
+                const pct = Math.round((completedJobs / jcs.length) * 100);
+                return (
+                  <div>
+                    <Progress percent={pct} size="small" showInfo={false}
+                      strokeColor={pct === 100 ? '#52c41a' : '#1677ff'} />
+                    <div className="text-xs text-gray-400 text-center">{completedJobs}/{jcs.length} jobs</div>
+                  </div>
+                );
+              },
+            },
+            {
+              title: 'Action',
+              key: 'action',
+              width: 160,
+              render: (_, po) => (
+                <div onClick={e => e.stopPropagation()}>{getNextAction(po)}</div>
+              ),
+            },
+          ]}
+        />
+      </Card>
 
       {/* ═══════ MODALS ═══════ */}
 

@@ -43,6 +43,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     if (payload.type === 'employee') {
       user = await this.employeeRepository.findOne({
         where: { id: payload.sub, status: 'active' },
+        select: ['id', 'firstName', 'lastName', 'email', 'enterpriseId', 'status', 'isReportingHead', 'reportingTo'],
       });
     } else if (payload.type === 'enterprise') {
       user = await this.enterpriseRepository.findOne({
@@ -62,12 +63,24 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       throw new UnauthorizedException('User not found or inactive');
     }
 
-    return {
+    const base = {
       id: payload.sub,
       email: payload.email,
       type: payload.type,
       enterpriseId: payload.enterpriseId,
       name: payload.name,
     };
+
+    // For employees, attach reporting fields so services can scope data correctly
+    if (payload.type === 'employee') {
+      const emp = user as Employee;
+      return {
+        ...base,
+        isReportingHead: emp.isReportingHead ?? false,
+        reportingTo: emp.reportingTo ?? null,
+      };
+    }
+
+    return base;
   }
 }

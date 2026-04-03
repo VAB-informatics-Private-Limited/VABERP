@@ -72,6 +72,11 @@ export class CreateQuotationDto {
   @IsDateString()
   validUntil?: string;
 
+  @ApiPropertyOptional({ example: '2026-04-15' })
+  @IsOptional()
+  @IsDateString()
+  expectedDelivery?: string;
+
   @ApiProperty({ example: 'ABC Industries' })
   @IsString()
   customerName: string;

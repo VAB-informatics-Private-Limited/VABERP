@@ -144,7 +144,7 @@ export class ManufacturingService {
       data.map(async (jc) => {
         const stageProgress = await this.stageRepository.find({
           where: { jobCardId: jc.id },
-          order: { sortOrder: 'ASC' },
+          order: { sortOrder: 'ASC', id: 'ASC' },
         });
         return { ...jc, stageProgress };
       }),
@@ -186,7 +186,7 @@ export class ManufacturingService {
     let stageProgress = await this.stageRepository.find({
       where: { jobCardId: id },
       relations: ['assignedEmployee', 'completedByEmployee'],
-      order: { sortOrder: 'ASC' },
+      order: { sortOrder: 'ASC', id: 'ASC' },
     });
 
     // Auto-initialize stages if none exist (lazy migration for existing job cards)
@@ -543,6 +543,15 @@ export class ManufacturingService {
     const oldStatus = jobCard.status;
     await this.jobCardRepository.update(id, updateData);
 
+    // Eagerly initialize stages the moment production starts — eliminates race conditions
+    // where GET /stages runs concurrently with findOne's lazy initialization
+    if (status === 'in_process') {
+      const existingStagesCount = await this.stageRepository.count({ where: { jobCardId: id } });
+      if (existingStagesCount === 0) {
+        await this.initializeStagesForJobCard(jobCard);
+      }
+    }
+
     // Audit log
     await this.auditLogsService.log({
       enterpriseId,
@@ -831,7 +840,7 @@ export class ManufacturingService {
   private async initializeStagesForJobCard(jobCard: JobCard): Promise<ProcessStage[]> {
     const activeStageMasters = await this.stageMasterRepository.find({
       where: { enterpriseId: jobCard.enterpriseId, isActive: true },
-      order: { sortOrder: 'ASC' },
+      order: { sortOrder: 'ASC', id: 'ASC' },
     });
 
     if (activeStageMasters.length === 0) return [];
@@ -892,7 +901,7 @@ export class ManufacturingService {
     // Get all stages for this job card
     let stageProgress = await this.stageRepository.find({
       where: { jobCardId: jobId },
-      order: { sortOrder: 'ASC' },
+      order: { sortOrder: 'ASC', id: 'ASC' },
     });
 
     // Auto-initialize if no stages
@@ -1088,7 +1097,7 @@ export class ManufacturingService {
     const allStages = await this.stageRepository.find({
       where: jobCardIds.map(id => ({ jobCardId: id })),
       relations: ['completedByEmployee'],
-      order: { sortOrder: 'ASC' },
+      order: { sortOrder: 'ASC', id: 'ASC' },
     });
 
     const grouped: Record<number, typeof allStages> = {};
@@ -1232,11 +1241,24 @@ export class ManufacturingService {
       throw new NotFoundException('Job card not found');
     }
 
-    const stages = await this.stageRepository.find({
+    let stages = await this.stageRepository.find({
       where: { jobCardId },
       relations: ['assignedEmployee', 'completedByEmployee'],
-      order: { sortOrder: 'ASC' },
+      order: { sortOrder: 'ASC', id: 'ASC' },
     });
+
+    // Auto-initialize if no stages and job card is in production — fallback for race conditions
+    if (stages.length === 0 && jobCard.status === 'in_process') {
+      const initialized = await this.initializeStagesForJobCard(jobCard);
+      // Re-fetch with relations after initialization
+      if (initialized.length > 0) {
+        stages = await this.stageRepository.find({
+          where: { jobCardId },
+          relations: ['assignedEmployee', 'completedByEmployee'],
+          order: { sortOrder: 'ASC', id: 'ASC' },
+        });
+      }
+    }
 
     return {
       message: 'Stages fetched successfully',

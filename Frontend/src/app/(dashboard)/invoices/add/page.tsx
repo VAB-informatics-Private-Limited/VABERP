@@ -1,13 +1,15 @@
 'use client';
 
-import { Typography, Card, Form, Input, InputNumber, Select, DatePicker, Button, Row, Col, Table, Space, message } from 'antd';
-import { ArrowLeftOutlined, PlusOutlined, DeleteOutlined } from '@ant-design/icons';
-import { useRouter } from 'next/navigation';
+import { Typography, Card, Form, Input, InputNumber, Select, DatePicker, Button, Row, Col, Table, Space, message, Alert, Spin, Descriptions, Tag } from 'antd';
+import { ArrowLeftOutlined, PlusOutlined, DeleteOutlined, FileTextOutlined, ThunderboltOutlined } from '@ant-design/icons';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import dayjs from 'dayjs';
 import { createInvoice } from '@/lib/api/invoices';
+import { createInvoiceFromSO } from '@/lib/api/sales-orders';
 import { getCustomerList } from '@/lib/api/customers';
+import { getSalesOrderById } from '@/lib/api/sales-orders';
 import { useAuthStore } from '@/stores/authStore';
 
 const { Title } = Typography;
@@ -26,6 +28,9 @@ interface LineItem {
 
 export default function AddInvoicePage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const salesOrderId = searchParams.get('salesOrderId') ? Number(searchParams.get('salesOrderId')) : null;
+
   const [form] = Form.useForm();
   const { getEnterpriseId } = useAuthStore();
   const enterpriseId = getEnterpriseId();
@@ -36,8 +41,28 @@ export default function AddInvoicePage() {
   const { data: customersData } = useQuery({
     queryKey: ['customers-list'],
     queryFn: () => getCustomerList({ enterpriseId: enterpriseId!, pageSize: 500 }),
-    enabled: !!enterpriseId,
+    enabled: !!enterpriseId && !salesOrderId,
   });
+
+  // Fetch SO data when salesOrderId is in URL
+  const { data: soData, isLoading: soLoading } = useQuery({
+    queryKey: ['so-for-invoice', salesOrderId],
+    queryFn: () => getSalesOrderById(salesOrderId!),
+    enabled: !!salesOrderId,
+  });
+
+  const so = soData?.data;
+
+  // ── Standalone form handlers ──
+  useEffect(() => {
+    if (so) {
+      form.setFieldsValue({
+        customer_id: so.customer_id,
+        customer_name: so.customer_name,
+        billing_address: so.billing_address || '',
+      });
+    }
+  }, [so, form]);
 
   const createMutation = useMutation({
     mutationFn: (data: any) => createInvoice(data),
@@ -50,14 +75,33 @@ export default function AddInvoicePage() {
     },
   });
 
+  // ── SO quick-generate handler ──
+  const generateFromSOMutation = useMutation({
+    mutationFn: () =>
+      createInvoiceFromSO(salesOrderId!, {
+        amount: Number(so?.remaining_amount ?? so?.grand_total ?? 0),
+        invoiceDate: dayjs().format('YYYY-MM-DD'),
+      }),
+    onSuccess: (result: any) => {
+      message.success('Invoice generated successfully');
+      const id = result?.data?.id ?? result?.data?.invoice?.id;
+      if (id) {
+        router.push(`/invoices/${id}`);
+      } else {
+        router.push('/invoices');
+      }
+    },
+    onError: (error: any) => {
+      message.error(error?.response?.data?.message || 'Failed to generate invoice');
+    },
+  });
+
   const addItem = () => {
     setItems([...items, { key: Date.now().toString(), item_name: '', quantity: 1, unit_price: 0, tax_percent: 0, line_total: 0 }]);
   };
 
   const removeItem = (key: string) => {
-    if (items.length > 1) {
-      setItems(items.filter((i) => i.key !== key));
-    }
+    if (items.length > 1) setItems(items.filter((i) => i.key !== key));
   };
 
   const updateItem = (key: string, field: string, value: any) => {
@@ -71,11 +115,24 @@ export default function AddInvoicePage() {
     }));
   };
 
+  const discountType = Form.useWatch('discount_type', form);
+  const discountValue = Form.useWatch('discount_value', form) || 0;
+  const shippingCharges = Form.useWatch('shipping_charges', form) || 0;
+
   const subTotal = items.reduce((sum, item) => sum + item.quantity * item.unit_price, 0);
   const taxTotal = items.reduce((sum, item) => {
     const sub = item.quantity * item.unit_price;
     return sum + (sub * (item.tax_percent || 0)) / 100;
   }, 0);
+
+  const discountAmount =
+    discountType === 'percentage'
+      ? (subTotal * discountValue) / 100
+      : discountType === 'amount'
+      ? discountValue
+      : 0;
+
+  const grandTotal = subTotal - discountAmount + taxTotal + Number(shippingCharges);
 
   const handleSubmit = (values: any) => {
     const customer = customersData?.data?.find((c) => c.id === values.customer_id);
@@ -100,6 +157,102 @@ export default function AddInvoicePage() {
     });
   };
 
+  // ════════════════════════════════════════════════
+  // SALES ORDER MODE — quick generate, no manual form
+  // ════════════════════════════════════════════════
+  if (salesOrderId) {
+    if (soLoading) {
+      return <div className="flex justify-center items-center h-64"><Spin size="large" /></div>;
+    }
+
+    if (!so) {
+      return (
+        <div className="text-center py-8">
+          <Title level={4}>Sales Order not found</Title>
+          <Button onClick={() => router.push('/invoices')}>Back to Invoices</Button>
+        </div>
+      );
+    }
+
+    const remaining = Number(so.remaining_amount ?? 0);
+    const alreadyInvoiced = Number(so.invoiced_amount ?? 0);
+    const fullyInvoiced = remaining <= 0;
+
+    return (
+      <div>
+        <div className="flex items-center gap-4 mb-6">
+          <Button icon={<ArrowLeftOutlined />} onClick={() => router.push('/invoices')}>Back</Button>
+          <Title level={4} className="!mb-0">Generate Invoice</Title>
+        </div>
+
+        <Card className="card-shadow max-w-2xl">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
+              <FileTextOutlined className="text-blue-600 text-lg" />
+            </div>
+            <div>
+              <div className="font-semibold text-base">{so.order_number}</div>
+              <div className="text-gray-500 text-sm">{so.customer_name}</div>
+            </div>
+          </div>
+
+          <Descriptions bordered size="small" column={1} className="mb-6">
+            <Descriptions.Item label="PO Number">{so.order_number}</Descriptions.Item>
+            <Descriptions.Item label="Customer">{so.customer_name}</Descriptions.Item>
+            <Descriptions.Item label="PO Total">
+              <span className="font-semibold">₹{fmt(Number(so.grand_total))}</span>
+            </Descriptions.Item>
+            <Descriptions.Item label="Already Invoiced">
+              <span className={alreadyInvoiced > 0 ? 'text-blue-600 font-medium' : 'text-gray-400'}>
+                ₹{fmt(alreadyInvoiced)}
+              </span>
+            </Descriptions.Item>
+            <Descriptions.Item label="Amount to Invoice">
+              {fullyInvoiced ? (
+                <Tag color="green">Fully Invoiced</Tag>
+              ) : (
+                <span className="font-bold text-green-700 text-base">₹{fmt(remaining)}</span>
+              )}
+            </Descriptions.Item>
+          </Descriptions>
+
+          {fullyInvoiced ? (
+            <Alert
+              type="success"
+              message="This PO has been fully invoiced. No remaining amount to invoice."
+              showIcon
+              className="mb-4"
+            />
+          ) : (
+            <Alert
+              type="info"
+              message={`An invoice for ₹${fmt(remaining)} will be generated for ${so.customer_name}.`}
+              showIcon
+              className="mb-4"
+            />
+          )}
+
+          <div className="flex gap-3 justify-end">
+            <Button onClick={() => router.push('/invoices')}>Cancel</Button>
+            <Button
+              type="primary"
+              icon={<ThunderboltOutlined />}
+              loading={generateFromSOMutation.isPending}
+              disabled={fullyInvoiced}
+              onClick={() => generateFromSOMutation.mutate()}
+              size="large"
+            >
+              Generate Invoice
+            </Button>
+          </div>
+        </Card>
+      </div>
+    );
+  }
+
+  // ════════════════════════════════════════════════
+  // STANDALONE MODE — manual form
+  // ════════════════════════════════════════════════
   return (
     <div>
       <div className="flex items-center gap-4 mb-6">
@@ -107,12 +260,15 @@ export default function AddInvoicePage() {
         <Title level={4} className="!mb-0">Create Invoice</Title>
       </div>
 
-      <Form form={form} layout="vertical" onFinish={handleSubmit} initialValues={{ invoice_date: dayjs() }}>
+      <Form form={form} layout="vertical" onFinish={handleSubmit} initialValues={{ invoice_date: dayjs(), due_date: dayjs() }}>
         <Card title="Customer & Dates" className="card-shadow mb-4">
           <Row gutter={16}>
             <Col xs={24} md={8}>
               <Form.Item name="customer_id" label="Customer" rules={[{ required: true, message: 'Please select customer' }]}>
-                <Select showSearch placeholder="Select customer" optionFilterProp="children"
+                <Select
+                  showSearch
+                  placeholder="Select customer"
+                  optionFilterProp="children"
                   onChange={(val) => {
                     const customer = customersData?.data?.find((c) => c.id === val);
                     if (customer) {
@@ -131,12 +287,12 @@ export default function AddInvoicePage() {
             </Col>
             <Col xs={24} md={8}>
               <Form.Item name="invoice_date" label="Invoice Date">
-                <DatePicker className="w-full" format="DD-MM-YYYY" />
+                <DatePicker className="w-full" format="DD-MM-YYYY" disabled />
               </Form.Item>
             </Col>
             <Col xs={24} md={8}>
               <Form.Item name="due_date" label="Due Date">
-                <DatePicker className="w-full" format="DD-MM-YYYY" />
+                <DatePicker className="w-full" format="DD-MM-YYYY" disabledDate={(d) => d.isBefore(dayjs(), 'day')} />
               </Form.Item>
             </Col>
           </Row>
@@ -155,30 +311,34 @@ export default function AddInvoicePage() {
             columns={[
               {
                 title: 'Item Name', dataIndex: 'item_name', key: 'item_name',
-                render: (_, record) => <Input value={record.item_name} onChange={(e) => updateItem(record.key, 'item_name', e.target.value)} placeholder="Item name" />,
+                render: (_, record) => (
+                  <Input value={record.item_name} onChange={(e) => updateItem(record.key, 'item_name', e.target.value)} placeholder="Item name" />
+                ),
               },
               {
                 title: 'Qty', dataIndex: 'quantity', key: 'quantity', width: 80,
-                render: (_, record) => <InputNumber min={1} value={record.quantity} onChange={(v) => updateItem(record.key, 'quantity', v || 1)} />,
+                render: (_, record) => (
+                  <InputNumber min={1} value={record.quantity} onChange={(v) => updateItem(record.key, 'quantity', v || 1)} />
+                ),
               },
               {
                 title: 'Unit Price', dataIndex: 'unit_price', key: 'unit_price', width: 140,
                 render: (_, record) => (
                   <InputNumber
-                    min={0}
-                    precision={2}
-                    value={record.unit_price}
+                    min={0} precision={2} value={record.unit_price}
                     onChange={(v) => updateItem(record.key, 'unit_price', v || 0)}
                     formatter={(value) => value ? `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',') : ''}
                     // @ts-ignore
-                  parser={(value) => Number((value || '').replace(/,/g, ''))}
+                    parser={(value) => Number((value || '').replace(/,/g, ''))}
                     style={{ width: '100%' }}
                   />
                 ),
               },
               {
                 title: 'Tax %', dataIndex: 'tax_percent', key: 'tax_percent', width: 80,
-                render: (_, record) => <InputNumber min={0} max={100} value={record.tax_percent} onChange={(v) => updateItem(record.key, 'tax_percent', v || 0)} />,
+                render: (_, record) => (
+                  <InputNumber min={0} max={100} value={record.tax_percent} onChange={(v) => updateItem(record.key, 'tax_percent', v || 0)} />
+                ),
               },
               {
                 title: 'Tax Amt', key: 'tax_amount', width: 110, align: 'right' as const,
@@ -193,14 +353,44 @@ export default function AddInvoicePage() {
               },
               {
                 title: '', key: 'actions', width: 50,
-                render: (_, record) => <Button type="text" danger icon={<DeleteOutlined />} onClick={() => removeItem(record.key)} />,
+                render: (_, record) => (
+                  <Button type="text" danger icon={<DeleteOutlined />} onClick={() => removeItem(record.key)} />
+                ),
               },
             ]}
           />
-          <div className="mt-4 text-right space-y-1">
-            <div className="text-gray-600">Sub Total: <span className="font-medium text-black">₹{fmt(subTotal)}</span></div>
-            <div className="text-gray-600">Tax: <span className="font-medium text-black">₹{fmt(taxTotal)}</span></div>
-            <div className="text-lg font-bold border-t pt-2 mt-2">Grand Total: ₹{fmt(subTotal + taxTotal)}</div>
+
+          <div className="mt-4 flex justify-end">
+            <table className="text-sm" style={{ minWidth: 260 }}>
+              <tbody>
+                <tr>
+                  <td className="pr-8 py-1 text-gray-500 text-right">Sub Total</td>
+                  <td className="text-right font-medium">₹{fmt(subTotal)}</td>
+                </tr>
+                {discountAmount > 0 && (
+                  <tr>
+                    <td className="pr-8 py-1 text-gray-500 text-right">
+                      Discount {discountType === 'percentage' ? `(${discountValue}%)` : ''}
+                    </td>
+                    <td className="text-right text-red-500">−₹{fmt(discountAmount)}</td>
+                  </tr>
+                )}
+                <tr>
+                  <td className="pr-8 py-1 text-gray-500 text-right">Tax</td>
+                  <td className="text-right">₹{fmt(taxTotal)}</td>
+                </tr>
+                {Number(shippingCharges) > 0 && (
+                  <tr>
+                    <td className="pr-8 py-1 text-gray-500 text-right">Shipping</td>
+                    <td className="text-right">₹{fmt(Number(shippingCharges))}</td>
+                  </tr>
+                )}
+                <tr className="border-t">
+                  <td className="pr-8 pt-2 text-right font-bold text-base">Grand Total</td>
+                  <td className="pt-2 text-right font-bold text-base text-blue-700">₹{fmt(grandTotal)}</td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </Card>
 
@@ -210,16 +400,14 @@ export default function AddInvoicePage() {
               <Form.Item name="discount_type" label="Discount Type">
                 <Select placeholder="Select" allowClear>
                   <Select.Option value="percentage">Percentage</Select.Option>
-                  <Select.Option value="amount">Amount</Select.Option>
+                  <Select.Option value="amount">Fixed Amount</Select.Option>
                 </Select>
               </Form.Item>
             </Col>
             <Col xs={24} md={8}>
               <Form.Item name="discount_value" label="Discount Value">
                 <InputNumber
-                  min={0}
-                  className="w-full"
-                  precision={2}
+                  min={0} className="w-full" precision={2}
                   formatter={(value) => value ? `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',') : ''}
                   // @ts-ignore
                   parser={(value) => Number((value || '').replace(/,/g, ''))}
@@ -229,10 +417,7 @@ export default function AddInvoicePage() {
             <Col xs={24} md={8}>
               <Form.Item name="shipping_charges" label="Shipping Charges">
                 <InputNumber
-                  min={0}
-                  className="w-full"
-                  precision={2}
-                  prefix="₹"
+                  min={0} className="w-full" precision={2} prefix="₹"
                   formatter={(value) => value ? `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',') : ''}
                   // @ts-ignore
                   parser={(value) => Number((value || '').replace(/,/g, ''))}

@@ -17,6 +17,7 @@ import { QuotationsModule } from './modules/quotations/quotations.module';
 import { ManufacturingModule } from './modules/manufacturing/manufacturing.module';
 import { ReportsModule } from './modules/reports/reports.module';
 import { EmailModule } from './modules/email/email.module';
+import { SmsModule } from './modules/sms/sms.module';
 import { InterestStatusesModule } from './modules/interest-statuses/interest-statuses.module';
 import { EmailTemplatesModule } from './modules/email-templates/email-templates.module';
 import { SourcesModule } from './modules/sources/sources.module';
@@ -37,6 +38,9 @@ import { LocationsModule } from './modules/locations/locations.module';
 import { ServicesMasterModule } from './modules/services-master/services-master.module';
 import { CouponsModule } from './modules/coupons/coupons.module';
 import { ResellersModule } from './modules/resellers/resellers.module';
+import { CrmModule } from './modules/crm/crm.module';
+import { TasksModule } from './modules/tasks/tasks.module';
+import { TeamUpdatesModule } from './modules/team-updates/team-updates.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import databaseConfig from './config/database.config';
 import jwtConfig from './config/jwt.config';
@@ -90,6 +94,7 @@ import jwtConfig from './config/jwt.config';
     ManufacturingModule,
     ReportsModule,
     EmailModule,
+    SmsModule,
     InterestStatusesModule,
     EmailTemplatesModule,
     SourcesModule,
@@ -110,6 +115,9 @@ import jwtConfig from './config/jwt.config';
     ServicesMasterModule,
     CouponsModule,
     ResellersModule,
+    CrmModule,
+    TasksModule,
+    TeamUpdatesModule,
     ScheduleModule.forRoot(),
   ],
   providers: [

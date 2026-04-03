@@ -88,6 +88,7 @@ export async function getInvoiceList(params: InvoiceListParams): Promise<Paginat
   if (params.search) queryParams.search = params.search;
   if (params.status) queryParams.status = params.status;
   if (params.customerId) queryParams.customerId = params.customerId;
+  if (params.salesOrderId) queryParams.salesOrderId = params.salesOrderId;
   if (params.startDate) queryParams.fromDate = params.startDate;
   if (params.endDate) queryParams.toDate = params.endDate;
 

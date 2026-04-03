@@ -6,6 +6,9 @@ import { Employee } from './entities/employee.entity';
 import { Department } from './entities/department.entity';
 import { Designation } from './entities/designation.entity';
 import { MenuPermission } from './entities/menu-permission.entity';
+import { ReportingManager } from './entities/reporting-manager.entity';
+import { Task } from '../tasks/entities/task.entity';
+import { JobCard } from '../manufacturing/entities/job-card.entity';
 import { buildEmptyPermissions } from '../../common/constants/permissions';
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
 
@@ -20,8 +23,50 @@ export class EmployeesService {
     private designationRepository: Repository<Designation>,
     @InjectRepository(MenuPermission)
     private permissionRepository: Repository<MenuPermission>,
+    @InjectRepository(ReportingManager)
+    private reportingManagerRepository: Repository<ReportingManager>,
+    @InjectRepository(Task)
+    private taskRepository: Repository<Task>,
+    @InjectRepository(JobCard)
+    private jobCardRepository: Repository<JobCard>,
     private auditLogsService: AuditLogsService,
   ) {}
+
+  // ============ Reporting Managers ============
+
+  async getReportingManagers(enterpriseId: number) {
+    const data = await this.reportingManagerRepository.find({
+      where: { enterpriseId },
+      order: { name: 'ASC' },
+    });
+    return { message: 'Reporting managers fetched successfully', data, totalRecords: data.length };
+  }
+
+  async createReportingManager(enterpriseId: number, body: any) {
+    const manager = this.reportingManagerRepository.create({
+      enterpriseId,
+      name: body.name,
+      status: body.status || 'active',
+    });
+    const saved = await this.reportingManagerRepository.save(manager);
+    return { message: 'Reporting manager created successfully', data: saved };
+  }
+
+  async updateReportingManager(id: number, enterpriseId: number, body: any) {
+    const manager = await this.reportingManagerRepository.findOne({ where: { id, enterpriseId } });
+    if (!manager) throw new NotFoundException('Reporting manager not found');
+    if (body.name !== undefined) manager.name = body.name;
+    if (body.status !== undefined) manager.status = body.status;
+    const saved = await this.reportingManagerRepository.save(manager);
+    return { message: 'Reporting manager updated successfully', data: saved };
+  }
+
+  async deleteReportingManager(id: number, enterpriseId: number) {
+    const manager = await this.reportingManagerRepository.findOne({ where: { id, enterpriseId } });
+    if (!manager) throw new NotFoundException('Reporting manager not found');
+    await this.reportingManagerRepository.delete(id);
+    return { message: 'Reporting manager deleted successfully', data: null };
+  }
 
   // ============ Departments ============
 
@@ -271,6 +316,48 @@ export class EmployeesService {
 
   // ============ Employees ============
 
+  async getReporters(enterpriseId: number) {
+    const data = await this.employeeRepository.find({
+      where: { enterpriseId, isReportingHead: true },
+      relations: ['department', 'designation'],
+      order: { firstName: 'ASC' },
+    });
+    return { message: 'Reporters fetched successfully', data };
+  }
+
+  async setReportingHead(id: number, enterpriseId: number, value: boolean) {
+    const employee = await this.employeeRepository.findOne({ where: { id, enterpriseId } });
+    if (!employee) throw new NotFoundException('Employee not found');
+    await this.employeeRepository.update({ id, enterpriseId }, { isReportingHead: value });
+    return { message: 'Updated successfully', data: null };
+  }
+
+  async findSalesEmployees(enterpriseId: number) {
+    const data = await this.employeeRepository
+      .createQueryBuilder('employee')
+      .leftJoinAndSelect('employee.department', 'department')
+      .leftJoinAndSelect('employee.designation', 'designation')
+      .innerJoin('menu_permissions', 'mp', 'mp.employee_id = employee.id')
+      .where('employee.enterpriseId = :enterpriseId', { enterpriseId })
+      .andWhere(`employee.status = 'active'`)
+      .andWhere(
+        `EXISTS (
+          SELECT 1
+          FROM jsonb_each(mp.permissions->'sales') AS sub(key, perms),
+               jsonb_each(perms) AS perm(action, val)
+          WHERE val::text = '1'
+        )`,
+      )
+      .orderBy('employee.firstName', 'ASC')
+      .getMany();
+
+    return {
+      message: 'Sales employees fetched successfully',
+      data,
+      totalRecords: data.length,
+    };
+  }
+
   async findAll(enterpriseId: number, page = 1, limit = 20, search?: string) {
     const pageNum = Number(page) || 1;
     const limitNum = Number(limit) || 20;
@@ -377,7 +464,41 @@ export class EmployeesService {
       updateDto.password = await bcrypt.hash(updateDto.password, 10);
     }
 
-    await this.employeeRepository.update(id, updateDto);
+    // Strip relation/unknown fields before TypeORM update to avoid EntityPropertyNotFoundError
+    const { reportingTo, reportingManagerId, manager, ...restDto } = updateDto;
+    await this.employeeRepository.update(id, restDto);
+
+    // Use raw SQL to update reporting_to — avoids TypeORM confusion from @Column + @ManyToOne on same column
+    if ('reportingTo' in updateDto) {
+      const newValue = reportingTo != null ? Number(reportingTo) : null;
+      await this.employeeRepository.query(
+        `UPDATE employees SET reporting_to = $1 WHERE id = $2 AND enterprise_id = $3`,
+        [newValue, id, enterpriseId],
+      );
+    }
+
+    // If reportingTo changed:
+    // 1. Auto-mark the new manager as a reporting head (so they see "My Team" in sidebar)
+    // 2. Propagate this employee's permissions to the new manager
+    if (
+      updateDto.reportingTo != null &&
+      updateDto.reportingTo !== employee.reportingTo
+    ) {
+      await this.employeeRepository.update(
+        { id: updateDto.reportingTo, enterpriseId },
+        { isReportingHead: true },
+      );
+      const empRecord = await this.permissionRepository.findOne({ where: { employeeId: id } });
+      if (empRecord) {
+        const managerRecord = await this.permissionRepository.findOne({
+          where: { employeeId: updateDto.reportingTo },
+        });
+        if (managerRecord) {
+          managerRecord.permissions = this.mergePermissions(managerRecord.permissions, empRecord.permissions);
+          await this.permissionRepository.save(managerRecord);
+        }
+      }
+    }
 
     this.auditLogsService.log({
       enterpriseId,
@@ -455,6 +576,23 @@ export class EmployeesService {
 
     const saved = await this.permissionRepository.save(record);
 
+    // Auto-propagate: merge employee's permissions into their manager (additive only)
+    if (employee.reportingTo) {
+      const manager = await this.employeeRepository.findOne({
+        where: { id: employee.reportingTo, enterpriseId },
+      });
+      if (manager) {
+        let managerRecord = await this.permissionRepository.findOne({
+          where: { employeeId: manager.id },
+        });
+        if (managerRecord) {
+          const merged = this.mergePermissions(managerRecord.permissions, permissions);
+          managerRecord.permissions = merged;
+          await this.permissionRepository.save(managerRecord);
+        }
+      }
+    }
+
     return {
       message: 'Permissions updated successfully',
       data: {
@@ -486,5 +624,101 @@ export class EmployeesService {
         ownDataOnly: record?.ownDataOnly ?? false,
       },
     };
+  }
+
+  async getTeamOverview(managerId: number, enterpriseId: number) {
+    const reports = await this.employeeRepository.find({
+      where: { reportingTo: managerId, enterpriseId },
+      relations: ['department', 'designation'],
+    });
+
+    const result = await Promise.all(
+      reports.map(async (emp) => {
+        const permRecord = await this.permissionRepository.findOne({
+          where: { employeeId: emp.id },
+        });
+        const perms: Record<string, any> = permRecord?.permissions || {};
+        const accessModules = Object.entries(perms)
+          .filter(([, submodules]) =>
+            Object.values(submodules as Record<string, any>).some((actions) =>
+              Object.values(actions as Record<string, number>).some((v) => v === 1),
+            ),
+          )
+          .map(([module]) => module);
+
+        // Active tasks for this employee
+        const allTasks = await this.taskRepository.find({
+          where: { assignedTo: emp.id, enterpriseId },
+          order: { createdDate: 'DESC' },
+          take: 10,
+        });
+        const activeTasks = allTasks
+          .filter((t) => t.status !== 'completed' && t.status !== 'cancelled')
+          .slice(0, 5)
+          .map((t) => ({
+            id: t.id,
+            taskNumber: t.taskNumber,
+            title: t.title,
+            status: t.status,
+            priority: t.priority,
+            dueDate: t.dueDate,
+          }));
+
+        // Active job cards for this employee
+        const allJobCards = await this.jobCardRepository.find({
+          where: { assignedTo: emp.id, enterpriseId },
+          order: { createdDate: 'DESC' },
+          take: 10,
+        });
+        const activeJobCards = allJobCards
+          .filter((j) => j.status !== 'dispatched')
+          .slice(0, 5)
+          .map((j) => ({
+            id: j.id,
+            jobNumber: j.jobNumber,
+            jobName: j.jobName,
+            status: j.status,
+          }));
+
+        return {
+          id: emp.id,
+          firstName: emp.firstName,
+          lastName: emp.lastName,
+          email: emp.email,
+          status: emp.status,
+          designation: (emp as any).designation?.name ?? null,
+          department: (emp as any).department?.name ?? null,
+          accessModules,
+          activeTasks,
+          activeJobCards,
+          activeTaskCount: activeTasks.length,
+          activeJobCardCount: activeJobCards.length,
+        };
+      }),
+    );
+
+    return { message: 'Team overview fetched successfully', data: result };
+  }
+
+  // Merge employee permissions into manager permissions — additive only (never revoke).
+  private mergePermissions(
+    base: Record<string, any>,
+    additional: Record<string, any>,
+  ): Record<string, any> {
+    const result: Record<string, any> = JSON.parse(JSON.stringify(base || {}));
+    for (const module of Object.keys(additional || {})) {
+      if (!result[module]) result[module] = {};
+      for (const submodule of Object.keys(additional[module] || {})) {
+        if (!result[module][submodule]) result[module][submodule] = {};
+        for (const action of Object.keys(additional[module][submodule] || {})) {
+          if (additional[module][submodule][action] === 1) {
+            result[module][submodule][action] = 1;
+          } else if (result[module][submodule][action] === undefined) {
+            result[module][submodule][action] = 0;
+          }
+        }
+      }
+    }
+    return result;
   }
 }

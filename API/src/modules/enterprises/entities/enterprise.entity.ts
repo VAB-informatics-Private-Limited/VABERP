@@ -78,6 +78,9 @@ export class Enterprise {
   @Column({ name: 'is_locked', default: false })
   isLocked: boolean;
 
+  @Column({ name: 'task_visibility_unrestricted', default: false })
+  taskVisibilityUnrestricted: boolean;
+
   @CreateDateColumn({ name: 'created_date' })
   createdDate: Date;
 

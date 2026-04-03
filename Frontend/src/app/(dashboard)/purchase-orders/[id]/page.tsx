@@ -57,6 +57,7 @@ export default function PurchaseOrderDetailPage() {
   // Add Invoice form modal
   const [addInvoiceOpen, setAddInvoiceOpen] = useState(false);
   const [addInvoiceForm] = Form.useForm();
+  const [addInvoicePaymentMethod, setAddInvoicePaymentMethod] = useState<string | undefined>();
 
   // ETA modal state
   const [etaModalOpen, setEtaModalOpen] = useState(false);
@@ -82,9 +83,8 @@ export default function PurchaseOrderDetailPage() {
   // ── Fetch invoices for this PO ────────────────────────────────────────────
   const { data: invoicesData, isLoading: invLoading } = useQuery({
     queryKey: ['po-invoices', poId],
-    queryFn: () => getInvoiceList({ page: 1, pageSize: 100 }),
+    queryFn: () => getInvoiceList({ page: 1, pageSize: 100, salesOrderId: poId }),
     enabled: !!poId,
-    select: (d) => ({ ...d, data: d.data.filter((inv) => inv.sales_order_id === poId) }),
   });
 
   // ── Fetch selected invoice detail (for drawer) ────────────────────────────
@@ -132,21 +132,21 @@ export default function PurchaseOrderDetailPage() {
       message.error(err?.response?.data?.message || 'Failed to perform dispatch action'),
   });
 
-  // ── Add Invoice ──────────────────────────────────────────────────────────
+  // ── Add Invoice / Record Payment ─────────────────────────────────────────
   const invoiceMutation = useMutation({
-    mutationFn: (data: { amount: number; invoiceDate?: string; notes?: string }) =>
+    mutationFn: (data: { amount: number; invoiceDate?: string; paymentMethod?: string; notes?: string }) =>
       createInvoiceFromSO(poId, data),
-    onSuccess: (res: any) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['po-invoices', poId] });
       queryClient.invalidateQueries({ queryKey: ['purchase-order', poId] });
-      const invId = res?.data?.id;
-      if (invId) setDrawerInvoiceId(invId);
+      queryClient.invalidateQueries({ queryKey: ['invoices'] });
       setAddInvoiceOpen(false);
       addInvoiceForm.resetFields();
-      message.success('Invoice added successfully');
+      setAddInvoicePaymentMethod(undefined);
+      message.success('Payment recorded successfully');
     },
     onError: (err: any) =>
-      message.error(err?.response?.data?.message || 'Failed to add invoice'),
+      message.error(err?.response?.data?.message || 'Failed to record payment'),
   });
 
   // ── Hold / Resume ─────────────────────────────────────────────────────────
@@ -246,7 +246,7 @@ export default function PurchaseOrderDetailPage() {
   });
 
   const po = poData?.data;
-  const linkedInvoices = invoicesData?.data || [];
+  const linkedInvoices = (invoicesData?.data || []).filter((inv) => inv.sales_order_id === poId);
   const invoice = invoiceDetail?.data;
 
   // Dispatch-ready computed values
@@ -263,8 +263,11 @@ export default function PurchaseOrderDetailPage() {
   // "Remaining"      = PO Total − Total Invoiced
   const poTotal = Number(po?.grand_total || 0);
   const totalInvoiced = linkedInvoices.reduce((s, i) => s + Number(i.grand_total || 0), 0);
+  const totalPaidOnInvoices = linkedInvoices.reduce((s, i) => s + Number(i.total_paid || 0), 0);
+  const totalBalanceDue = linkedInvoices.reduce((s, i) => s + Number(i.balance_due || 0), 0);
   const remainingBalance = poTotal - totalInvoiced;
   const invoicedPercent = poTotal > 0 ? Math.min(100, Math.round((totalInvoiced / poTotal) * 100)) : 0;
+  const paidPercent = totalInvoiced > 0 ? Math.min(100, Math.round((totalPaidOnInvoices / totalInvoiced) * 100)) : 0;
 
   // Running balance per row: sort invoices by id (chronological), compute
   // cumulative invoiced amount and the PO remaining after each entry.
@@ -300,6 +303,7 @@ export default function PurchaseOrderDetailPage() {
   const handleCreateInvoiceClick = () => {
     addInvoiceForm.resetFields();
     addInvoiceForm.setFieldsValue({ invoice_date: dayjs() });
+    setAddInvoicePaymentMethod(undefined);
     setAddInvoiceOpen(true);
   };
 
@@ -307,6 +311,7 @@ export default function PurchaseOrderDetailPage() {
     invoiceMutation.mutate({
       amount: values.amount,
       invoiceDate: values.invoice_date?.format('YYYY-MM-DD'),
+      paymentMethod: values.payment_method,
       notes: values.notes,
     });
   };
@@ -440,27 +445,27 @@ export default function PurchaseOrderDetailPage() {
       render: (v) => <span className="font-semibold text-gray-800">{fmt(v)}</span>,
     },
     {
-      title: 'PO Remaining After',
-      key: 'running_remaining',
-      render: (_, record: InvoiceWithRunning) => (
-        <span
-          className={`font-semibold ${
-            record._running_remaining > 0 ? 'text-orange-500' : 'text-green-600'
-          }`}
-        >
-          {fmt(record._running_remaining)}
+      title: 'Paid',
+      dataIndex: 'total_paid',
+      key: 'total_paid',
+      render: (v) => <span className="text-green-600 font-semibold">{fmt(v || 0)}</span>,
+    },
+    {
+      title: 'Balance Due',
+      dataIndex: 'balance_due',
+      key: 'balance_due',
+      render: (v) => (
+        <span className={`font-semibold ${Number(v) > 0.005 ? 'text-red-500' : 'text-green-600'}`}>
+          {fmt(v || 0)}
         </span>
       ),
     },
     {
       title: 'Status',
       key: 'status',
-      render: (_: any, record: InvoiceWithRunning) =>
-        record._running_remaining <= 0.005 ? (
-          <Tag color="green">Fully Paid</Tag>
-        ) : (
-          <Tag color="orange">Partial Payment</Tag>
-        ),
+      render: (_: any, record: InvoiceWithRunning) => (
+        <Tag color={getInvStatusColor(record.status)}>{getInvStatusLabel(record.status)}</Tag>
+      ),
     },
     {
       title: 'Actions',
@@ -763,11 +768,11 @@ export default function PurchaseOrderDetailPage() {
             <Tooltip title={remainingBalance <= 0 ? 'This purchase order has been fully paid' : ''}>
               <Button
                 type="primary"
-                icon={<PlusOutlined />}
+                icon={<DollarOutlined />}
                 disabled={remainingBalance <= 0}
                 onClick={handleCreateInvoiceClick}
               >
-                {remainingBalance <= 0 ? 'Fully Paid' : 'Add Invoice'}
+                {remainingBalance <= 0 ? 'Fully Paid' : 'Record Payment'}
               </Button>
             </Tooltip>
           )}
@@ -1097,21 +1102,28 @@ export default function PurchaseOrderDetailPage() {
                 <Text type="secondary">Total Invoiced</Text>
                 <span className="text-orange-500 font-semibold">{fmt(totalInvoiced)}</span>
               </div>
+              <div className="flex justify-between text-sm">
+                <Text type="secondary">Total Paid</Text>
+                <span className="text-green-600 font-semibold">{fmt(totalPaidOnInvoices)}</span>
+              </div>
               <Divider className="my-2" />
               <div className="flex justify-between font-bold">
-                <span>Remaining</span>
-                <span className={remainingBalance > 0 ? 'text-red-600' : 'text-green-600'}>
-                  {fmt(remainingBalance)}
+                <span>Balance Due</span>
+                <span className={totalBalanceDue > 0.005 ? 'text-red-600' : 'text-green-600'}>
+                  {fmt(totalBalanceDue)}
                 </span>
               </div>
+              {remainingBalance > 0.005 && (
+                <div className="flex justify-between text-sm">
+                  <Text type="secondary">Uninvoiced</Text>
+                  <span className="text-gray-500">{fmt(remainingBalance)}</span>
+                </div>
+              )}
               <Progress
-                percent={invoicedPercent}
-                strokeColor={remainingBalance <= 0 ? '#52c41a' : '#fa8c16'}
-                format={() => `${invoicedPercent}%`}
+                percent={paidPercent}
+                strokeColor={totalBalanceDue <= 0.005 ? '#52c41a' : '#1677ff'}
+                format={() => `${paidPercent}% paid`}
               />
-              <div className="text-xs text-gray-400 text-center">
-                {invoicedPercent}% of PO invoiced
-              </div>
             </div>
           </Card>
         </Col>
@@ -1133,10 +1145,10 @@ export default function PurchaseOrderDetailPage() {
               <Button
                 type="primary"
                 size="small"
-                icon={<PlusOutlined />}
+                icon={<DollarOutlined />}
                 onClick={handleCreateInvoiceClick}
               >
-                Add Invoice
+                Record Payment
               </Button>
             )}
           </div>
@@ -1452,16 +1464,8 @@ export default function PurchaseOrderDetailPage() {
               prefix="₹"
               precision={2}
               min={0.01}
-              max={invoice ? Number(invoice.balance_due) : undefined}
               placeholder={`Max: ${fmt(Number(invoice?.balance_due || 0))}`}
-              formatter={(value) => {
-                if (!value && value !== 0) return '';
-                const num = `${value}`.replace(/,/g, '');
-                const [intStr, decStr] = num.split('.');
-                const formatted = parseInt(intStr || '0', 10).toLocaleString('en-IN');
-                return decStr !== undefined ? `${formatted}.${decStr}` : formatted;
-              }}
-              parser={(value) => value!.replace(/,/g, '') as unknown as number}
+              parser={(value) => Number(value!.replace(/,/g, '')) as unknown as number}
             />
           </Form.Item>
           <Form.Item name="payment_date" label="Payment Date">
@@ -1484,21 +1488,21 @@ export default function PurchaseOrderDetailPage() {
         </Form>
       </Modal>
 
-      {/* ── Add Invoice Form Modal ────────────────────────────────────────── */}
+      {/* ── Record Payment Modal ─────────────────────────────────────────── */}
       <Modal
         title={
           <div className="flex items-center gap-2">
-            <FileDoneOutlined className="text-blue-500" />
-            <span>Add Invoice</span>
+            <DollarOutlined className="text-blue-500" />
+            <span>Record Payment</span>
           </div>
         }
         open={addInvoiceOpen}
-        onCancel={() => { setAddInvoiceOpen(false); addInvoiceForm.resetFields(); }}
+        onCancel={() => { setAddInvoiceOpen(false); addInvoiceForm.resetFields(); setAddInvoicePaymentMethod(undefined); }}
         footer={null}
         maskClosable={false}
         width={480}
       >
-        {/* PO balance reference — read-only, never modified */}
+        {/* PO balance reference — read-only */}
         <div className="mb-5">
           <div className="text-xs text-gray-400 uppercase font-semibold mb-2 tracking-wide">
             Balance Reference ({po?.order_number} · {po?.customer_name})
@@ -1510,17 +1514,14 @@ export default function PurchaseOrderDetailPage() {
             </div>
             {totalInvoiced > 0 && (
               <div className="flex justify-between items-center px-3 py-2 bg-orange-50 border-b">
-                <span className="text-gray-600">Already Invoiced</span>
+                <span className="text-gray-600">Already Paid</span>
                 <span className="font-semibold text-orange-500">− {fmt(totalInvoiced)}</span>
               </div>
             )}
             <div className="flex justify-between items-center px-3 py-2.5 bg-green-50">
-              <span className="font-semibold text-gray-700">Available to Invoice</span>
+              <span className="font-semibold text-gray-700">Balance Remaining</span>
               <span className="font-bold text-lg text-green-700">{fmt(remainingBalance)}</span>
             </div>
-          </div>
-          <div className="text-xs text-gray-400 mt-1 text-center">
-            Remaining = PO Total − Total Invoiced &nbsp;·&nbsp; Max you can enter: {fmt(remainingBalance)}
           </div>
         </div>
 
@@ -1529,52 +1530,71 @@ export default function PurchaseOrderDetailPage() {
           layout="vertical"
           onFinish={handleAddInvoiceSubmit}
         >
-          <Form.Item
-            name="amount"
-            label="Invoice Amount"
-            rules={[
-              { required: true, message: 'Please enter an invoice amount' },
-              { type: 'number', min: 0.01, message: 'Amount must be greater than 0' },
-              {
-                type: 'number',
-                max: remainingBalance,
-                message: `Amount cannot exceed remaining balance of ${fmt(remainingBalance)}`,
-              },
-            ]}
-          >
-            <InputNumber
-              className="w-full"
-              prefix="₹"
-              precision={2}
-              min={0.01}
-              max={remainingBalance}
-              placeholder="Enter invoice amount"
-              size="large"
-              formatter={(value) => {
-                if (!value && value !== 0) return '';
-                const num = `${value}`.replace(/,/g, '');
-                const [intStr, decStr] = num.split('.');
-                const formatted = parseInt(intStr || '0', 10).toLocaleString('en-IN');
-                return decStr !== undefined ? `${formatted}.${decStr}` : formatted;
-              }}
-              parser={(value) => value!.replace(/,/g, '') as unknown as number}
-            />
+          <Row gutter={12}>
+            <Col span={12}>
+              <Form.Item
+                name="amount"
+                label="Amount (₹)"
+                rules={[
+                  { required: true, message: 'Enter payment amount' },
+                  { type: 'number', min: 0.01, message: 'Must be greater than 0' },
+                  { type: 'number', max: remainingBalance, message: `Cannot exceed ${fmt(remainingBalance)}` },
+                ]}
+              >
+                <InputNumber
+                  className="w-full"
+                  prefix="₹"
+                  precision={2}
+                  min={0.01}
+                  placeholder="Enter amount"
+                  formatter={(value) => value ? `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',') : ''}
+                  // @ts-ignore
+                  parser={(value) => Number((value || '').replace(/,/g, ''))}
+                />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item name="invoice_date" label="Payment Date">
+                <DatePicker className="w-full" format="DD-MM-YYYY" />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          <Form.Item name="payment_method" label="Payment Method" rules={[{ required: true, message: 'Select payment method' }]}>
+            <Select placeholder="Select method" onChange={(val) => { setAddInvoicePaymentMethod(val); addInvoiceForm.setFieldValue('reference_number', undefined); }}>
+              <Select.Option value="bank_transfer">Bank Transfer</Select.Option>
+              <Select.Option value="cheque">Cheque</Select.Option>
+              <Select.Option value="upi">UPI</Select.Option>
+              <Select.Option value="cash">Cash</Select.Option>
+            </Select>
           </Form.Item>
 
-          <Form.Item name="invoice_date" label="Invoice Date">
-            <DatePicker className="w-full" format="DD-MM-YYYY" />
-          </Form.Item>
+          {addInvoicePaymentMethod === 'bank_transfer' && (
+            <Form.Item name="reference_number" label="Transaction ID" rules={[{ required: true, message: 'Enter transaction ID' }]}>
+              <Input placeholder="Enter bank transaction ID" />
+            </Form.Item>
+          )}
+          {addInvoicePaymentMethod === 'cheque' && (
+            <Form.Item name="reference_number" label="Cheque Number" rules={[{ required: true, message: 'Enter cheque number' }]}>
+              <Input placeholder="Enter cheque number" />
+            </Form.Item>
+          )}
+          {addInvoicePaymentMethod === 'upi' && (
+            <Form.Item name="reference_number" label="UPI Transaction ID" rules={[{ required: true, message: 'Enter UPI transaction ID' }]}>
+              <Input placeholder="Enter UPI transaction ID / UTR" />
+            </Form.Item>
+          )}
 
           <Form.Item name="notes" label="Notes (optional)">
-            <Input.TextArea rows={2} placeholder="Add any notes for this invoice..." />
+            <Input.TextArea rows={2} placeholder="Optional notes..." />
           </Form.Item>
 
           <div className="flex justify-end gap-2 mt-2">
-            <Button onClick={() => { setAddInvoiceOpen(false); addInvoiceForm.resetFields(); }}>
+            <Button onClick={() => { setAddInvoiceOpen(false); addInvoiceForm.resetFields(); setAddInvoicePaymentMethod(undefined); }}>
               Cancel
             </Button>
             <Button type="primary" htmlType="submit" loading={invoiceMutation.isPending}>
-              Add Invoice
+              Record Payment
             </Button>
           </div>
         </Form>

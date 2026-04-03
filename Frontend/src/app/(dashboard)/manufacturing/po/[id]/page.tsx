@@ -25,11 +25,11 @@ import {
   addJobCardProgress,
   jobCardDispatchAction,
   moveToNextStage,
-  getJobCardProcesses,
   getBomRawMaterials,
 } from '@/lib/api/manufacturing';
 import {
   getManufacturingPurchaseOrders,
+  getManufacturingPurchaseOrderById,
   createBom,
   getBomByPurchaseOrder,
   createJobCardsFromBom,
@@ -83,7 +83,7 @@ const WORKFLOW_STATUS_MAP: Record<WorkflowStatus, { label: string; color: string
   dispatched:            { label: 'Dispatched',            color: 'green',      step: 9 },
 };
 
-function getWorkflowStatus(po: ManufacturingPO): WorkflowStatus {
+function getWorkflowStatus(po: ManufacturingPO, mrStatus?: string): WorkflowStatus {
   if (po.status === 'on_hold') return 'on_hold';
 
   const approval = po.material_approval_status || 'none';
@@ -102,6 +102,9 @@ function getWorkflowStatus(po: ManufacturingPO): WorkflowStatus {
     if (anyInProcess) return 'in_production';
     return 'job_card_created';
   }
+
+  // If MR is fulfilled/partially_fulfilled, materials are already issued — treat as approved
+  if (mrStatus && ['fulfilled', 'partially_fulfilled'].includes(mrStatus)) return 'approved';
 
   if (approval === 'approved') return 'approved';
   if (approval === 'pending_approval') return 'pending_approval';
@@ -158,7 +161,6 @@ export default function ManufacturingPODetailPage() {
   const [stageProgressData, setStageProgressData] = useState<any[]>([]);
   const [stageProgressLoading, setStageProgressLoading] = useState(false);
   const [jobCardStages, setJobCardStages] = useState<Record<number, any[]>>({});
-  const [completeStageModalOpen, setCompleteStageModalOpen] = useState(false);
   const [stageNotes, setStageNotes] = useState('');
   const [stageDescription, setStageDescription] = useState('');
   const [stageCompletedDate, setStageCompletedDate] = useState<dayjs.Dayjs | null>(null);
@@ -190,12 +192,12 @@ export default function ManufacturingPODetailPage() {
 
 
   /* ── Load PO data ── */
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (silent = false) => {
     if (!poId) return;
-    setLoading(true);
+    if (!silent) setLoading(true);
     try {
-      const poRes = await getManufacturingPurchaseOrders({ pageSize: 500 });
-      const po = (poRes?.data || []).find(p => p.id === poId);
+      const poRes = await getManufacturingPurchaseOrderById(poId);
+      const po = poRes?.data;
       if (!po) { message.error('Order not found'); router.push('/manufacturing'); return; }
       setDetailPO(po);
 
@@ -210,16 +212,27 @@ export default function ManufacturingPODetailPage() {
       const jcList = jcRes.data || [];
       setDetailJobCards(jcList);
 
-      // Fetch stages and child job cards for each job card
+      // Fetch stages and child job cards for each job card.
+      // Use getJobCardById (findOne) which always auto-initializes stages, preventing
+      // race conditions where getJobCardProcesses returns empty for newly-started job cards.
       const stagesMap: Record<number, any[]> = {};
       const childMap: Record<number, JobCard[]> = {};
       await Promise.all(jcList.map(async (jc: JobCard) => {
         try {
-          const [stagesRes, detailRes] = await Promise.all([
-            getJobCardProcesses(jc.id),
-            getJobCardById(jc.id, enterpriseId!),
-          ]);
-          stagesMap[jc.id] = (stagesRes.data || []).sort((a: any, b: any) => a.sequence_order - b.sequence_order);
+          const detailRes = await getJobCardById(jc.id, enterpriseId!);
+          // stage_progress from findOne is always initialized — use it directly
+          const stages = (detailRes.data?.stage_progress || []).map((s: any) => ({
+            id: s.id,
+            process_name: s.stage_name,
+            sequence_order: s.sort_order,
+            status: s.status || 'pending',
+            started_at: s.start_time,
+            completed_at: s.end_time,
+            completed_by_name: s.completed_by_name,
+            description: s.description,
+            remarks: s.notes,
+          }));
+          stagesMap[jc.id] = stages.sort((a: any, b: any) => a.sequence_order - b.sequence_order);
           childMap[jc.id] = detailRes.data?.child_job_cards || [];
         } catch {
           stagesMap[jc.id] = [];
@@ -235,8 +248,16 @@ export default function ManufacturingPODetailPage() {
           setDetailMR(mrRes.data || null);
         } catch { setDetailMR(null); }
       }
-    } catch { message.error('Failed to load details'); }
-    finally { setLoading(false); }
+    } catch (err: any) {
+      const status = err?.response?.status;
+      if (status === 404 || status === 403) {
+        message.error('Order not found');
+        router.push('/manufacturing');
+      } else {
+        message.error('Failed to load details');
+      }
+    }
+    finally { if (!silent) setLoading(false); }
   }, [poId, router]);
 
   useEffect(() => { loadData(); }, [loadData]);
@@ -249,7 +270,7 @@ export default function ManufacturingPODetailPage() {
 
   const refreshPage = async () => {
     invalidateAll();
-    await loadData();
+    await loadData(true);  // silent refresh — no loading spinner, no layout jump
   };
 
   const refreshDetailMR = async () => {
@@ -281,7 +302,7 @@ export default function ManufacturingPODetailPage() {
 
   const confirmReceivedMutation = useMutation({
     mutationFn: (mrId: number) => confirmMaterialsReceived(mrId),
-    onSuccess: () => { message.success('Receipt confirmed — materials received by manufacturing'); refreshDetailMR(); },
+    onSuccess: () => { message.success('Receipt confirmed — materials received by manufacturing'); refreshPage(); refreshDetailMR(); },
     onError: (err: any) => message.error(err?.response?.data?.message || 'Failed to confirm receipt'),
   });
 
@@ -343,7 +364,7 @@ export default function ManufacturingPODetailPage() {
     mutationFn: ({ jobId, notes, completedDate, description }: { jobId: number; notes?: string; completedDate?: string; description?: string }) =>
       moveToNextStage(jobId, notes, completedDate, description),
     onSuccess: (response) => {
-      const childCards = (response?.data as any)?.child_job_cards || [];
+      const childCards = response?.data?.child_job_cards || [];
       const latestChild = childCards[childCards.length - 1];
       message.success(
         latestChild
@@ -351,13 +372,32 @@ export default function ManufacturingPODetailPage() {
           : 'Stage completed — next stage activated',
         4,
       );
-      setCompleteStageModalOpen(false);
       setStageNotes('');
       setStageDescription('');
-      setStageCompletedDate(null);
-      // Refresh stage data for the open modal
+      setStageCompletedDate(dayjs());
+      // Update stage data directly from the mutation response (already has fresh data from findOne)
+      // This ensures the modal updates synchronously before the button re-enables
+      if (response?.data?.stage_progress) {
+        const stages = (response.data.stage_progress as any[]).map((s: any) => ({
+          id: s.id,
+          process_name: s.stage_name,
+          sequence_order: s.sort_order,
+          status: s.status || 'pending',
+          started_at: s.start_time,
+          completed_at: s.end_time,
+          completed_by_name: s.completed_by_name,
+          description: s.description,
+          remarks: s.notes,
+        })).sort((a: any, b: any) => a.sequence_order - b.sequence_order);
+        setStageProgressData(stages);
+        // Also update the mini stage pipeline in the job cards list view
+        if (selectedJob) {
+          setJobCardStages(prev => ({ ...prev, [selectedJob.id]: stages }));
+        }
+      }
       if (selectedJob) {
-        openStageProgress(selectedJob);
+        setChildJobCards(childCards);
+        setChildJobCardsMap(prev => ({ ...prev, [selectedJob.id]: childCards }));
       }
       refreshPage();
     },
@@ -368,22 +408,57 @@ export default function ManufacturingPODetailPage() {
     setSelectedJob(job);
     setProgressModalOpen(true);
     setStageProgressLoading(true);
+    setStageProgressData([]);   // clear stale data so spinner shows cleanly
     setChildJobCards([]);
+    setStageNotes('');
+    setStageDescription('');
+    setStageCompletedDate(dayjs());
     try {
-      const [stagesRes, jobDetailRes] = await Promise.all([
-        getJobCardProcesses(job.id),
-        getJobCardById(job.id, enterpriseId!),
-      ]);
-      setStageProgressData((stagesRes.data || []).sort((a: any, b: any) => a.sequence_order - b.sequence_order));
+      // Use getJobCardById (findOne) — always auto-initializes stages, no race condition
+      const jobDetailRes = await getJobCardById(job.id, enterpriseId!);
+      const stages = (jobDetailRes.data?.stage_progress || []).map((s: any) => ({
+        id: s.id,
+        process_name: s.stage_name,
+        sequence_order: s.sort_order,
+        status: s.status || 'pending',
+        started_at: s.start_time,
+        completed_at: s.end_time,
+        completed_by_name: s.completed_by_name,
+        description: s.description,
+        remarks: s.notes,
+      })).sort((a: any, b: any) => a.sequence_order - b.sequence_order);
+      setStageProgressData(stages);
       const children = jobDetailRes.data?.child_job_cards || [];
       setChildJobCards(children);
-      // Also update the map so the main page shows them immediately
       setChildJobCardsMap(prev => ({ ...prev, [job.id]: children }));
     } catch {
       setStageProgressData([]);
       setChildJobCards([]);
     }
     setStageProgressLoading(false);
+  };
+
+  // Silent refresh — updates stage data in place without showing a spinner or clearing content.
+  // Uses getJobCardById (findOne) which always auto-initializes stages — no race condition.
+  const silentRefreshStageProgress = async (job: JobCard) => {
+    try {
+      const jobDetailRes = await getJobCardById(job.id, enterpriseId!);
+      const stages = (jobDetailRes.data?.stage_progress || []).map((s: any) => ({
+        id: s.id,
+        process_name: s.stage_name,
+        sequence_order: s.sort_order,
+        status: s.status || 'pending',
+        started_at: s.start_time,
+        completed_at: s.end_time,
+        completed_by_name: s.completed_by_name,
+        description: s.description,
+        remarks: s.notes,
+      })).sort((a: any, b: any) => a.sequence_order - b.sequence_order);
+      setStageProgressData(stages);
+      const children = jobDetailRes.data?.child_job_cards || [];
+      setChildJobCards(children);
+      setChildJobCardsMap(prev => ({ ...prev, [job.id]: children }));
+    } catch { /* keep existing data */ }
   };
 
   /* ── Handlers ── */
@@ -450,12 +525,14 @@ export default function ManufacturingPODetailPage() {
 
   /* ═══════════════ RENDER ═══════════════ */
 
-  if (loading) return <div className="flex justify-center items-center h-64"><Spin size="large" /></div>;
+  if (loading && !detailPO) return <div className="flex justify-center items-center h-64"><Spin size="large" /></div>;
   if (!detailPO) return <div className="text-center py-16 text-gray-400">Order not found. <Button type="link" onClick={() => router.push('/manufacturing')}>Go back</Button></div>;
 
-  const ws = getWorkflowStatus(detailPO);
+  const ws = getWorkflowStatus(detailPO, detailMR?.status);
   const isOnHold = detailPO.status === 'on_hold';
   const holdReason = detailPO.hold_reason;
+  const mrIssued = !!(detailMR && ['fulfilled', 'partially_fulfilled'].includes(detailMR.status));
+  const canCreateJobCards = (ws === 'approved' || mrIssued) && detailJobCards.length === 0;
 
   return (
     <div>
@@ -638,14 +715,14 @@ export default function ManufacturingPODetailPage() {
           </Card>
         )}
 
-        {ws === 'approved' && detailJobCards.length === 0 && (
+        {canCreateJobCards && (
           <Card size="small" className="border-green-200 bg-green-50">
             <div className="flex items-start gap-3">
               <ToolOutlined className="text-green-600 text-xl mt-1" />
               <div className="flex-1">
                 <Text strong className="text-base text-green-700 block">Step 3: Create Job Cards</Text>
                 <Text type="secondary" className="text-sm block mt-1">
-                  All raw materials approved by Inventory. Create job cards to start production.
+                  {mrIssued ? 'Raw materials have been issued by Inventory.' : 'All raw materials approved by Inventory.'} Create job cards to start production.
                 </Text>
                 <div className="mt-3">
                   <Button type="primary" size="large" icon={<PlusOutlined />} onClick={() => {
@@ -1260,20 +1337,42 @@ export default function ManufacturingPODetailPage() {
                           </div>
                         </div>
 
-                        {itemJobCard && ['in_process', 'partially_completed', 'completed_production'].includes(itemJobCard.status) && (
-                          <div className="mt-2">
-                            <div className="flex justify-between text-xs text-gray-400 mb-1">
-                              <span>Progress</span>
-                              <span>{itemJobCard.quantity_completed}/{itemJobCard.quantity} ({Math.min(100, Math.round((Number(itemJobCard.quantity_completed) / Number(itemJobCard.quantity || 1)) * 100))}%)</span>
+                        {itemJobCard && ['in_process', 'partially_completed', 'completed_production'].includes(itemJobCard.status) && (() => {
+                          const itemStages = jobCardStages[itemJobCard.id] || [];
+                          if (itemStages.length > 0) {
+                            const completedCount = itemStages.filter((s: any) => s.status === 'completed').length;
+                            const stagePct = Math.round((completedCount / itemStages.length) * 100);
+                            return (
+                              <div className="mt-2">
+                                <div className="flex justify-between text-xs text-gray-400 mb-1">
+                                  <span>Stages</span>
+                                  <span>{completedCount}/{itemStages.length} ({stagePct}%)</span>
+                                </div>
+                                <Progress
+                                  percent={stagePct}
+                                  size="small"
+                                  showInfo={false}
+                                  strokeColor={itemJobCard.status === 'completed_production' ? '#52c41a' : '#1677ff'}
+                                />
+                              </div>
+                            );
+                          }
+                          const qtyPct = Math.min(100, Math.round((Number(itemJobCard.quantity_completed) / Number(itemJobCard.quantity || 1)) * 100));
+                          return (
+                            <div className="mt-2">
+                              <div className="flex justify-between text-xs text-gray-400 mb-1">
+                                <span>Progress</span>
+                                <span>{itemJobCard.quantity_completed}/{itemJobCard.quantity} ({qtyPct}%)</span>
+                              </div>
+                              <Progress
+                                percent={qtyPct}
+                                size="small"
+                                showInfo={false}
+                                strokeColor={itemJobCard.status === 'completed_production' ? '#52c41a' : '#1677ff'}
+                              />
                             </div>
-                            <Progress
-                              percent={Math.min(100, Math.round((Number(itemJobCard.quantity_completed) / Number(itemJobCard.quantity || 1)) * 100))}
-                              size="small"
-                              showInfo={false}
-                              strokeColor={itemJobCard.status === 'completed_production' ? '#52c41a' : '#1677ff'}
-                            />
-                          </div>
-                        )}
+                          );
+                        })()}
                       </div>
                     );
                   })}
@@ -1344,7 +1443,7 @@ export default function ManufacturingPODetailPage() {
               <Badge count={detailJobCards.length} showZero color={detailJobCards.length > 0 ? 'blue' : 'default'} />
             </span>
           } extra={
-            detailBom && detailJobCards.length === 0 && ws === 'approved' && (
+            detailBom && canCreateJobCards && (
               <Button size="small" type="primary" icon={<PlusOutlined />} onClick={() => {
                 setSelectedPO(detailPO);
                 setCurrentBom(detailBom);
@@ -1412,21 +1511,21 @@ export default function ManufacturingPODetailPage() {
                                 return (
                                   <div key={stage.id} className="flex items-center">
                                     <div className={`flex flex-col items-center min-w-[60px]`}>
-                                      <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold border-2 ${
+                                      <div style={{ transition: 'background 0.3s, border-color 0.3s, color 0.3s' }} className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold border-2 ${
                                         sDone ? 'border-green-500 bg-green-100 text-green-600' :
                                         sActive ? 'border-blue-500 bg-blue-100 text-blue-600' :
                                         'border-gray-300 bg-gray-50 text-gray-400'
                                       }`}>
                                         {sDone ? <CheckCircleOutlined /> : sActive ? <span>{sIdx + 1}</span> : <LockOutlined className="text-[9px]" />}
                                       </div>
-                                      <span className={`text-[10px] mt-0.5 text-center leading-tight max-w-[70px] truncate ${
+                                      <span style={{ transition: 'color 0.3s' }} className={`text-[10px] mt-0.5 text-center leading-tight max-w-[70px] truncate ${
                                         sDone ? 'text-green-600 font-medium' :
                                         sActive ? 'text-blue-600 font-medium' :
                                         'text-gray-400'
                                       }`} title={`#${sIdx + 1} ${stage.process_name}`}>#{sIdx + 1} {stage.process_name}</span>
                                     </div>
                                     {sIdx < stages.length - 1 && (
-                                      <div className={`w-4 h-0.5 mt-[-12px] ${sDone ? 'bg-green-400' : 'bg-gray-200'}`} />
+                                      <div style={{ transition: 'background 0.3s' }} className={`w-4 h-0.5 mt-[-12px] ${sDone ? 'bg-green-400' : 'bg-gray-200'}`} />
                                     )}
                                   </div>
                                 );
@@ -1478,8 +1577,11 @@ export default function ManufacturingPODetailPage() {
                             <Button size="small" icon={<EditOutlined />} onClick={() => openStageProgress(jc)}>Update Progress</Button>
                           )
                         )}
-                        {isReadyForApproval && (
-                          <Tag color="gold" icon={<ClockCircleOutlined />}>Sent for Approval</Tag>
+                        {jc.status === 'completed_production' && (
+                          <Tag color="cyan" icon={<CheckCircleOutlined />}>Production Complete</Tag>
+                        )}
+                        {jc.status === 'ready_for_approval' && (
+                          <Tag color="gold" icon={<ClockCircleOutlined />}>Pending Dispatch Approval</Tag>
                         )}
                         {isApprovedForDispatch && (
                           <>
@@ -1945,7 +2047,7 @@ export default function ManufacturingPODetailPage() {
                 <div key={stage.id} className="flex items-stretch gap-3">
                   {/* Timeline indicator */}
                   <div className="flex flex-col items-center">
-                    <div className={`w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold border-2 ${
+                    <div style={{ transition: 'background 0.35s, border-color 0.35s, color 0.35s' }} className={`w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold border-2 ${
                       isDone ? 'border-green-500 bg-green-100 text-green-600' :
                       isActive ? 'border-blue-500 bg-blue-100 text-blue-600 ring-3 ring-blue-100' :
                       'border-gray-300 bg-gray-50 text-gray-400'
@@ -1953,12 +2055,12 @@ export default function ManufacturingPODetailPage() {
                       {isDone ? <CheckCircleOutlined /> : isActive ? <span>{idx + 1}</span> : <LockOutlined className="text-[10px]" />}
                     </div>
                     {idx < stageProgressData.length - 1 && (
-                      <div className={`w-0.5 flex-1 mt-1 ${isDone ? 'bg-green-400' : 'bg-gray-200'}`} />
+                      <div style={{ transition: 'background 0.35s' }} className={`w-0.5 flex-1 mt-1 ${isDone ? 'bg-green-400' : 'bg-gray-200'}`} />
                     )}
                   </div>
 
                   {/* Stage card */}
-                  <div className={`flex-1 border rounded-lg p-3 mb-0 ${
+                  <div style={{ transition: 'background 0.35s, border-color 0.35s, opacity 0.35s' }} className={`flex-1 border rounded-lg p-3 mb-0 ${
                     isDone ? 'border-green-300 bg-green-50' :
                     isActive ? 'border-blue-400 bg-blue-50 shadow-sm' :
                     'border-gray-200 bg-gray-50 opacity-60'
@@ -1977,22 +2079,6 @@ export default function ManufacturingPODetailPage() {
                           {isDone ? 'Completed' : isActive ? 'In Progress' : 'Locked'}
                         </Tag>
                       </div>
-                      {isActive && (
-                        isOnHold ? (
-                          <Tag color="warning" icon={<PauseCircleOutlined />}>ON HOLD</Tag>
-                        ) : (
-                          <Button type="primary" size="small" icon={<CheckCircleOutlined />}
-                            style={{ background: '#52c41a', borderColor: '#52c41a' }}
-                            onClick={() => {
-                              setStageNotes('');
-                              setStageDescription('');
-                              setStageCompletedDate(dayjs());
-                              setCompleteStageModalOpen(true);
-                            }}>
-                            Complete Stage
-                          </Button>
-                        )
-                      )}
                     </div>
 
                     {/* Completed stage details */}
@@ -2024,10 +2110,72 @@ export default function ManufacturingPODetailPage() {
                       </div>
                     )}
 
-                    {/* Active stage info */}
+                    {/* Active stage — inline complete form */}
                     {isActive && (
-                      <div className="text-xs text-gray-500">
-                        {stage.started_at && <span><ClockCircleOutlined className="mr-1" />Started: {dayjs(stage.started_at).format('DD MMM YYYY, hh:mm A')}</span>}
+                      <div className="space-y-3 pt-2">
+                        {stage.started_at && (
+                          <div className="text-xs text-gray-500">
+                            <ClockCircleOutlined className="mr-1" />Started: {dayjs(stage.started_at).format('DD MMM YYYY, hh:mm A')}
+                          </div>
+                        )}
+                        {isOnHold ? (
+                          <Tag color="warning" icon={<PauseCircleOutlined />}>ON HOLD — Production paused</Tag>
+                        ) : (
+                          <>
+                            <div className="bg-white rounded border border-blue-200 p-3 space-y-3">
+                              <Text strong className="text-xs text-blue-700 uppercase tracking-wide block">Complete this stage</Text>
+                              <div>
+                                <Text className="text-xs text-gray-500 block mb-1">Completed Date</Text>
+                                <DatePicker
+                                  showTime
+                                  className="w-full"
+                                  value={stageCompletedDate}
+                                  onChange={val => setStageCompletedDate(val)}
+                                  format="DD MMM YYYY, hh:mm A"
+                                  size="small"
+                                />
+                              </div>
+                              <div>
+                                <Text className="text-xs text-gray-500 block mb-1">Description / Work Done</Text>
+                                <Input.TextArea
+                                  placeholder="Describe the work completed in this stage..."
+                                  rows={2}
+                                  size="small"
+                                  value={stageDescription}
+                                  onChange={e => setStageDescription(e.target.value)}
+                                />
+                              </div>
+                              <div>
+                                <Text className="text-xs text-gray-500 block mb-1">Notes (optional)</Text>
+                                <Input.TextArea
+                                  placeholder="Any additional notes or observations..."
+                                  rows={1}
+                                  size="small"
+                                  value={stageNotes}
+                                  onChange={e => setStageNotes(e.target.value)}
+                                />
+                              </div>
+                            </div>
+                            <Button
+                              type="primary"
+                              icon={<CheckCircleOutlined />}
+                              style={{ background: '#52c41a', borderColor: '#52c41a' }}
+                              loading={completeCurrentStageMutation.isPending}
+                              block
+                              onClick={() => {
+                                if (!selectedJob) return;
+                                completeCurrentStageMutation.mutate({
+                                  jobId: selectedJob.id,
+                                  notes: stageNotes || undefined,
+                                  completedDate: stageCompletedDate ? stageCompletedDate.toISOString() : undefined,
+                                  description: stageDescription || undefined,
+                                });
+                              }}
+                            >
+                              Complete Stage
+                            </Button>
+                          </>
+                        )}
                       </div>
                     )}
 
@@ -2039,65 +2187,35 @@ export default function ManufacturingPODetailPage() {
                 </div>
               );
             })}
-            <div className="text-center pt-2 text-sm text-gray-400">
-              {stageProgressData.filter((s: any) => s.status === 'completed').length}/{stageProgressData.length} stages completed
-            </div>
+            {(() => {
+              const completedCount = stageProgressData.filter((s: any) => s.status === 'completed').length;
+              const allDone = completedCount === stageProgressData.length && stageProgressData.length > 0;
+              return allDone ? (
+                <div className="mt-4">
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-center">
+                    <CheckCircleOutlined className="text-green-500 text-2xl mb-2" />
+                    <div className="text-green-700 font-semibold text-base">All Stages Complete!</div>
+                    <div className="text-green-600 text-sm mt-1">Production is done. This job card will now move to dispatch approval.</div>
+                  </div>
+                  <Button
+                    type="primary"
+                    block
+                    className="mt-3"
+                    onClick={() => { setProgressModalOpen(false); setSelectedJob(null); setStageProgressData([]); }}
+                  >
+                    Done
+                  </Button>
+                </div>
+              ) : (
+                <div className="text-center pt-2 text-sm text-gray-400">
+                  {completedCount}/{stageProgressData.length} stages completed
+                </div>
+              );
+            })()}
           </div>
         )}
       </Modal>
 
-      {/* Complete Stage Modal */}
-      <Modal
-        title={`Complete Stage: ${stageProgressData.find((s: any) => s.status === 'in_progress')?.process_name || 'Current Stage'}`}
-        open={completeStageModalOpen}
-        onCancel={() => setCompleteStageModalOpen(false)}
-        okText="Complete Stage"
-        okButtonProps={{
-          style: { background: '#52c41a', borderColor: '#52c41a' },
-          loading: completeCurrentStageMutation.isPending,
-        }}
-        onOk={() => {
-          if (!selectedJob) return;
-          completeCurrentStageMutation.mutate({
-            jobId: selectedJob.id,
-            notes: stageNotes || undefined,
-            completedDate: stageCompletedDate ? stageCompletedDate.toISOString() : undefined,
-            description: stageDescription || undefined,
-          });
-        }}
-        width={520}
-      >
-        <div className="space-y-4 pt-2">
-          <div>
-            <Text strong className="block mb-1">Completed Date</Text>
-            <DatePicker
-              showTime
-              className="w-full"
-              value={stageCompletedDate}
-              onChange={(val) => setStageCompletedDate(val)}
-              format="DD MMM YYYY, hh:mm A"
-            />
-          </div>
-          <div>
-            <Text strong className="block mb-1">Description / Work Done</Text>
-            <Input.TextArea
-              placeholder="Describe the work completed in this stage..."
-              rows={3}
-              value={stageDescription}
-              onChange={e => setStageDescription(e.target.value)}
-            />
-          </div>
-          <div>
-            <Text strong className="block mb-1">Notes (optional)</Text>
-            <Input.TextArea
-              placeholder="Any additional notes or observations..."
-              rows={2}
-              value={stageNotes}
-              onChange={e => setStageNotes(e.target.value)}
-            />
-          </div>
-        </div>
-      </Modal>
 
       {/* Dispatch Modal */}
       <Modal

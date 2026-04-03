@@ -65,6 +65,25 @@ export class SuperAdminService implements OnApplicationBootstrap {
     await this.superAdminRepository.manager.query(`
       ALTER TABLE resellers ADD COLUMN IF NOT EXISTS is_locked BOOLEAN NOT NULL DEFAULT FALSE
     `);
+    await this.superAdminRepository.manager.query(`
+      ALTER TABLE enterprises ADD COLUMN IF NOT EXISTS task_visibility_unrestricted BOOLEAN NOT NULL DEFAULT FALSE
+    `);
+    await this.superAdminRepository.manager.query(`
+      ALTER TABLE employees ADD COLUMN IF NOT EXISTS is_reporting_head BOOLEAN NOT NULL DEFAULT FALSE
+    `);
+    await this.superAdminRepository.manager.query(`
+      CREATE TABLE IF NOT EXISTS reporting_managers (
+        id SERIAL PRIMARY KEY,
+        enterprise_id INTEGER NOT NULL,
+        name VARCHAR NOT NULL,
+        status VARCHAR NOT NULL DEFAULT 'active',
+        created_date TIMESTAMPTZ NOT NULL DEFAULT now(),
+        modified_date TIMESTAMPTZ NOT NULL DEFAULT now()
+      )
+    `);
+    await this.superAdminRepository.manager.query(`
+      ALTER TABLE employees ADD COLUMN IF NOT EXISTS reporting_manager_id INTEGER REFERENCES reporting_managers(id) ON DELETE SET NULL
+    `);
 
     // Seed super admin
     const existing = await this.superAdminRepository.findOne({
@@ -255,6 +274,14 @@ export class SuperAdminService implements OnApplicationBootstrap {
 
     await this.enterpriseRepository.update(id, { expiryDate: new Date(expiryDate) });
     return { message: 'Expiry date updated successfully' };
+  }
+
+  async updateTaskVisibility(id: number, unrestricted: boolean) {
+    const enterprise = await this.enterpriseRepository.findOne({ where: { id } });
+    if (!enterprise) throw new NotFoundException('Enterprise not found');
+
+    await this.enterpriseRepository.update(id, { taskVisibilityUnrestricted: unrestricted } as any);
+    return { message: `Task visibility ${unrestricted ? 'unrestricted' : 'restricted'} successfully` };
   }
 
   async getEnterpriseFinancials(id: number, period: string) {

@@ -80,7 +80,7 @@ export default function ManufactureStatusPage() {
   const [expandedKeys, setExpandedKeys] = useState<number[]>([]);
   const [myTeam, setMyTeam] = useState(false);
 
-  const isReportingHead = !!(user as any)?.isReportingHead;
+  const isReportingHead = !!(user as any)?.is_reporting_head;
   const currentEmployeeId = (user as any)?.id;
 
   // ── Queries ──

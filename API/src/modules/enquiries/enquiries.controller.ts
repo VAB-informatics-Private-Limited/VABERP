@@ -36,6 +36,7 @@ export class EnquiriesController {
     @DataStartDate() dataStartDate: Date | null,
     @OwnDataOnly() ownDataOnly: boolean,
     @CurrentUserId() currentUserId: number,
+    @CurrentUser() user: any,
     @Query('page') page?: number,
     @Query('limit') limit?: number,
     @Query('search') search?: string,
@@ -44,6 +45,7 @@ export class EnquiriesController {
     @Query('fromDate') fromDate?: string,
     @Query('toDate') toDate?: string,
   ) {
+    const effectiveOwnDataOnly = ownDataOnly || (user?.type === 'employee' && !user?.isReportingHead);
     return this.enquiriesService.findAll(
       enterpriseId,
       page,
@@ -54,7 +56,7 @@ export class EnquiriesController {
       fromDate,
       toDate,
       dataStartDate,
-      ownDataOnly,
+      effectiveOwnDataOnly,
       currentUserId,
     );
   }

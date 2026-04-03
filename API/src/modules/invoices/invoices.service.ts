@@ -34,6 +34,7 @@ export class InvoicesService {
     customerId?: number,
     fromDate?: string,
     toDate?: string,
+    salesOrderId?: number,
   ) {
     const query = this.invoiceRepository
       .createQueryBuilder('invoice')
@@ -64,6 +65,10 @@ export class InvoicesService {
 
     if (toDate) {
       query.andWhere('invoice.invoiceDate <= :toDate', { toDate });
+    }
+
+    if (salesOrderId) {
+      query.andWhere('invoice.salesOrderId = :salesOrderId', { salesOrderId });
     }
 
     const pageNum = Number(page) || 1;
@@ -351,17 +356,21 @@ export class InvoicesService {
       throw new BadRequestException('Cannot record payment for a cancelled invoice');
     }
 
-    if (invoice.status === 'fully_paid') {
+    // Always recompute balanceDue from actual payments to avoid stale stored values
+    const existingPayments = await this.paymentRepository.find({ where: { invoiceId } });
+    const totalAlreadyPaid = existingPayments.reduce((sum, p) => sum + Number(p.amount), 0);
+    const balanceDue = Number(invoice.grandTotal) - totalAlreadyPaid;
+
+    if (balanceDue <= 0) {
       throw new BadRequestException('Invoice is already fully paid');
     }
 
-    const balanceDue = Number(invoice.balanceDue);
     if (dto.amount <= 0) {
       throw new BadRequestException('Payment amount must be greater than zero');
     }
 
-    if (dto.amount > balanceDue) {
-      throw new BadRequestException(`Payment amount cannot exceed balance due (${balanceDue})`);
+    if (dto.amount > balanceDue + 0.01) {
+      throw new BadRequestException(`Payment amount (${dto.amount}) cannot exceed balance due (${balanceDue.toFixed(2)})`);
     }
 
     // Generate payment number
@@ -383,8 +392,8 @@ export class InvoicesService {
 
     await this.paymentRepository.save(payment);
 
-    // Update invoice totals
-    const newTotalPaid = Number(invoice.totalPaid) + dto.amount;
+    // Update invoice totals using recomputed values (not stale stored column)
+    const newTotalPaid = totalAlreadyPaid + dto.amount;
     const newBalanceDue = Number(invoice.grandTotal) - newTotalPaid;
     const newStatus = newBalanceDue <= 0 ? 'fully_paid' : 'partially_paid';
 

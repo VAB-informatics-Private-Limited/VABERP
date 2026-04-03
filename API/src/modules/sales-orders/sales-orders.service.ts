@@ -52,6 +52,8 @@ export class SalesOrdersService {
     search?: string,
     status?: string,
     dataStartDate?: Date | null,
+    ownDataOnly = false,
+    currentUserId?: number,
   ) {
     const query = this.soRepository
       .createQueryBuilder('so')
@@ -70,6 +72,16 @@ export class SalesOrdersService {
     }
     if (dataStartDate) {
       query.andWhere('so.createdDate >= :dataStartDate', { dataStartDate });
+    }
+    if (ownDataOnly && currentUserId) {
+      // Show SOs the employee created directly OR SOs generated from a quotation they created
+      query.andWhere(
+        '(so.createdBy = :currentUserId OR ' +
+        '(so.quotationId IS NOT NULL AND EXISTS (' +
+        '  SELECT 1 FROM quotations q WHERE q.id = so.quotation_id AND q.created_by = :currentUserId' +
+        ')))',
+        { currentUserId },
+      );
     }
 
     const pageNum = Number(page) || 1;
@@ -674,6 +686,18 @@ This is an automated notification.`;
   async delete(id: number, enterpriseId: number) {
     const so = await this.soRepository.findOne({ where: { id, enterpriseId } });
     if (!so) throw new NotFoundException('Sales order not found');
+
+    // Stamp the linked quotation so UI can show "PO Cancelled" with timestamp
+    const linkedQuotation = await this.quotationRepository.findOne({
+      where: { salesOrderId: id, enterpriseId },
+    });
+    if (linkedQuotation) {
+      await this.quotationRepository.update(linkedQuotation.id, {
+        poCancelledAt: new Date(),
+        cancelledPoNumber: so.orderNumber,
+        salesOrderId: null,
+      });
+    }
 
     await this.soItemRepository.delete({ salesOrderId: id });
     await this.soRepository.delete(id);

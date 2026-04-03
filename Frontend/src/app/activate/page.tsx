@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { Button, Typography, Result, Spin } from 'antd';
+import { useState, useEffect } from 'react';
+import { Button, Typography, Spin } from 'antd';
 import {
   ClockCircleOutlined,
   WarningOutlined,
@@ -19,11 +19,26 @@ export default function ActivatePage() {
   const router = useRouter();
   const { user, userType, logout, updateUser, isAuthenticated } = useAuthStore();
   const [refreshing, setRefreshing] = useState(false);
+  const [hydrated, setHydrated] = useState(false);
 
-  // Redirect if not authenticated or not an enterprise user
-  if (!isAuthenticated || userType !== 'enterprise') {
-    router.replace('/login');
-    return null;
+  // Wait for zustand-persist to rehydrate from localStorage before checking auth
+  useEffect(() => {
+    setHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    if (hydrated && (!isAuthenticated || userType !== 'enterprise')) {
+      router.replace('/login');
+    }
+  }, [hydrated, isAuthenticated, userType, router]);
+
+  // Show spinner while hydrating or if auth check hasn't passed yet
+  if (!hydrated || !isAuthenticated || userType !== 'enterprise') {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Spin size="large" />
+      </div>
+    );
   }
 
   const ent = user as Enterprise;

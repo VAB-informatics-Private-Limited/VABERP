@@ -51,6 +51,18 @@ export const PERMISSION_STRUCTURE: Record<string, Record<string, string[]>> = {
     sources: ['view', 'create', 'edit', 'delete'],
     email_templates: ['view', 'create', 'edit', 'delete'],
   },
+  crm: {
+    leads:       ['view', 'create', 'edit', 'delete'],
+    assignments: ['view', 'create', 'edit'],
+    followups:   ['view', 'create', 'edit'],
+    reports:     ['view'],
+    settings:    ['view', 'edit'],
+  },
+  tasks: {
+    my_tasks:    ['view', 'create', 'edit', 'delete'],
+    assignments: ['view', 'create'],
+    settings:    ['view', 'edit'],
+  },
 };
 
 export type PermissionsJson = Record<string, Record<string, Record<string, number>>>;

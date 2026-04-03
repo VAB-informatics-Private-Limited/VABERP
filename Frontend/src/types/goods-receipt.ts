@@ -31,6 +31,7 @@ export interface GoodsReceipt {
   grn_number: string;
   indent_id?: number;
   indent_number?: string;
+  material_request_id?: number;
   po_number?: string;
   supplier_name?: string;
   supplier_id?: number;

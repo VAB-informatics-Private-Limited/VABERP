@@ -4,7 +4,7 @@ import { Typography, message, Spin } from 'antd';
 import { useRouter, useParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { EmployeeForm } from '@/components/employees/EmployeeForm';
-import { getEmployees, updateEmployee } from '@/lib/api/employees';
+import { getEmployees, updateEmployee, getReporters } from '@/lib/api/employees';
 import { useAuthStore } from '@/stores/authStore';
 import { EmployeeFormData } from '@/types/employee';
 
@@ -18,14 +18,19 @@ export default function EditEmployeePage() {
   const { getEnterpriseId } = useAuthStore();
   const enterpriseId = getEnterpriseId();
 
-  const { data, isLoading } = useQuery({
-    queryKey: ['employee', employeeId],
-    queryFn: async () => {
-      const response = await getEmployees(enterpriseId!);
-      return response.data?.find((e) => e.id === employeeId);
-    },
+  const { data: allEmployees, isLoading } = useQuery({
+    queryKey: ['employees', enterpriseId],
+    queryFn: () => getEmployees(enterpriseId!, 1, 500),
     enabled: !!enterpriseId && !!employeeId,
   });
+
+  const { data: employeeOptions = [] } = useQuery({
+    queryKey: ['reporters'],
+    queryFn: getReporters,
+    select: (opts) => opts.filter(o => o.value !== employeeId),
+  });
+
+  const data = allEmployees?.data?.find((e) => e.id === employeeId);
 
   const mutation = useMutation({
     mutationFn: (formData: EmployeeFormData) =>
@@ -63,6 +68,7 @@ export default function EditEmployeePage() {
         loading={mutation.isPending}
         submitText="Update Employee"
         isEdit
+        employeeOptions={employeeOptions}
       />
     </div>
   );

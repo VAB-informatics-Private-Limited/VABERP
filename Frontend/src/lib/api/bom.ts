@@ -112,6 +112,12 @@ export async function getManufacturingPurchaseOrders(params: {
   };
 }
 
+export async function getManufacturingPurchaseOrderById(id: number): Promise<ApiResponse<ManufacturingPO>> {
+  const response = await apiClient.get(`/manufacturing/purchase-orders/${id}`);
+  const d = response.data as any;
+  return { message: d.message, data: d.data ? mapManufacturingPOFromBackend(d.data) : undefined };
+}
+
 // ============ BOM ============
 
 export async function createBom(data: {

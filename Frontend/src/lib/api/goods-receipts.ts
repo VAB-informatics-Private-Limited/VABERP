@@ -33,6 +33,7 @@ function mapGrnFromBackend(data: any): GoodsReceipt {
     grn_number: data.grnNumber,
     indent_id: data.indentId,
     indent_number: data.indent?.indentNumber,
+    material_request_id: data.indent?.materialRequestId,
     po_number: data.poNumber,
     supplier_name: data.supplierName,
     supplier_id: data.supplierId,

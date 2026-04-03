@@ -30,6 +30,7 @@ export class InvoicesController {
   @ApiQuery({ name: 'customerId', required: false })
   @ApiQuery({ name: 'fromDate', required: false })
   @ApiQuery({ name: 'toDate', required: false })
+  @ApiQuery({ name: 'salesOrderId', required: false })
   async findAll(
     @EnterpriseId() enterpriseId: number,
     @Query('page') page?: number,
@@ -39,8 +40,9 @@ export class InvoicesController {
     @Query('customerId') customerId?: number,
     @Query('fromDate') fromDate?: string,
     @Query('toDate') toDate?: string,
+    @Query('salesOrderId') salesOrderId?: number,
   ) {
-    return this.invoicesService.findAll(enterpriseId, page, limit, search, status, customerId, fromDate, toDate);
+    return this.invoicesService.findAll(enterpriseId, page, limit, search, status, customerId, fromDate, toDate, salesOrderId);
   }
 
   @Get('payments/all')

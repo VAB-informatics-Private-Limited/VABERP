@@ -4,7 +4,7 @@ import { Typography, Button, Card, Select, Space, Table, Tag, Alert, Badge, Tabs
 import dayjs from 'dayjs';
 import {
   ClearOutlined, EyeOutlined, ExclamationCircleOutlined, CheckCircleOutlined,
-  FireOutlined, ToolOutlined, InboxOutlined, ClockCircleOutlined,
+  ToolOutlined, InboxOutlined, ClockCircleOutlined,
   WarningOutlined, SendOutlined,
 } from '@ant-design/icons';
 import { useRouter } from 'next/navigation';
@@ -30,14 +30,12 @@ type TabKey = 'all' | 'pending' | 'manufacturing' | 'approved' | 'fulfilled';
 
 export default function MaterialRequestsPage() {
   const router = useRouter();
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
   const [status, setStatus] = useState<string | undefined>();
   const [activeTab, setActiveTab] = useState<TabKey>('all');
 
   const { data, isLoading } = useQuery({
-    queryKey: ['material-requests', page, pageSize, status],
-    queryFn: () => getMaterialRequestList({ page, pageSize, status }),
+    queryKey: ['material-requests', status],
+    queryFn: () => getMaterialRequestList({ page: 1, pageSize: 500, status }),
   });
 
   const { data: priorityData } = useQuery({
@@ -374,7 +372,7 @@ export default function MaterialRequestsPage() {
       {/* Summary Stats */}
       <Row gutter={[16, 16]} className="mb-5">
         <Col xs={12} sm={6}>
-          <Card className="card-shadow text-center" bodyStyle={{ padding: 16 }}>
+          <Card className="card-shadow text-center" styles={{ body: { padding: 16 } }}>
             <Statistic
               title={<span className="text-xs font-semibold">Pending Approval</span>}
               value={counts.pending.length}
@@ -455,15 +453,15 @@ export default function MaterialRequestsPage() {
       {/* Tabs */}
       <Tabs
         activeKey={activeTab}
-        onChange={(k) => { setActiveTab(k as TabKey); setPage(1); }}
-        className="mb-4"
+        onChange={(k) => setActiveTab(k as TabKey)}
+        className="mb-0"
         items={[
           { key: 'all', label: <span><InboxOutlined /> All Requests</span> },
           {
             key: 'pending',
             label: (
               <Badge count={counts.pending.length} size="small" offset={[8, 0]}>
-                <span><ClockCircleOutlined /> Pending Approval</span>
+                <span><ClockCircleOutlined /> Pending</span>
               </Badge>
             ),
           },
@@ -471,7 +469,7 @@ export default function MaterialRequestsPage() {
             key: 'manufacturing',
             label: (
               <Badge count={counts.mfgPending.length} size="small" offset={[8, 0]} color="purple">
-                <span><ToolOutlined /> Manufacturing Requests</span>
+                <span><ToolOutlined /> Manufacturing</span>
               </Badge>
             ),
           },
@@ -480,13 +478,13 @@ export default function MaterialRequestsPage() {
         ]}
       />
 
-      {/* Status filter */}
-      <div className="bg-white p-4 rounded-lg mb-4 card-shadow">
-        <Space wrap>
+      <Card className="card-shadow">
+        {/* Filter bar inside card */}
+        <div className="flex flex-wrap items-center gap-3 mb-4 pb-4 border-b border-gray-100">
           <Select
             placeholder="Filter by status"
             value={status}
-            onChange={(v) => { setStatus(v); setPage(1); }}
+            onChange={(v) => setStatus(v)}
             style={{ width: 200 }}
             allowClear
           >
@@ -495,13 +493,11 @@ export default function MaterialRequestsPage() {
             ))}
           </Select>
           {status && (
-            <Button icon={<ClearOutlined />} onClick={() => { setStatus(undefined); setPage(1); }} type="link">Clear</Button>
+            <Button icon={<ClearOutlined />} onClick={() => setStatus(undefined)} type="link" className="p-0">Clear</Button>
           )}
-          <Text type="secondary">{filteredData.length} request(s)</Text>
-        </Space>
-      </div>
+          <Text type="secondary" className="ml-auto">{filteredData.length} request(s)</Text>
+        </div>
 
-      <Card className="card-shadow">
         <Table
           columns={columns}
           dataSource={filteredData}
@@ -512,10 +508,7 @@ export default function MaterialRequestsPage() {
             rowExpandable: (record) => (record.items?.length || 0) > 0,
           }}
           pagination={{
-            current: page,
-            pageSize,
-            total: activeTab === 'all' ? (data?.totalRecords || 0) : filteredData.length,
-            onChange: (p, ps) => { setPage(p); setPageSize(ps); },
+            pageSize: 20,
             showSizeChanger: true,
             showTotal: (total, range) => `${range[0]}-${range[1]} of ${total}`,
           }}

@@ -51,6 +51,8 @@ export function LoginForm() {
           hire_date: loginData.user.hireDate,
           created_date: loginData.user.createdDate,
           status: loginData.user.status,
+          is_reporting_head: loginData.user.isReportingHead ?? false,
+          reporting_to: loginData.user.reportingTo ?? null,
         };
         login(mappedUser, 'employee', loginData.token);
 

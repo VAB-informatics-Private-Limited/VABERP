@@ -392,10 +392,7 @@ export default function GoodsReceiptDetailPage() {
 
               <Space wrap>
                 <Tag icon={<FileDoneOutlined />} color="green">
-                  Stock updated in inventory
-                </Tag>
-                <Tag color="blue">
-                  Materials issued to manufacturing
+                  Stock added to inventory
                 </Tag>
                 {grn.indent_number && (
                   <Tag
@@ -408,6 +405,43 @@ export default function GoodsReceiptDetailPage() {
                   </Tag>
                 )}
               </Space>
+
+              {/* Next Step guidance */}
+              <div className="mt-4 p-4 rounded-lg border-2 border-blue-200 bg-blue-50">
+                <div className="flex items-start gap-3">
+                  <div className="text-2xl">📦</div>
+                  <div className="flex-1">
+                    <div className="font-semibold text-blue-800 text-sm mb-1">
+                      Next Step — Issue Materials to Manufacturing
+                    </div>
+                    <div className="text-sm text-blue-700 mb-3">
+                      Stock has been added to inventory. The <strong>Inventory team</strong> must now go to the
+                      Material Request and issue the approved materials to the manufacturing team so production can begin.
+                    </div>
+                    <Space wrap>
+                      {grn.material_request_id ? (
+                        <Button
+                          type="primary"
+                          size="small"
+                          icon={<FileDoneOutlined />}
+                          onClick={() => router.push(`/material-requests/${grn.material_request_id}`)}
+                        >
+                          Issue Materials Now
+                        </Button>
+                      ) : (
+                        <Button
+                          type="primary"
+                          size="small"
+                          icon={<FileDoneOutlined />}
+                          onClick={() => router.push('/material-requests')}
+                        >
+                          Go to Material Requests
+                        </Button>
+                      )}
+                    </Space>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </Card>

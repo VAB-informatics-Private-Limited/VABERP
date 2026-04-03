@@ -1,7 +1,7 @@
 'use client';
 
-import { Form, Input, Select, Button, Row, Col, Card, InputNumber, Table } from 'antd';
-import { PlusOutlined, DeleteOutlined } from '@ant-design/icons';
+import { Form, Input, Select, Button, Row, Col, Card, InputNumber, Tag, Space } from 'antd';
+import { PlusOutlined, DeleteOutlined, SaveOutlined, LockOutlined } from '@ant-design/icons';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQuery } from '@tanstack/react-query';
@@ -24,7 +24,9 @@ export function ProductForm({ initialData, onSubmit, loading, submitText = 'Save
   const enterpriseId = getEnterpriseId();
   const { units } = useUnits();
   const [selectedCategory, setSelectedCategory] = useState<number | undefined>(initialData?.category_id);
-  const [discountTiers, setDiscountTiers] = useState<DiscountTier[]>(initialData?.discount_tiers || []);
+  const [discountTiers, setDiscountTiers] = useState<DiscountTier[]>((initialData?.discount_tiers || []).map(t => ({ minQty: Number(t.minQty), discountPercent: Number(t.discountPercent) })));
+  // Pending tier being entered (null = not adding a tier right now)
+  const [pendingTier, setPendingTier] = useState<DiscountTier | null>(null);
 
   const {
     control,
@@ -44,7 +46,6 @@ export function ProductForm({ initialData, onSubmit, loading, submitText = 'Save
       unit: initialData?.unit || '',
       price: initialData?.price != null ? Number(initialData.price) : undefined,
       gst_rate: initialData?.gst_rate != null ? Number(initialData.gst_rate) : undefined,
-      max_discount_percent: initialData?.max_discount_percent != null ? Number(initialData.max_discount_percent) : undefined,
       discount_tiers: (initialData?.discount_tiers || []).map((t) => ({ minQty: Number(t.minQty), discountPercent: Number(t.discountPercent) })),
       status: initialData?.status || 'active',
     },
@@ -71,16 +72,20 @@ export function ProductForm({ initialData, onSubmit, loading, submitText = 'Save
     enabled: !!enterpriseId && !!selectedCategory,
   });
 
-  const addTier = () => {
-    const updated = [...discountTiers, { minQty: 1, discountPercent: 0 }];
-    setDiscountTiers(updated);
-    setValue('discount_tiers', updated);
+  const startAddTier = () => {
+    setPendingTier({ minQty: 1, discountPercent: 0 });
   };
 
-  const updateTier = (index: number, field: keyof DiscountTier, value: number) => {
-    const updated = discountTiers.map((t, i) => i === index ? { ...t, [field]: value } : t);
+  const savePendingTier = (andAddAnother: boolean) => {
+    if (!pendingTier) return;
+    const updated = [...discountTiers, { minQty: pendingTier.minQty, discountPercent: pendingTier.discountPercent }];
     setDiscountTiers(updated);
     setValue('discount_tiers', updated);
+    if (andAddAnother) {
+      setPendingTier({ minQty: 1, discountPercent: 0 });
+    } else {
+      setPendingTier(null);
+    }
   };
 
   const removeTier = (index: number) => {
@@ -276,30 +281,6 @@ export function ProductForm({ initialData, onSubmit, loading, submitText = 'Save
               />
             </Form.Item>
           </Col>
-          <Col xs={24} md={8}>
-            <Form.Item
-              label="Max Discount (%)"
-              validateStatus={errors.max_discount_percent ? 'error' : ''}
-              help={errors.max_discount_percent?.message ?? 'Overall cap on any discount'}
-            >
-              <Controller
-                name="max_discount_percent"
-                control={control}
-                render={({ field }) => (
-                  <InputNumber
-                    {...field}
-                    placeholder="e.g. 15"
-                    size="large"
-                    className="w-full"
-                    min={0}
-                    max={100}
-                    precision={2}
-                    addonAfter="%"
-                  />
-                )}
-              />
-            </Form.Item>
-          </Col>
         </Row>
 
         <Row gutter={16}>
@@ -344,87 +325,117 @@ export function ProductForm({ initialData, onSubmit, loading, submitText = 'Save
         title="Volume Discount Tiers"
         className="mb-4"
         extra={
-          <Button type="dashed" icon={<PlusOutlined />} onClick={addTier} size="small">
-            Add Tier
-          </Button>
+          !pendingTier && (
+            <Button type="dashed" icon={<PlusOutlined />} onClick={startAddTier} size="small">
+              Add Tier
+            </Button>
+          )
         }
       >
         <div className="text-gray-500 text-xs mb-3">
           Set automatic discounts based on order quantity. When a customer orders more, a higher discount is applied automatically in the quotation.
         </div>
 
-        {discountTiers.length === 0 ? (
+        {/* Saved (locked) tiers */}
+        {discountTiers.length === 0 && !pendingTier ? (
           <div className="bg-gray-50 border border-dashed border-gray-300 rounded p-4 text-center text-gray-400 text-sm">
             No tiers yet. Click <strong>Add Tier</strong> to set quantity-based discounts.
             <div className="text-xs mt-1 text-gray-400">Example: Qty ≥ 10 → 5% &nbsp;|&nbsp; Qty ≥ 50 → 8% &nbsp;|&nbsp; Qty ≥ 100 → 12%</div>
           </div>
         ) : (
           <>
-            <Table
-              dataSource={[...discountTiers].sort((a, b) => a.minQty - b.minQty).map((t, i) => ({ ...t, key: i, _origIndex: discountTiers.indexOf(t) }))}
-              pagination={false}
-              size="small"
-              columns={[
-                {
-                  title: 'When customer orders at least…',
-                  dataIndex: 'minQty',
-                  render: (val, row: any) => (
-                    <InputNumber
-                      value={val}
-                      min={1}
-                      max={999999}
-                      precision={0}
-                      parser={(v) => v?.replace(/[^\d]/g, '') as any}
-                      onChange={(v) => updateTier(row._origIndex, 'minQty', v || 1)}
-                      addonAfter="units"
-                      style={{ width: 160 }}
-                      placeholder="e.g. 10"
-                    />
-                  ),
-                },
-                {
-                  title: 'Apply this discount',
-                  dataIndex: 'discountPercent',
-                  render: (val, row: any) => (
-                    <InputNumber
-                      value={val}
-                      min={0}
-                      max={100}
-                      precision={0}
-                      parser={(v) => v?.replace(/[^\d]/g, '') as any}
-                      addonAfter="%"
-                      onChange={(v) => updateTier(row._origIndex, 'discountPercent', v || 0)}
-                      style={{ width: 120 }}
-                      placeholder="e.g. 5"
-                    />
-                  ),
-                },
-                {
-                  title: 'What customer sees',
-                  render: (_, row: any) => (
-                    <span className="text-green-700 font-medium text-sm">
-                      Order {row.minQty}+ units → get {row.discountPercent}% off
-                    </span>
-                  ),
-                },
-                {
-                  title: '',
-                  width: 48,
-                  render: (_, row: any) => (
-                    <Button
-                      type="text"
-                      danger
-                      icon={<DeleteOutlined />}
-                      onClick={() => removeTier(row._origIndex)}
-                    />
-                  ),
-                },
-              ]}
-            />
-            <div className="mt-3 bg-blue-50 border border-blue-100 rounded p-3 text-xs text-blue-700">
-              <strong>How it works in quotations:</strong> When a salesperson selects this product and enters a quantity, the discount field auto-fills based on the above tiers. The salesperson can still manually change the discount, but it cannot exceed the <strong>Max Discount %</strong> set above.
-            </div>
+            {discountTiers
+              .map((tier, origIdx) => ({ tier, origIdx }))
+              .sort((a, b) => a.tier.minQty - b.tier.minQty)
+              .map(({ tier, origIdx }) => (
+                <div key={origIdx} className="flex items-center gap-3 mb-2 p-2 bg-gray-50 rounded border border-gray-200">
+                  <LockOutlined className="text-gray-400 text-xs" />
+                  <Tag color="blue" className="m-0">Qty ≥ {tier.minQty}</Tag>
+                  <Tag color="green" className="m-0">{tier.discountPercent}% off</Tag>
+                  <span className="text-gray-400 text-xs flex-1">
+                    Order {tier.minQty}+ units → {tier.discountPercent}% discount applied automatically
+                  </span>
+                  <Button
+                    type="text"
+                    danger
+                    icon={<DeleteOutlined />}
+                    size="small"
+                    onClick={() => removeTier(origIdx)}
+                  />
+                </div>
+              ))}
           </>
+        )}
+
+        {/* Pending tier being entered */}
+        {pendingTier && (
+          <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded">
+            <div className="text-xs text-blue-700 font-medium mb-2">New Tier</div>
+            <div className="flex items-center gap-3 flex-wrap">
+              <div>
+                <div className="text-xs text-gray-500 mb-1">Min Quantity</div>
+                <InputNumber
+                  value={pendingTier.minQty}
+                  min={1}
+                  max={999999}
+                  precision={0}
+                  parser={(v) => v?.replace(/[^\d]/g, '') as any}
+                  onChange={(v) => setPendingTier({ ...pendingTier, minQty: v || 1 })}
+                  addonAfter="units"
+                  style={{ width: 160 }}
+                  placeholder="e.g. 10"
+                />
+              </div>
+              <div>
+                <div className="text-xs text-gray-500 mb-1">Discount %</div>
+                <InputNumber
+                  value={pendingTier.discountPercent}
+                  min={0}
+                  max={100}
+                  precision={0}
+                  parser={(v) => v?.replace(/[^\d]/g, '') as any}
+                  onChange={(v) => setPendingTier({ ...pendingTier, discountPercent: v || 0 })}
+                  addonAfter="%"
+                  style={{ width: 120 }}
+                  placeholder="e.g. 5"
+                />
+              </div>
+              {pendingTier.minQty > 0 && (
+                <div className="text-green-700 font-medium text-sm self-end pb-1">
+                  Order {pendingTier.minQty}+ units → {pendingTier.discountPercent}% off
+                </div>
+              )}
+            </div>
+            <Space className="mt-3">
+              <Button
+                type="primary"
+                icon={<SaveOutlined />}
+                size="small"
+                onClick={() => savePendingTier(false)}
+              >
+                Save Tier
+              </Button>
+              <Button
+                icon={<PlusOutlined />}
+                size="small"
+                onClick={() => savePendingTier(true)}
+              >
+                Save and Add Tier
+              </Button>
+              <Button
+                size="small"
+                onClick={() => setPendingTier(null)}
+              >
+                Cancel
+              </Button>
+            </Space>
+          </div>
+        )}
+
+        {discountTiers.length > 0 && (
+          <div className="mt-3 bg-blue-50 border border-blue-100 rounded p-3 text-xs text-blue-700">
+            <strong>How it works in quotations:</strong> When a salesperson selects this product and enters a quantity, the discount field auto-fills based on the above tiers. The salesperson can still manually adjust the discount.
+          </div>
         )}
       </Card>
 

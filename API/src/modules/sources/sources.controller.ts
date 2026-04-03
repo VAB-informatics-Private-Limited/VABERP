@@ -22,7 +22,7 @@ export class SourcesController {
 
   @Get()
   @ApiOperation({ summary: 'Get all lead sources' })
-  @RequirePermission('configurations', 'sources', 'view')
+  @RequirePermission('enquiry', 'enquiries', 'view')
   async findAll(@EnterpriseId() enterpriseId: number) {
     return this.service.findAll(enterpriseId);
   }

@@ -59,6 +59,11 @@ export async function unlockEnterprise(id: number) {
   return res.data;
 }
 
+export async function updateTaskVisibility(id: number, unrestricted: boolean) {
+  const res = await superAdminClient.patch(`/super-admin/enterprises/${id}/task-visibility`, { unrestricted });
+  return res.data;
+}
+
 export async function lockReseller(id: number) {
   const res = await superAdminClient.patch(`/super-admin/resellers/${id}/lock`);
   return res.data;

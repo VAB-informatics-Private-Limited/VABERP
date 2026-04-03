@@ -1,7 +1,7 @@
 'use client';
 
 import { Table, Button, Tag, Space, Card, Empty, Modal, message } from 'antd';
-import { PhoneOutlined, EyeOutlined, CheckCircleOutlined, CalendarOutlined } from '@ant-design/icons';
+import { PhoneOutlined, EyeOutlined, CheckCircleOutlined, FileTextOutlined } from '@ant-design/icons';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -22,7 +22,7 @@ export function TodayFollowupList({ data, loading }: TodayFollowupListProps) {
   const [actionModal, setActionModal] = useState<{
     open: boolean;
     followup: TodayFollowup | null;
-    mode: 'complete' | 'reschedule';
+    mode: 'complete';
   }>({
     open: false,
     followup: null,
@@ -35,18 +35,7 @@ export function TodayFollowupList({ data, loading }: TodayFollowupListProps) {
     onSuccess: (response) => {
       const outcome = response?.data?.outcomeStatus;
 
-      if (outcome === 'sale_closed') {
-        message.success('Sale closed! Customer created successfully.');
-        queryClient.invalidateQueries({ queryKey: ['customers'] });
-        queryClient.invalidateQueries({ queryKey: ['today-followups'] });
-        queryClient.invalidateQueries({ queryKey: ['enquiries'] });
-        const customerId = response?.data?.customer?.id;
-        if (customerId) {
-          setActionModal({ open: false, followup: null, mode: 'complete' });
-          router.push(`/customers/${customerId}`);
-          return;
-        }
-      } else if (outcome === 'not_interested') {
+      if (outcome === 'not_interested') {
         message.success('Enquiry marked as not interested');
       } else if (outcome === 'follow_up') {
         message.success('Follow-up rescheduled successfully');
@@ -148,10 +137,10 @@ export function TodayFollowupList({ data, loading }: TodayFollowupListProps) {
           </Button>
           <Button
             size="small"
-            icon={<CalendarOutlined />}
-            onClick={() => setActionModal({ open: true, followup: record, mode: 'reschedule' })}
+            icon={<FileTextOutlined />}
+            onClick={() => router.push(`/quotations/create?enquiryId=${record.enquiry_id}`)}
           >
-            Reschedule
+            Create Quotation
           </Button>
           <Button
             size="small"
@@ -187,7 +176,7 @@ export function TodayFollowupList({ data, loading }: TodayFollowupListProps) {
       />
 
       <Modal
-        title={`Update — ${actionModal.followup?.customer_name}`}
+        title={`Complete Follow-up — ${actionModal.followup?.customer_name}`}
         open={actionModal.open}
         onCancel={() => setActionModal({ open: false, followup: null, mode: 'complete' })}
         footer={null}

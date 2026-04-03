@@ -23,6 +23,8 @@ const employeeSchema = z.object({
   phone_number: z.string().min(10, 'Phone number must be 10 digits'),
   hire_date: z.string().min(1, 'Hire date is required'),
   status: z.enum(['active', 'inactive']).optional().default('active'),
+  reporting_to: z.number().nullable().optional(),
+  reporting_manager_id: z.number().nullable().optional(),
 });
 
 type EmployeeFormValues = z.infer<typeof employeeSchema>;
@@ -34,6 +36,7 @@ interface EmployeeFormProps {
   submitText?: string;
   isEdit?: boolean;
   showPermissions?: boolean;
+  employeeOptions?: { value: number; label: string }[];
 }
 
 export function EmployeeForm({
@@ -43,6 +46,7 @@ export function EmployeeForm({
   submitText = 'Save Employee',
   isEdit = false,
   showPermissions = false,
+  employeeOptions = [],
 }: EmployeeFormProps) {
   const [permissions, setPermissions] = useState<MenuPermissions>({});
   const { getEnterpriseId } = useAuthStore();
@@ -66,6 +70,8 @@ export function EmployeeForm({
       phone_number: initialData?.phone_number || '',
       hire_date: initialData?.hire_date || '',
       status: initialData?.status || 'active',
+      reporting_to: initialData?.reporting_to ?? null,
+      reporting_manager_id: initialData?.reporting_manager_id ?? null,
     },
   });
 
@@ -285,6 +291,29 @@ export function EmployeeForm({
                     <Select.Option value="active">Active</Select.Option>
                     <Select.Option value="inactive">Inactive</Select.Option>
                   </Select>
+                )}
+              />
+            </Form.Item>
+          </Col>
+        </Row>
+        <Row gutter={16}>
+          <Col xs={24} md={12}>
+            <Form.Item label="Reports To (Manager)">
+              <Controller
+                name="reporting_to"
+                control={control}
+                render={({ field }) => (
+                  <Select
+                    {...field}
+                    value={field.value ?? null}
+                    onChange={(val) => field.onChange(val ?? null)}
+                    placeholder="Select manager (optional)"
+                    size="large"
+                    showSearch
+                    allowClear
+                    optionFilterProp="label"
+                    options={employeeOptions}
+                  />
                 )}
               />
             </Form.Item>

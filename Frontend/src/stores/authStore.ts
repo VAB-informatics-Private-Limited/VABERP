@@ -4,7 +4,7 @@ import { Employee, Enterprise, MenuPermissions, UserType } from '@/types';
 
 export type PermissionModule =
   | 'sales' | 'catalog' | 'enquiry' | 'orders' | 'inventory'
-  | 'invoicing' | 'reports' | 'configurations' | 'procurement' | 'employees';
+  | 'invoicing' | 'reports' | 'configurations' | 'procurement' | 'employees' | 'crm' | 'tasks';
 
 export type PermissionAction = 'view' | 'create' | 'edit' | 'delete' | 'approve';
 
