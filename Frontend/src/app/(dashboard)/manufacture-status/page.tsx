@@ -23,6 +23,7 @@ import { getManufacturingPurchaseOrders } from '@/lib/api/bom';
 import { useAuthStore } from '@/stores/authStore';
 import { JobCard, JOB_CARD_STATUS_OPTIONS } from '@/types/manufacturing';
 import { ManufacturingPO } from '@/types/bom';
+import { SO_STATUS_OPTIONS } from '@/types/sales-order';
 import dayjs from 'dayjs';
 
 const { Title, Text } = Typography;
@@ -268,6 +269,10 @@ export default function ManufactureStatusPage() {
             dataSource={filteredPOs}
             rowKey="id"
             size="small"
+            onRow={(record) => ({
+              onClick: () => router.push(`/purchase-orders/${record.id}`),
+              style: { cursor: 'pointer' },
+            })}
             pagination={{ pageSize: 15, showSizeChanger: true, showTotal: (t, r) => `${r[0]}-${r[1]} of ${t}` }}
             expandable={{
               expandedRowKeys: expandedKeys,
@@ -296,6 +301,17 @@ export default function ManufactureStatusPage() {
                           ) : '-'}
                         </Descriptions.Item>
                         <Descriptions.Item label="Total Value"><Text strong>{fmt(record.grand_total)}</Text></Descriptions.Item>
+                        <Descriptions.Item label="PO Status">
+                          {(() => { const opt = SO_STATUS_OPTIONS.find((o: any) => o.value === record.status); return <Tag color={opt?.color || 'default'}>{opt?.label || record.status}</Tag>; })()}
+                        </Descriptions.Item>
+                        <Descriptions.Item label="Invoiced">
+                          <Text strong className="text-orange-500">{fmt(Number(record.invoiced_amount || 0))}</Text>
+                        </Descriptions.Item>
+                        <Descriptions.Item label="Remaining">
+                          <Text strong className={Number(record.remaining_amount) > 0 ? 'text-red-500' : 'text-green-600'}>
+                            {fmt(Number(record.remaining_amount ?? (record.grand_total - (record.invoiced_amount || 0))))}
+                          </Text>
+                        </Descriptions.Item>
                         <Descriptions.Item label="Priority">
                           <Tag color={record.manufacturing_priority === 2 ? 'red' : record.manufacturing_priority === 1 ? 'orange' : 'default'}>
                             {record.manufacturing_priority === 2 ? 'Urgent' : record.manufacturing_priority === 1 ? 'High' : 'Normal'}
@@ -491,6 +507,44 @@ export default function ManufactureStatusPage() {
                     {record.items.length > 2 && <Text type="secondary" className="text-xs">+{record.items.length - 2} more</Text>}
                   </div>
                 ),
+              },
+              {
+                title: 'PO Status',
+                key: 'po_status',
+                width: 130,
+                render: (_, record: any) => {
+                  const opt = SO_STATUS_OPTIONS.find(o => o.value === record.status);
+                  return <Tag color={opt?.color || 'default'}>{opt?.label || record.status}</Tag>;
+                },
+              },
+              {
+                title: 'Payment',
+                key: 'payment',
+                width: 170,
+                render: (_, record: any) => {
+                  const totalPaid = Number(record.total_paid || 0);
+                  const grandTotal = Number(record.grand_total || 0);
+                  const balanceDue = grandTotal - totalPaid;
+                  const isPaid = balanceDue <= 0.005 && totalPaid > 0;
+                  const isPartial = totalPaid > 0 && balanceDue > 0.005;
+                  return (
+                    <div>
+                      <Tag color={isPaid ? 'green' : isPartial ? 'orange' : 'red'} className="mb-1">
+                        {isPaid ? 'Fully Paid' : isPartial ? 'Partial' : 'Unpaid'}
+                      </Tag>
+                      {totalPaid > 0 && (
+                        <div className="text-xs text-gray-500">
+                          Paid: <span className="text-green-600 font-medium">{fmt(totalPaid)}</span>
+                        </div>
+                      )}
+                      {balanceDue > 0.005 && (
+                        <div className="text-xs text-gray-500">
+                          Due: <span className="text-red-500 font-medium">{fmt(balanceDue)}</span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                },
               },
               {
                 title: 'Delivery',

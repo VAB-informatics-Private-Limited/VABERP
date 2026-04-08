@@ -88,16 +88,16 @@ export function TaskTable({ tasks, total, page, pageSize, loading, canEdit, canD
       render: (_: unknown, r: Task) => (
         <Space size={4}>
           <Tooltip title="View">
-            <Button size="small" icon={<EyeOutlined />} onClick={() => router.push(`/tasks/${r.id}`)} />
+            <Button size="small" icon={<EyeOutlined />} onClick={(e) => { e.stopPropagation(); router.push(`/tasks/${r.id}`); }} />
           </Tooltip>
           {canEdit && (
             <Tooltip title="Edit">
-              <Button size="small" icon={<EditOutlined />} onClick={() => router.push(`/tasks/${r.id}/edit`)} />
+              <Button size="small" icon={<EditOutlined />} onClick={(e) => { e.stopPropagation(); router.push(`/tasks/${r.id}/edit`); }} />
             </Tooltip>
           )}
           {canDelete && (
             <Popconfirm title="Delete task?" onConfirm={() => onDelete(r.id)} okButtonProps={{ danger: true }}>
-              <Button size="small" danger icon={<DeleteOutlined />} />
+              <Button size="small" danger icon={<DeleteOutlined />} onClick={(e) => e.stopPropagation()} />
             </Popconfirm>
           )}
         </Space>
@@ -112,6 +112,10 @@ export function TaskTable({ tasks, total, page, pageSize, loading, canEdit, canD
       rowKey="id"
       loading={loading}
       size="small"
+      onRow={(record) => ({
+        onClick: () => router.push(`/tasks/${record.id}`),
+        style: { cursor: 'pointer' },
+      })}
       pagination={{
         current: page,
         pageSize,

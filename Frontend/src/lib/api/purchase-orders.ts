@@ -66,7 +66,7 @@ export async function receivePurchaseOrder(id: number): Promise<ApiResponse> {
 }
 
 export async function updatePOExpectedDelivery(id: number, expectedDelivery: string): Promise<ApiResponse<PurchaseOrder>> {
-  const response = await apiClient.patch(`/purchase-orders/${id}/eta`, { expectedDelivery });
+  const response = await apiClient.patch(`/sales-orders/${id}/eta`, { expectedDelivery });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const d = response.data as any;
   return { message: d.message, data: d.data ? mapPOFromBackend(d.data) : undefined };

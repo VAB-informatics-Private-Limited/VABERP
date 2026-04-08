@@ -27,7 +27,9 @@ export interface Payment {
   notes?: string;
   received_by?: number;
   received_by_name?: string;
-  status: string;
+  status: string; // 'pending' | 'completed' | 'cancelled' | 'refunded'
+  verified_by?: number;
+  verified_at?: string;
   created_date: string;
 }
 
@@ -50,6 +52,7 @@ export interface Invoice {
   shipping_charges: number;
   grand_total: number;
   total_paid: number;
+  pending_amount?: number;
   balance_due: number;
   terms_conditions?: string;
   notes?: string;
@@ -85,6 +88,7 @@ export interface InvoiceFormData {
 export interface PaymentFormData {
   amount: number;
   payment_date?: string;
+  payment_method?: string;
   reference_number?: string;
   notes?: string;
 }

@@ -13,6 +13,7 @@ import { EmailService } from '../email/email.service';
 import { IndentsService, InsufficientItem } from '../indents/indents.service';
 import { JobCard } from '../manufacturing/entities/job-card.entity';
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class MaterialRequestsService {
@@ -37,6 +38,7 @@ export class MaterialRequestsService {
     @Inject(forwardRef(() => IndentsService))
     private indentsService: IndentsService,
     private auditLogsService: AuditLogsService,
+    private notificationsService: NotificationsService,
   ) {}
 
   async findAll(enterpriseId: number, page = 1, limit = 20, status?: string) {
@@ -152,6 +154,15 @@ export class MaterialRequestsService {
       userId,
       enterpriseId,
     }).catch(() => {});
+    this.notificationsService.create({
+      enterpriseId,
+      title: 'New Material Request',
+      message: `Material request ${requestNumber} has been submitted and is awaiting approval.`,
+      type: 'material_request_created',
+      module: 'inventory',
+      subModule: 'material-requests',
+      link: `/material-requests/${savedMr.id}`,
+    });
     return createResult;
   }
 
@@ -334,6 +345,15 @@ export class MaterialRequestsService {
       userId,
       enterpriseId,
     }).catch(() => {});
+    this.notificationsService.create({
+      enterpriseId,
+      title: 'Material Request Approved',
+      message: `Material request ${mr.requestNumber} has been ${newStatus.replace('_', ' ')}.`,
+      type: 'material_request_approved',
+      module: 'inventory',
+      subModule: 'material-requests',
+      link: `/material-requests/${id}`,
+    });
     return {
       ...result,
       indent: indentData,

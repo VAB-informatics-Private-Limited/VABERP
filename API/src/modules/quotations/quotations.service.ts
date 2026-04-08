@@ -10,6 +10,7 @@ import { SalesOrderItem } from '../sales-orders/entities/sales-order-item.entity
 import { Customer } from '../customers/entities/customer.entity';
 import { CreateQuotationDto, QuotationItemDto } from './dto';
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class QuotationsService {
@@ -29,6 +30,7 @@ export class QuotationsService {
     @InjectRepository(Customer)
     private customerRepository: Repository<Customer>,
     private auditLogsService: AuditLogsService,
+    private notificationsService: NotificationsService,
   ) {}
 
   async findAll(
@@ -42,6 +44,7 @@ export class QuotationsService {
     dataStartDate?: Date | null,
     ownDataOnly = false,
     currentUserId?: number,
+    managerUserId?: number,
   ) {
     const query = this.quotationRepository
       .createQueryBuilder('quotation')
@@ -74,6 +77,12 @@ export class QuotationsService {
     }
     if (ownDataOnly && currentUserId) {
       query.andWhere('quotation.createdBy = :currentUserId', { currentUserId });
+    } else if (managerUserId) {
+      // Manager sees own records + all direct reports' records
+      query.andWhere(
+        `(quotation.createdBy = :managerUserId OR quotation.createdBy IN (SELECT e.id FROM employees e WHERE e.reporting_to = :managerUserId AND e.enterprise_id = :enterpriseId))`,
+        { managerUserId, enterpriseId },
+      );
     }
 
     const pageNum = Number(page) || 1;
@@ -429,6 +438,16 @@ export class QuotationsService {
       description: `Quotation ${quotation.quotationNumber} accepted and converted to Sales Order ${savedSo.orderNumber}`,
       newValues: { status: 'accepted', salesOrderId: savedSo.id, orderNumber: savedSo.orderNumber },
     }).catch(() => {});
+
+    this.notificationsService.create({
+      enterpriseId,
+      title: 'Quotation Converted to Purchase Order',
+      message: `Quotation ${quotation.quotationNumber} was accepted and converted to Purchase Order ${savedSo.orderNumber}.`,
+      type: 'quotation_accepted',
+      module: 'orders',
+      subModule: 'purchase-orders',
+      link: `/purchase-orders/${savedSo.id}`,
+    });
 
     // ── 3. Update linked enquiry and auto-convert to customer ─────────────
     if (quotation.enquiryId) {

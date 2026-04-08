@@ -130,10 +130,20 @@ export class RecordPaymentDto {
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
+  paymentMethod?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
   referenceNumber?: string;
 
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
   notes?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  paymentProof?: string;
 }

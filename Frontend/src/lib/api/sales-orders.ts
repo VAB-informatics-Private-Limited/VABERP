@@ -39,7 +39,9 @@ function mapSOFromBackend(data: any): SalesOrder {
     grand_total: Number(data.grandTotal),
     invoiced_amount: Number(data.invoicedAmount || 0),
     remaining_amount: Number(data.grandTotal) - Number(data.invoicedAmount || 0),
+    total_paid: Number(data.totalPaid || 0),
     notes: data.notes,
+    delay_note: data.delayNote || null,
     hold_reason: data.holdReason || undefined,
     hold_acknowledged: data.holdAcknowledged || false,
     status: data.status,
@@ -161,4 +163,10 @@ export async function updateSalesOrder(
 export async function deleteSalesOrder(id: number): Promise<ApiResponse> {
   const response = await apiClient.delete(`/sales-orders/${id}`);
   return response.data;
+}
+
+export async function reportSODelay(id: number, delayNote: string): Promise<ApiResponse<SalesOrder>> {
+  const response = await apiClient.patch(`/sales-orders/${id}/delay`, { delayNote });
+  const d = response.data as any;
+  return { message: d.message, data: d.data ? mapSOFromBackend(d.data) : undefined };
 }

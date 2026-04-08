@@ -22,6 +22,7 @@ export class AuditLogsController {
   @ApiQuery({ name: 'fromDate', required: false })
   @ApiQuery({ name: 'toDate', required: false })
   @ApiQuery({ name: 'userName', required: false })
+  @ApiQuery({ name: 'userId', required: false })
   async findAll(
     @EnterpriseId() enterpriseId: number,
     @Query('page') page?: number,
@@ -32,7 +33,8 @@ export class AuditLogsController {
     @Query('fromDate') fromDate?: string,
     @Query('toDate') toDate?: string,
     @Query('userName') userName?: string,
+    @Query('userId') userId?: number,
   ) {
-    return this.service.findAll(enterpriseId, page, limit, entityType, entityId, action, fromDate, toDate, userName);
+    return this.service.findAll(enterpriseId, page, limit, entityType, entityId, action, fromDate, toDate, userName, userId);
   }
 }

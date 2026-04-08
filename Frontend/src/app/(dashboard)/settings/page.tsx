@@ -1,7 +1,7 @@
 'use client';
 
 import { Typography, Card, Form, Input, Button, Row, Col, Spin, message, Descriptions, Tag } from 'antd';
-import { SaveOutlined, EditOutlined, SettingOutlined, TagsOutlined, MailOutlined, AuditOutlined, ToolOutlined, DashboardOutlined } from '@ant-design/icons';
+import { SaveOutlined, EditOutlined, SettingOutlined, TagsOutlined, MailOutlined, AuditOutlined, ToolOutlined, DashboardOutlined, PrinterOutlined } from '@ant-design/icons';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
@@ -55,6 +55,12 @@ export default function SettingsPage() {
   };
 
   const settingsCards = [
+    {
+      title: 'Print Template',
+      description: 'Configure company logo, header layout and style for all printed documents',
+      icon: <PrinterOutlined className="text-3xl text-red-500" />,
+      path: '/settings/print-template',
+    },
     {
       title: 'Lead Sources',
       description: 'Manage enquiry sources like Website, Referral, etc.',

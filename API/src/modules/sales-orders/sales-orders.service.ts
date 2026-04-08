@@ -87,11 +87,29 @@ export class SalesOrdersService {
     const pageNum = Number(page) || 1;
     const limitNum = Number(limit) || 20;
 
-    const [data, total] = await query
+    const [rows, total] = await query
       .skip((pageNum - 1) * limitNum)
       .take(limitNum)
       .orderBy('so.createdDate', 'DESC')
       .getManyAndCount();
+
+    // Compute totalPaid from completed payments for each SO in one query
+    let paidMap: Map<number, number> = new Map();
+    if (rows.length > 0) {
+      const soIds = rows.map((s) => s.id);
+      const paidRows = await this.paymentRepository
+        .createQueryBuilder('p')
+        .select('inv.salesOrderId', 'soId')
+        .addSelect('COALESCE(SUM(p.amount), 0)', 'totalPaid')
+        .innerJoin('p.invoice', 'inv')
+        .where('inv.salesOrderId IN (:...soIds)', { soIds })
+        .andWhere("p.status = 'completed'")
+        .groupBy('inv.salesOrderId')
+        .getRawMany();
+      paidMap = new Map(paidRows.map((r) => [Number(r.soId), Number(r.totalPaid)]));
+    }
+
+    const data = rows.map((so) => ({ ...so, totalPaid: paidMap.get(so.id) || 0 }));
 
     return {
       message: 'Sales orders fetched successfully',
@@ -108,6 +126,16 @@ export class SalesOrdersService {
     await this.soRepository.update(id, {
       expectedDelivery: expectedDelivery ? new Date(expectedDelivery) : null,
     });
+    return this.findOne(id, enterpriseId);
+  }
+
+  async reportDelay(id: number, enterpriseId: number, delayNote: string) {
+    const so = await this.soRepository.findOne({ where: { id, enterpriseId } });
+    if (!so) throw new NotFoundException('Sales order not found');
+    await this.soRepository.update(id, { delayNote });
+    if (so.quotationId) {
+      await this.quotationRepository.update(so.quotationId, { delayNote });
+    }
     return this.findOne(id, enterpriseId);
   }
 
@@ -431,10 +459,6 @@ This is an automated notification.`;
     const count = await this.invoiceRepository.count({ where: { enterpriseId } });
     const invoiceNumber = `INV-${String(count + 1).padStart(6, '0')}`;
 
-    // Status: 'fully_paid' only when this invoice completes the PO; otherwise 'partially_paid'
-    const isFullPayment = invoiceAmount >= remainingToInvoice - 0.01;
-    const invoiceStatus = isFullPayment ? 'fully_paid' : 'partially_paid';
-
     const invoice = this.invoiceRepository.create({
       enterpriseId,
       invoiceNumber,
@@ -451,10 +475,10 @@ This is an automated notification.`;
       taxAmount: scaledTaxAmount,
       shippingCharges: 0,
       grandTotal: invoiceAmount,
-      totalPaid: invoiceAmount,
-      balanceDue: 0,
+      totalPaid: 0,
+      balanceDue: invoiceAmount,
       notes: dto.notes || so.notes || undefined,
-      status: invoiceStatus,
+      status: 'unpaid',
       createdBy: userId,
     });
 
@@ -484,22 +508,6 @@ This is an automated notification.`;
       });
       await this.invoiceItemRepository.save(itemEntities);
     }
-
-    // ── Create payment record (audit trail + history) ─────────────────────
-    const paymentCount = await this.paymentRepository.count({ where: { enterpriseId } });
-    const paymentNumber = `PAY-${String(paymentCount + 1).padStart(6, '0')}`;
-    const payment = this.paymentRepository.create({
-      enterpriseId,
-      invoiceId: savedInvoice.id,
-      paymentNumber,
-      paymentDate: dto.invoiceDate ? new Date(dto.invoiceDate) : new Date(),
-      amount: invoiceAmount,
-      paymentMethod: dto.paymentMethod || 'other',
-      notes: dto.notes || undefined,
-      receivedBy: userId,
-      status: 'completed',
-    });
-    await this.paymentRepository.save(payment);
 
     // ── Recalculate invoiced_amount from actual invoice sum (always accurate) ──
     const { sum } = await this.invoiceRepository

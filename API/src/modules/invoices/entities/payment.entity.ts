@@ -47,6 +47,9 @@ export class Payment {
   @Column({ nullable: true, type: 'text' })
   notes: string;
 
+  @Column({ name: 'payment_proof', nullable: true, type: 'text' })
+  paymentProof: string;
+
   @Column({ name: 'received_by', nullable: true })
   receivedBy: number;
 
@@ -54,8 +57,14 @@ export class Payment {
   @JoinColumn({ name: 'received_by' })
   receivedByEmployee: Employee;
 
-  @Column({ default: 'completed' })
-  status: string; // 'completed', 'pending', 'cancelled', 'refunded'
+  @Column({ default: 'pending' })
+  status: string; // 'pending', 'completed', 'cancelled', 'refunded'
+
+  @Column({ name: 'verified_by', nullable: true })
+  verifiedBy: number;
+
+  @Column({ name: 'verified_at', type: 'timestamp', nullable: true })
+  verifiedAt: Date;
 
   @CreateDateColumn({ name: 'created_date' })
   createdDate: Date;

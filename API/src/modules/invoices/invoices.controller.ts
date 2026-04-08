@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Put,
+  Patch,
   Delete,
   Body,
   Param,
@@ -40,9 +41,10 @@ export class InvoicesController {
     @Query('customerId') customerId?: number,
     @Query('fromDate') fromDate?: string,
     @Query('toDate') toDate?: string,
-    @Query('salesOrderId') salesOrderId?: number,
+    @Query('salesOrderId') salesOrderId?: string,
   ) {
-    return this.invoicesService.findAll(enterpriseId, page, limit, search, status, customerId, fromDate, toDate, salesOrderId);
+    const parsedSalesOrderId = salesOrderId ? parseInt(salesOrderId, 10) : undefined;
+    return this.invoicesService.findAll(enterpriseId, page, limit, search, status, customerId, fromDate, toDate, parsedSalesOrderId);
   }
 
   @Get('payments/all')
@@ -141,6 +143,16 @@ export class InvoicesController {
     return this.invoicesService.recordPayment(id, enterpriseId, dto, user?.id);
   }
 
+  @Get('payments/:paymentId')
+  @ApiOperation({ summary: 'Get a single payment by ID' })
+  @RequirePermission('invoicing', 'payments', 'view')
+  async getPaymentById(
+    @Param('paymentId', ParseIntPipe) paymentId: number,
+    @EnterpriseId() enterpriseId: number,
+  ) {
+    return this.invoicesService.getPaymentById(paymentId, enterpriseId);
+  }
+
   @Get(':id/payments')
   @ApiOperation({ summary: 'Get payment history for an invoice' })
   @RequirePermission('invoicing', 'payments', 'view')
@@ -149,5 +161,17 @@ export class InvoicesController {
     @EnterpriseId() enterpriseId: number,
   ) {
     return this.invoicesService.getPayments(id, enterpriseId);
+  }
+
+  @Patch(':id/payments/:paymentId/verify')
+  @ApiOperation({ summary: 'Verify a pending payment — marks it as paid' })
+  @RequirePermission('invoicing', 'payments', 'edit')
+  async verifyPayment(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('paymentId', ParseIntPipe) paymentId: number,
+    @EnterpriseId() enterpriseId: number,
+    @CurrentUser() user: any,
+  ) {
+    return this.invoicesService.verifyPayment(paymentId, id, enterpriseId, user?.id);
   }
 }

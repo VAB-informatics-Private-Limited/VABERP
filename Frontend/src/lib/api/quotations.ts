@@ -65,6 +65,7 @@ function mapQuotationFromBackend(data: any): Quotation {
     tax_amount: data.taxAmount,
     total_amount: data.grandTotal,
     notes: data.notes,
+    delay_note: data.delayNote || null,
     terms_conditions: data.termsConditions,
     status: data.status || 'draft',
     created_by: data.createdBy,

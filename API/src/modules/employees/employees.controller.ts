@@ -264,8 +264,9 @@ export class EmployeesController {
   async updatePermissions(
     @Param('id', ParseIntPipe) id: number,
     @EnterpriseId() enterpriseId: number,
+    @CurrentUser() user: any,
     @Body() permissions: any,
   ) {
-    return this.employeesService.updatePermissions(id, enterpriseId, permissions);
+    return this.employeesService.updatePermissions(id, enterpriseId, permissions, user?.id);
   }
 }

@@ -184,7 +184,7 @@ export default function InvoiceDetailPage() {
       {/* ── Screen action bar ── */}
       <div className="flex flex-wrap justify-between items-center mb-6 gap-3 print:hidden">
         <div className="flex items-center gap-4">
-          <Button icon={<ArrowLeftOutlined />} onClick={() => router.push('/invoices')}>Back</Button>
+          <Button icon={<ArrowLeftOutlined />} onClick={() => router.back()}>Back</Button>
           <Title level={4} className="!mb-0">{invoice.invoice_number}</Title>
           <Tag color={getStatusColor(invoice.status)}>{getStatusLabel(invoice.status)}</Tag>
         </div>

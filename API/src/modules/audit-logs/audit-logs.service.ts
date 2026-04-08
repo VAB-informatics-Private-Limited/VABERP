@@ -53,6 +53,7 @@ export class AuditLogsService {
     fromDate?: string,
     toDate?: string,
     userName?: string,
+    userId?: number,
   ) {
     const query = this.auditLogRepository
       .createQueryBuilder('log')
@@ -80,6 +81,10 @@ export class AuditLogsService {
 
     if (userName) {
       query.andWhere('log.userName ILIKE :userName', { userName: `%${userName}%` });
+    }
+
+    if (userId) {
+      query.andWhere('log.userId = :userId', { userId });
     }
 
     const pageNum = Number(page) || 1;

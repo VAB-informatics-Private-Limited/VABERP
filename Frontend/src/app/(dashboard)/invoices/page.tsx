@@ -1,7 +1,7 @@
 'use client';
 
 import { Typography, Button, Card, Input, Select, Space, DatePicker, Table, Tag, Modal, Form, InputNumber, message, Tooltip, Row, Col } from 'antd';
-import { SearchOutlined, ClearOutlined, EyeOutlined, FileTextOutlined, DollarOutlined, PrinterOutlined, HistoryOutlined } from '@ant-design/icons';
+import { SearchOutlined, ClearOutlined, FileTextOutlined, DollarOutlined, HistoryOutlined } from '@ant-design/icons';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
@@ -261,12 +261,12 @@ export default function InvoicesPage() {
         if (record.type === 'standalone') {
           return <Tag color={getStatusColor(record.invoice!.status)}>{getStatusLabel(record.invoice!.status)}</Tag>;
         }
-        const statuses = record.invoices.map((i) => i.status).filter((s, idx, arr) => arr.indexOf(s) === idx);
-        return (
-          <Space size={2} wrap>
-            {statuses.map((s) => <Tag key={s} color={getStatusColor(s)} style={{ fontSize: 11 }}>{getStatusLabel(s)}</Tag>)}
-          </Space>
-        );
+        const rem = Number(record.so_remaining_amount ?? 0);
+        const total = Number(record.so_grand_total ?? 0);
+        let s = 'unpaid', label = 'Unpaid', color = 'red';
+        if (rem <= 0) { s = 'paid'; label = 'Paid'; color = 'green'; }
+        else if (rem < total) { s = 'partially_paid'; label = 'Partially Paid'; color = 'orange'; }
+        return <Tag color={color}>{label}</Tag>;
       },
     },
     {
@@ -278,9 +278,8 @@ export default function InvoicesPage() {
           const remaining = Number(record.so_remaining_amount);
           const canPayPo = remaining > 0;
           return (
-            <Space size={4}>
-              <Tooltip title="View PO"><Button type="text" icon={<EyeOutlined />} size="small" onClick={() => router.push(`/purchase-orders/${record.sales_order_id}`)} /></Tooltip>
-              <Tooltip title="View Invoices"><Button type="text" icon={<PrinterOutlined />} size="small" onClick={() => window.open(`/purchase-orders/${record.sales_order_id}`, '_blank')} /></Tooltip>
+            <Space size={4} onClick={(e) => e.stopPropagation()}>
+              <Tooltip title="View PO"><Button type="text" icon={<FileTextOutlined />} size="small" onClick={() => router.push(`/purchase-orders/${record.sales_order_id}`)} /></Tooltip>
               <Tooltip title={canPayPo ? 'Record Payment' : 'Fully Paid'}>
                 <Button
                   type="primary"
@@ -299,12 +298,10 @@ export default function InvoicesPage() {
         const inv = record.invoice!;
         const canPay = inv.status !== 'cancelled' && Number(inv.balance_due) > 0;
         return (
-          <Space size={4}>
-            <Tooltip title="View Invoice"><Button type="text" icon={<EyeOutlined />} size="small" onClick={() => router.push(`/invoices/${inv.id}`)} /></Tooltip>
+          <Space size={4} onClick={(e) => e.stopPropagation()}>
             <Tooltip title={canPay ? 'Record Payment' : 'Fully Paid'}>
               <Button type="text" icon={<DollarOutlined />} size="small" disabled={!canPay} onClick={() => canPay && openPaymentModal(inv)} />
             </Tooltip>
-            <Tooltip title="Download / Print"><Button type="text" icon={<PrinterOutlined />} size="small" onClick={() => window.open(`/invoices/${inv.id}`, '_blank')} /></Tooltip>
             <Tooltip title="View Payments"><Button type="text" icon={<HistoryOutlined />} size="small" onClick={() => { setHistoryInvoiceId(inv.id!); setHistoryModalOpen(true); }} /></Tooltip>
           </Space>
         );
@@ -405,6 +402,16 @@ export default function InvoicesPage() {
             pageSizeOptions: ['50', '100', '200'],
             showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} invoices`,
           }}
+          onRow={(record) => ({
+            onClick: () => {
+              if (record.type === 'po') {
+                router.push(`/purchase-orders/${record.sales_order_id}`);
+              } else {
+                router.push(`/invoices/${record.invoice!.id}`);
+              }
+            },
+            style: { cursor: 'pointer' },
+          })}
           expandable={{
             rowExpandable: (record) => record.type === 'po',
             expandedRowRender: (record) => (
@@ -422,6 +429,10 @@ export default function InvoicesPage() {
                   pagination={false}
                   size="small"
                   className="border border-gray-200 rounded"
+                  onRow={(inv) => ({
+                    onClick: () => router.push(`/invoices/${inv.id}`),
+                    style: { cursor: 'pointer' },
+                  })}
                 />
               </div>
             ),

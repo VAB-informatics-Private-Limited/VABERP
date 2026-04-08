@@ -51,9 +51,9 @@ export default function SalesOrdersPage() {
       title: 'Actions', key: 'actions', width: 100,
       render: (_, record) => (
         <Space>
-          <Button type="text" icon={<EyeOutlined />} onClick={() => router.push(`/sales-orders/${record.id}`)} />
+          <Button type="text" icon={<EyeOutlined />} onClick={(e) => { e.stopPropagation(); router.push(`/sales-orders/${record.id}`); }} />
           <Popconfirm title="Delete?" onConfirm={() => deleteMutation.mutate(record.id)} okText="Yes" cancelText="No">
-            <Button type="text" danger icon={<DeleteOutlined />} />
+            <Button type="text" danger icon={<DeleteOutlined />} onClick={(e) => e.stopPropagation()} />
           </Popconfirm>
         </Space>
       ),
@@ -89,6 +89,10 @@ export default function SalesOrdersPage() {
           dataSource={data?.data || []}
           rowKey="id"
           loading={isLoading}
+          onRow={(record) => ({
+            onClick: () => router.push(`/sales-orders/${record.id}`),
+            style: { cursor: 'pointer' },
+          })}
           pagination={{
             current: page, pageSize, total: data?.totalRecords || 0,
             onChange: (p, ps) => { setPage(p); setPageSize(ps); },

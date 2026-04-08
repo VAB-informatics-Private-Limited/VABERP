@@ -153,7 +153,6 @@ export default function EnhancedBackgroundPaths({
     }, 2.25);
 
     // ── Phase 4: Tools draw in from the spiral positions ──────────
-    // Stagger per tool group (same order as spiral seed positions)
     const toolGroups = [
       "#s-gear-large",
       "#s-gear-small",
@@ -168,7 +167,6 @@ export default function EnhancedBackgroundPaths({
         svg.querySelectorAll<SVGGeometryElement>(`${selector} .s-tool`)
       );
       if (!groupEls.length) return;
-      // Each group's paths draw in together, groups staggered by 0.12s
       tl.to(groupEls, {
         strokeDashoffset: 0,
         opacity: 1,
@@ -323,15 +321,15 @@ export default function EnhancedBackgroundPaths({
       {/* ── Main Content ─────────────────────────────────────────── */}
       <div className="relative z-10 container mx-auto px-4 md:px-6 text-center">
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
+          initial={{ y: 20 }}
+          animate={{ y: 0 }}
           transition={{ duration: 1.5, ease: "easeOut" }}
           className="max-w-5xl mx-auto"
         >
           {/* Badge */}
           <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
+            initial={{ y: -10 }}
+            animate={{ y: 0 }}
             transition={{ delay: 0.3, duration: 0.8 }}
             className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-medium mb-8 bg-blue-50 text-blue-700 border border-blue-200"
           >
@@ -347,8 +345,8 @@ export default function EnhancedBackgroundPaths({
                   {word.split("").map((letter, li) => (
                     <motion.span
                       key={`${wi}-${li}`}
-                      initial={{ y: 100, opacity: 0, rotateX: -90 }}
-                      animate={{ y: 0, opacity: 1, rotateX: 0 }}
+                      initial={{ y: 24 }}
+                      animate={{ y: 0 }}
                       transition={{
                         delay: wi * 0.15 + li * 0.05,
                         type: "spring",
@@ -368,21 +366,16 @@ export default function EnhancedBackgroundPaths({
 
           {/* Subtitle */}
           {subtitle && (
-            <motion.p
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 1, duration: 1 }}
-              className="text-lg md:text-xl text-slate-600 font-light tracking-wide max-w-2xl mx-auto mb-10"
-            >
+            <p className="text-lg md:text-xl text-slate-600 font-light tracking-wide max-w-2xl mx-auto mb-10">
               {subtitle}
-            </motion.p>
+            </p>
           )}
 
           {/* CTA */}
           {primaryCta && (
             <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
+              initial={{ y: 20 }}
+              animate={{ y: 0 }}
               transition={{ delay: 1.5, duration: 0.8, type: "spring", stiffness: 100 }}
               className="flex justify-center"
             >
@@ -410,22 +403,15 @@ export default function EnhancedBackgroundPaths({
 
       {/* ── Floating Module Icons ─────────────────────────────────── */}
       {[
-        // Top-left cluster
         { icon: <BarChartOutlined />,    bg: "#eff6ff", color: "#2563eb", top: "12%",  left: "4%",   delay: 0,    duration: 5.5,  size: 48 },
         { icon: <TeamOutlined />,        bg: "#f5f3ff", color: "#7c3aed", top: "28%",  left: "7%",   delay: 1.2,  duration: 7,    size: 44 },
         { icon: <ShoppingOutlined />,    bg: "#fff7ed", color: "#ea580c", top: "18%",  left: "13%",  delay: 2.5,  duration: 6,    size: 40 },
-
-        // Top-right cluster
         { icon: <FileTextOutlined />,    bg: "#f0fdf4", color: "#16a34a", top: "10%",  right: "5%",  delay: 0.5,  duration: 6.5,  size: 48 },
         { icon: <DollarOutlined />,      bg: "#ecfdf5", color: "#059669", top: "24%",  right: "8%",  delay: 1.8,  duration: 5,    size: 44 },
         { icon: <RocketOutlined />,      bg: "#fdf4ff", color: "#a21caf", top: "16%",  right: "16%", delay: 3,    duration: 7.5,  size: 40 },
-
-        // Bottom-left cluster
         { icon: <ToolOutlined />,        bg: "#f8fafc", color: "#475569", top: "68%",  left: "5%",   delay: 0.8,  duration: 6,    size: 48 },
         { icon: <InboxOutlined />,       bg: "#fff7ed", color: "#d97706", top: "80%",  left: "10%",  delay: 2,    duration: 5.5,  size: 44 },
         { icon: <FileDoneOutlined />,    bg: "#f0f9ff", color: "#0284c7", top: "73%",  left: "18%",  delay: 3.5,  duration: 7,    size: 40 },
-
-        // Bottom-right cluster
         { icon: <ShoppingCartOutlined />,bg: "#fff1f2", color: "#e11d48", top: "70%",  right: "6%",  delay: 1.5,  duration: 6.5,  size: 48 },
         { icon: <CarOutlined />,         bg: "#eff6ff", color: "#3b82f6", top: "82%",  right: "11%", delay: 0.3,  duration: 5,    size: 44 },
         { icon: <SettingOutlined />,     bg: "#f1f5f9", color: "#64748b", top: "75%",  right: "19%", delay: 2.8,  duration: 7,    size: 40 },
@@ -438,8 +424,8 @@ export default function EnhancedBackgroundPaths({
             left: "left" in item ? item.left : undefined,
             right: "right" in item ? item.right : undefined,
           }}
-          initial={{ opacity: 0, scale: 0.5 }}
-          animate={{ opacity: 1, scale: 1 }}
+          initial={{ scale: 0.5 }}
+          animate={{ scale: 1 }}
           transition={{ delay: item.delay + 1, duration: 0.6, ease: "backOut" }}
         >
           <motion.div
@@ -473,12 +459,12 @@ export default function EnhancedBackgroundPaths({
       {/* Floating accent blobs */}
       <motion.div
         className="absolute top-1/4 left-1/4 w-4 h-4 bg-blue-500/20 rounded-full blur-sm pointer-events-none"
-        animate={{ y: [0, -20, 0], x: [0, 10, 0], scale: [1, 1.2, 1], opacity: [0.3, 0.7, 0.3] }}
+        animate={{ y: [0, -20, 0], x: [0, 10, 0], scale: [1, 1.2, 1] }}
         transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
       />
       <motion.div
         className="absolute top-3/4 right-1/3 w-6 h-6 bg-slate-500/15 rounded-full blur-sm pointer-events-none"
-        animate={{ y: [0, 15, 0], x: [0, -15, 0], scale: [1, 0.8, 1], opacity: [0.4, 0.7, 0.4] }}
+        animate={{ y: [0, 15, 0], x: [0, -15, 0], scale: [1, 0.8, 1] }}
         transition={{ duration: 8, repeat: Infinity, ease: "easeInOut", delay: 2 }}
       />
     </div>

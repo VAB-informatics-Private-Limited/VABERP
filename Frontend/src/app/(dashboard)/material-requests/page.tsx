@@ -1,11 +1,11 @@
 'use client';
 
-import { Typography, Button, Card, Select, Space, Table, Tag, Alert, Badge, Tabs, Statistic, Row, Col, Tooltip, Progress } from 'antd';
+import { Typography, Button, Card, Select, Space, Table, Tag, Alert, Badge, Tabs, Statistic, Row, Col, Tooltip, Progress, Avatar, Input, Divider } from 'antd';
 import dayjs from 'dayjs';
 import {
   ClearOutlined, EyeOutlined, ExclamationCircleOutlined, CheckCircleOutlined,
   ToolOutlined, InboxOutlined, ClockCircleOutlined,
-  WarningOutlined, SendOutlined,
+  WarningOutlined, SendOutlined, CalendarOutlined, SearchOutlined, UserOutlined, FilterOutlined,
 } from '@ant-design/icons';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
@@ -26,11 +26,19 @@ const ITEM_STATUS_COLORS: Record<string, string> = {
   issued: 'blue',
 };
 
+const AVATAR_COLORS = ['#4f46e5', '#0891b2', '#059669', '#d97706', '#dc2626', '#7c3aed'];
+function getAvatarColor(name: string) {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
+}
+
 type TabKey = 'all' | 'pending' | 'manufacturing' | 'approved' | 'fulfilled';
 
 export default function MaterialRequestsPage() {
   const router = useRouter();
   const [status, setStatus] = useState<string | undefined>();
+  const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState<TabKey>('all');
 
   const { data, isLoading } = useQuery({
@@ -44,10 +52,8 @@ export default function MaterialRequestsPage() {
     refetchInterval: 30000,
   });
 
-  const urgentItems = (priorityData?.data || []).filter((p: any) => p.priority === 'urgent' || p.priority === 'high');
   const allRequests = data?.data || [];
 
-  // Computed counts
   const counts = useMemo(() => {
     const pending = allRequests.filter(r => r.status === 'pending');
     const manufacturing = allRequests.filter(r => r.sales_order_id || r.purpose?.toLowerCase().includes('manufacturing'));
@@ -60,36 +66,83 @@ export default function MaterialRequestsPage() {
     return { pending, manufacturing, mfgPending, approved, fulfilled, readyToIssue };
   }, [allRequests]);
 
-  // Filter data by active tab
   const filteredData = useMemo(() => {
+    let base = allRequests;
     switch (activeTab) {
-      case 'pending': return allRequests.filter(r => r.status === 'pending');
-      case 'manufacturing': return allRequests.filter(r => r.sales_order_id || r.purpose?.toLowerCase().includes('manufacturing'));
-      case 'approved': return allRequests.filter(r => ['approved', 'partially_approved'].includes(r.status));
-      case 'fulfilled': return allRequests.filter(r => r.status === 'fulfilled');
-      default: return allRequests;
+      case 'pending': base = base.filter(r => r.status === 'pending'); break;
+      case 'manufacturing': base = base.filter(r => r.sales_order_id || r.purpose?.toLowerCase().includes('manufacturing')); break;
+      case 'approved': base = base.filter(r => ['approved', 'partially_approved'].includes(r.status)); break;
+      case 'fulfilled': base = base.filter(r => r.status === 'fulfilled'); break;
     }
-  }, [allRequests, activeTab]);
+    if (status) base = base.filter(r => r.status === status);
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      base = base.filter(r =>
+        r.request_number?.toLowerCase().includes(q) ||
+        r.requested_by_name?.toLowerCase().includes(q) ||
+        r.purpose?.toLowerCase().includes(q) ||
+        r.job_card_name?.toLowerCase().includes(q)
+      );
+    }
+    return base;
+  }, [allRequests, activeTab, status, search]);
 
   const getStatusColor = (s: string) => MR_STATUS_OPTIONS.find(o => o.value === s)?.color || 'default';
   const getStatusLabel = (s: string) => MR_STATUS_OPTIONS.find(o => o.value === s)?.label || s;
-
   const isManufacturingRequest = (r: MaterialRequest) => !!(r.sales_order_id || r.purpose?.toLowerCase().includes('manufacturing'));
+
+  const statCards = [
+    {
+      title: 'Pending Approval',
+      value: counts.pending.length,
+      icon: <ClockCircleOutlined style={{ fontSize: 20 }} />,
+      color: '#fa8c16',
+      bg: '#fff7e6',
+      tab: 'pending' as TabKey,
+    },
+    {
+      title: 'From Manufacturing',
+      value: counts.mfgPending.length,
+      icon: <ToolOutlined style={{ fontSize: 20 }} />,
+      color: '#722ed1',
+      bg: '#f9f0ff',
+      tab: 'manufacturing' as TabKey,
+      badge: counts.mfgPending.length > 0 ? 'Action Required' : undefined,
+    },
+    {
+      title: 'Ready to Issue',
+      value: counts.readyToIssue.length,
+      icon: <SendOutlined style={{ fontSize: 20 }} />,
+      color: '#1677ff',
+      bg: '#e6f4ff',
+      tab: 'approved' as TabKey,
+    },
+    {
+      title: 'Fulfilled',
+      value: counts.fulfilled.length,
+      icon: <CheckCircleOutlined style={{ fontSize: 20 }} />,
+      color: '#52c41a',
+      bg: '#f6ffed',
+      tab: 'fulfilled' as TabKey,
+    },
+  ];
 
   const columns: ColumnsType<MaterialRequest> = [
     {
       title: 'Request #',
       dataIndex: 'request_number',
       key: 'request_number',
-      width: 140,
+      width: 165,
       render: (text, record) => (
         <div>
-          <Text strong className="text-blue-600">{text}</Text>
+          <Text strong style={{ color: '#1677ff', fontSize: 13 }}>{text}</Text>
           {record.job_card_name && (
-            <div className="text-xs text-gray-600 font-medium mt-0.5">{record.job_card_name}</div>
+            <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>{record.job_card_name}</div>
           )}
           {isManufacturingRequest(record) && (
-            <div><Tag color="purple" style={{ fontSize: 10 }} className="!mt-1"><ToolOutlined /> Manufacturing</Tag></div>
+            <Tag color="purple" style={{ fontSize: 10, marginTop: 4, padding: '0 5px' }}>
+              <ToolOutlined style={{ marginRight: 3 }} />Manufacturing
+            </Tag>
           )}
         </div>
       ),
@@ -99,17 +152,35 @@ export default function MaterialRequestsPage() {
       dataIndex: 'request_date',
       key: 'request_date',
       width: 110,
-      render: (v) => v ? new Date(v).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '-',
+      render: (v) => v
+        ? <Text style={{ fontSize: 12 }}>{new Date(v).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</Text>
+        : <Text type="secondary">—</Text>,
     },
     {
       title: 'ETA',
       dataIndex: 'expected_delivery',
       key: 'expected_delivery',
-      width: 120,
+      width: 130,
       render: (v: string) => {
-        if (!v) return <Text type="secondary">Not set</Text>;
+        if (!v) return <Text type="secondary" style={{ fontSize: 12 }}>Not set</Text>;
         const isOverdue = dayjs(v).isBefore(dayjs(), 'day');
-        return <Text type={isOverdue ? 'danger' : undefined}>{dayjs(v).format('DD MMM YYYY')}{isOverdue ? ' ⚠' : ''}</Text>;
+        const daysLeft = dayjs(v).diff(dayjs(), 'day');
+        return (
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              <CalendarOutlined style={{ fontSize: 11, color: isOverdue ? '#ff4d4f' : '#8c8c8c' }} />
+              <Text style={{ fontSize: 12, color: isOverdue ? '#ff4d4f' : undefined, fontWeight: isOverdue ? 600 : undefined }}>
+                {dayjs(v).format('DD MMM YYYY')}
+              </Text>
+            </div>
+            {isOverdue
+              ? <Text style={{ fontSize: 10, color: '#ff4d4f' }}>Overdue by {Math.abs(daysLeft)}d</Text>
+              : daysLeft <= 3
+                ? <Text style={{ fontSize: 10, color: '#fa8c16' }}>Due in {daysLeft}d</Text>
+                : null
+            }
+          </div>
+        );
       },
     },
     {
@@ -119,7 +190,6 @@ export default function MaterialRequestsPage() {
       render: (_, record) => {
         const items = record.items || [];
         if (items.length === 0) return <Text type="secondary">—</Text>;
-
         const shortItems = items.filter(i => i.available_stock < i.quantity_requested);
         const allOk = shortItems.length === 0;
 
@@ -134,11 +204,7 @@ export default function MaterialRequestsPage() {
                     <span>Need: <strong style={{ color: '#fff' }}>{item.quantity_requested} {item.unit_of_measure || ''}</strong></span>
                     <span>Stock: <strong style={{ color: isShort ? '#ff7875' : '#95de64' }}>{item.available_stock} {item.unit_of_measure || ''}</strong></span>
                   </div>
-                  {isShort && (
-                    <div style={{ fontSize: 11, color: '#ff7875', marginTop: 1 }}>
-                      ⚠ Short by {item.quantity_requested - item.available_stock}
-                    </div>
-                  )}
+                  {isShort && <div style={{ fontSize: 11, color: '#ff7875', marginTop: 1 }}>Short by {item.quantity_requested - item.available_stock}</div>}
                   <Progress
                     percent={Math.min(100, Math.round((item.available_stock / item.quantity_requested) * 100))}
                     size="small"
@@ -156,43 +222,30 @@ export default function MaterialRequestsPage() {
         return (
           <Tooltip title={tooltipContent} placement="left" overlayStyle={{ maxWidth: 280 }}>
             <div style={{ cursor: 'default' }}>
-              {/* Summary badge row */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-                <span style={{ fontSize: 13, fontWeight: 600, color: '#333' }}>
-                  {items.length} item{items.length !== 1 ? 's' : ''}
-                </span>
-                {allOk ? (
-                  <Tag color="green" style={{ fontSize: 10, padding: '0 5px', lineHeight: '16px', margin: 0 }}>
-                    ✓ All in stock
-                  </Tag>
-                ) : (
-                  <Tag color="red" style={{ fontSize: 10, padding: '0 5px', lineHeight: '16px', margin: 0 }}>
-                    ⚠ {shortItems.length} short
-                  </Tag>
-                )}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 5 }}>
+                <Text strong style={{ fontSize: 12 }}>{items.length} item{items.length !== 1 ? 's' : ''}</Text>
+                {allOk
+                  ? <Tag color="green" style={{ fontSize: 10, padding: '0 5px', lineHeight: '16px', margin: 0 }}>✓ All in stock</Tag>
+                  : <Tag color="red" style={{ fontSize: 10, padding: '0 5px', lineHeight: '16px', margin: 0 }}>⚠ {shortItems.length} short</Tag>
+                }
               </div>
-
-              {/* Item list with dot indicator */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                 {items.slice(0, 2).map((item, i) => {
                   const isShort = item.available_stock < item.quantity_requested;
                   return (
                     <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                       <span style={{
-                        width: 7, height: 7, borderRadius: '50%', flexShrink: 0,
+                        width: 6, height: 6, borderRadius: '50%', flexShrink: 0,
                         background: isShort ? '#ff4d4f' : '#52c41a',
-                        boxShadow: isShort ? '0 0 0 2px #fff1f0' : '0 0 0 2px #f6ffed',
                       }} />
-                      <Text style={{ fontSize: 12, color: '#444' }} ellipsis={{ tooltip: item.item_name }}>
+                      <Text style={{ fontSize: 12, color: '#4b5563' }} ellipsis={{ tooltip: item.item_name }}>
                         {item.item_name}
                       </Text>
                     </div>
                   );
                 })}
                 {items.length > 2 && (
-                  <Text type="secondary" style={{ fontSize: 11, marginLeft: 13 }}>
-                    +{items.length - 2} more
-                  </Text>
+                  <Text type="secondary" style={{ fontSize: 11, marginLeft: 12 }}>+{items.length - 2} more</Text>
                 )}
               </div>
             </div>
@@ -205,27 +258,43 @@ export default function MaterialRequestsPage() {
       dataIndex: 'purpose',
       key: 'purpose',
       width: 140,
-      render: (v) => v || '-',
+      render: (v) => v
+        ? <Text style={{ fontSize: 12, color: '#374151' }}>{v}</Text>
+        : <Text type="secondary">—</Text>,
     },
     {
       title: 'Requested By',
       dataIndex: 'requested_by_name',
       key: 'requested_by_name',
-      width: 130,
-      render: (v) => v || '-',
+      width: 150,
+      render: (v) => v ? (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Avatar
+            size={26}
+            style={{ background: getAvatarColor(v), fontSize: 11, fontWeight: 600, flexShrink: 0 }}
+          >
+            {v.split(' ').map((n: string) => n[0]).slice(0, 2).join('').toUpperCase()}
+          </Avatar>
+          <Text style={{ fontSize: 12 }}>{v}</Text>
+        </div>
+      ) : <Text type="secondary">—</Text>,
     },
     {
       title: 'Status',
       dataIndex: 'status',
       key: 'status',
-      width: 140,
+      width: 150,
       render: (s, record) => {
         const hasShortage = record.items?.some(i => i.status === 'pending' && i.available_stock < i.quantity_requested);
         return (
           <div>
-            <Tag color={getStatusColor(s)}>{getStatusLabel(s)}</Tag>
+            <Tag color={getStatusColor(s)} style={{ fontWeight: 500 }}>{getStatusLabel(s)}</Tag>
             {s === 'pending' && hasShortage && (
-              <div className="mt-1"><Tag color="red" style={{ fontSize: 10 }}><WarningOutlined /> Stock Issues</Tag></div>
+              <div style={{ marginTop: 4 }}>
+                <Tag color="red" style={{ fontSize: 10, padding: '0 5px' }}>
+                  <WarningOutlined style={{ marginRight: 2 }} />Stock Issues
+                </Tag>
+              </div>
             )}
           </div>
         );
@@ -234,33 +303,50 @@ export default function MaterialRequestsPage() {
     {
       title: 'Action',
       key: 'actions',
-      width: 120,
+      width: 100,
       align: 'center',
       render: (_, record) => {
         const isPending = record.status === 'pending';
         const needsIssue = record.status === 'approved' && record.items?.some(i => i.status === 'approved' && i.quantity_issued < i.quantity_approved);
+        if (isPending) {
+          return (
+            <Button
+              type="primary"
+              size="small"
+              icon={<CheckCircleOutlined />}
+              onClick={(e) => { e.stopPropagation(); router.push(`/material-requests/${record.id}`); }}
+              style={{ borderRadius: 6 }}
+            >
+              Review
+            </Button>
+          );
+        }
+        if (needsIssue) {
+          return (
+            <Button
+              size="small"
+              icon={<SendOutlined />}
+              onClick={(e) => { e.stopPropagation(); router.push(`/material-requests/${record.id}`); }}
+              style={{ borderRadius: 6, borderColor: '#1677ff', color: '#1677ff' }}
+            >
+              Issue
+            </Button>
+          );
+        }
         return (
-          <Space direction="vertical" size={4}>
-            {isPending ? (
-              <Button type="primary" size="small" icon={<CheckCircleOutlined />} onClick={() => router.push(`/material-requests/${record.id}`)}>
-                Review
-              </Button>
-            ) : needsIssue ? (
-              <Button size="small" icon={<SendOutlined />} className="border-blue-400 text-blue-600" onClick={() => router.push(`/material-requests/${record.id}`)}>
-                Issue
-              </Button>
-            ) : (
-              <Button size="small" icon={<EyeOutlined />} onClick={() => router.push(`/material-requests/${record.id}`)}>
-                View
-              </Button>
-            )}
-          </Space>
+          <Button
+            size="small"
+            icon={<EyeOutlined />}
+            onClick={(e) => { e.stopPropagation(); router.push(`/material-requests/${record.id}`); }}
+            style={{ borderRadius: 6 }}
+          >
+            View
+          </Button>
         );
       },
     },
   ];
 
-  // Expandable row showing all items in detail with stock comparison
   const expandedRowRender = (record: MaterialRequest) => {
     const itemColumns: ColumnsType<MaterialRequestItem> = [
       {
@@ -268,8 +354,8 @@ export default function MaterialRequestsPage() {
         key: 'product',
         render: (_, item) => (
           <div>
-            <Text strong>{item.item_name}</Text>
-            {item.raw_material_code && <div className="text-xs text-gray-400 font-mono">{item.raw_material_code}</div>}
+            <Text strong style={{ fontSize: 12 }}>{item.item_name}</Text>
+            {item.raw_material_code && <div style={{ fontSize: 10, color: '#9ca3af', fontFamily: 'monospace' }}>{item.raw_material_code}</div>}
           </div>
         ),
       },
@@ -278,7 +364,9 @@ export default function MaterialRequestsPage() {
         dataIndex: 'quantity_requested',
         width: 110,
         align: 'center',
-        render: (q: number, item: MaterialRequestItem) => <Text strong>{q} {item.unit_of_measure || ''}</Text>,
+        render: (q: number, item: MaterialRequestItem) => (
+          <Text strong style={{ fontSize: 12 }}>{q} {item.unit_of_measure || ''}</Text>
+        ),
       },
       {
         title: 'Available Stock',
@@ -289,8 +377,8 @@ export default function MaterialRequestsPage() {
           const isShort = stock < item.quantity_requested;
           return (
             <div>
-              <Text type={isShort ? 'danger' : 'success'} strong>{stock} {item.unit_of_measure || ''}</Text>
-              {isShort && <div className="text-xs text-red-500">Short by {item.quantity_requested - stock}</div>}
+              <Text type={isShort ? 'danger' : 'success'} strong style={{ fontSize: 12 }}>{stock} {item.unit_of_measure || ''}</Text>
+              {isShort && <div style={{ fontSize: 10, color: '#ef4444' }}>Short by {item.quantity_requested - stock}</div>}
             </div>
           );
         },
@@ -303,129 +391,142 @@ export default function MaterialRequestsPage() {
         render: (_: unknown, item: MaterialRequestItem) => {
           const isAvailable = item.available_stock >= item.quantity_requested;
           return isAvailable
-            ? <Tag color="green">Available</Tag>
-            : <Tag color="red"><WarningOutlined /> Shortage</Tag>;
+            ? <Tag color="green" style={{ fontWeight: 500 }}>Available</Tag>
+            : <Tag color="red" style={{ fontWeight: 500 }}><WarningOutlined /> Shortage</Tag>;
         },
       },
       {
         title: 'Approved',
         dataIndex: 'quantity_approved',
-        width: 100,
+        width: 90,
         align: 'center',
-        render: (q: number) => q > 0 ? <Text strong className="text-green-600">{q}</Text> : <Text type="secondary">-</Text>,
+        render: (q: number) => q > 0
+          ? <Text strong style={{ color: '#16a34a', fontSize: 12 }}>{q}</Text>
+          : <Text type="secondary">—</Text>,
       },
       {
         title: 'Issued',
         dataIndex: 'quantity_issued',
-        width: 100,
+        width: 90,
         align: 'center',
-        render: (q: number) => q > 0 ? <Text strong className="text-blue-600">{q}</Text> : <Text type="secondary">-</Text>,
+        render: (q: number) => q > 0
+          ? <Text strong style={{ color: '#1677ff', fontSize: 12 }}>{q}</Text>
+          : <Text type="secondary">—</Text>,
       },
       {
         title: 'Status',
         dataIndex: 'status',
-        width: 110,
+        width: 100,
         align: 'center',
-        render: (s: string) => <Tag color={ITEM_STATUS_COLORS[s] || 'default'}>{s?.toUpperCase()}</Tag>,
+        render: (s: string) => <Tag color={ITEM_STATUS_COLORS[s] || 'default'} style={{ fontWeight: 500, fontSize: 11 }}>{s?.toUpperCase()}</Tag>,
       },
       {
         title: 'Notes',
         dataIndex: 'notes',
-        width: 150,
-        render: (notes: string) => notes ? <Text type="secondary" className="text-xs">{notes}</Text> : '-',
+        width: 160,
+        render: (notes: string) => notes
+          ? <Text type="secondary" style={{ fontSize: 11 }}>{notes}</Text>
+          : <Text type="secondary">—</Text>,
       },
     ];
 
     return (
-      <Table
-        columns={itemColumns}
-        dataSource={record.items || []}
-        rowKey="id"
-        pagination={false}
-        size="small"
-        className="bg-gray-50"
-        rowClassName={(item) =>
-          item.status === 'rejected' ? 'bg-red-50' :
-          item.status === 'approved' ? 'bg-green-50' :
-          item.available_stock < item.quantity_requested ? 'bg-yellow-50' : ''
-        }
-      />
+      <div style={{ padding: '8px 0 8px 40px', background: '#fafafa' }}>
+        <Table
+          columns={itemColumns}
+          dataSource={record.items || []}
+          rowKey="id"
+          pagination={false}
+          size="small"
+          bordered
+          rowClassName={(item) =>
+            item.status === 'rejected' ? 'bg-red-50' :
+            item.status === 'approved' ? 'bg-green-50' :
+            item.available_stock < item.quantity_requested ? 'bg-yellow-50' : ''
+          }
+        />
+      </div>
     );
   };
 
   return (
-    <div>
-      <div className="flex flex-wrap justify-between items-center mb-6 gap-3">
+    <div style={{ padding: '0 0 24px' }}>
+      {/* Page Header */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24, gap: 12 }}>
         <div>
-          <Title level={4} className="!mb-1">Inventory — Material Requests</Title>
-          <Text type="secondary">Review material requests from manufacturing, verify stock availability, and approve or reject</Text>
+          <Title level={4} style={{ margin: 0, fontWeight: 700, color: '#111827' }}>Material Requests</Title>
+          <Text type="secondary" style={{ fontSize: 13 }}>
+            Review requests from manufacturing, verify stock availability, and approve or issue materials
+          </Text>
         </div>
         <ExportDropdown
           data={filteredData || []}
           disabled={!filteredData?.length}
           filename="material-requests"
           title="Material Requests"
-          columns={[{ key: 'request_number', title: 'Request #' }, { key: 'request_date', title: 'Date' }, { key: 'purpose', title: 'Purpose' }, { key: 'requested_by_name', title: 'Requested By' }, { key: 'status', title: 'Status' }]}
+          columns={[
+            { key: 'request_number', title: 'Request #' },
+            { key: 'request_date', title: 'Date' },
+            { key: 'purpose', title: 'Purpose' },
+            { key: 'requested_by_name', title: 'Requested By' },
+            { key: 'status', title: 'Status' },
+          ]}
         />
       </div>
 
-      {/* Summary Stats */}
-      <Row gutter={[16, 16]} className="mb-5">
-        <Col xs={12} sm={6}>
-          <Card className="card-shadow text-center" styles={{ body: { padding: 16 } }}>
-            <Statistic
-              title={<span className="text-xs font-semibold">Pending Approval</span>}
-              value={counts.pending.length}
-              valueStyle={{ color: counts.pending.length > 0 ? '#fa8c16' : '#8c8c8c', fontSize: 28 }}
-              prefix={<ClockCircleOutlined />}
-            />
-          </Card>
-        </Col>
-        <Col xs={12} sm={6}>
-          <Card className="card-shadow text-center" bodyStyle={{ padding: 16 }}>
-            <Statistic
-              title={<span className="text-xs font-semibold">From Manufacturing</span>}
-              value={counts.mfgPending.length}
-              valueStyle={{ color: counts.mfgPending.length > 0 ? '#722ed1' : '#8c8c8c', fontSize: 28 }}
-              prefix={<ToolOutlined />}
-              suffix={counts.mfgPending.length > 0 ? <Tag color="red" className="!text-xs">Action Required</Tag> : null}
-            />
-          </Card>
-        </Col>
-        <Col xs={12} sm={6}>
-          <Card className="card-shadow text-center" bodyStyle={{ padding: 16 }}>
-            <Statistic
-              title={<span className="text-xs font-semibold">Ready to Issue</span>}
-              value={counts.readyToIssue.length}
-              valueStyle={{ color: counts.readyToIssue.length > 0 ? '#1677ff' : '#8c8c8c', fontSize: 28 }}
-              prefix={<SendOutlined />}
-            />
-          </Card>
-        </Col>
-        <Col xs={12} sm={6}>
-          <Card className="card-shadow text-center" bodyStyle={{ padding: 16 }}>
-            <Statistic
-              title={<span className="text-xs font-semibold">Fulfilled</span>}
-              value={counts.fulfilled.length}
-              valueStyle={{ color: '#52c41a', fontSize: 28 }}
-              prefix={<CheckCircleOutlined />}
-            />
-          </Card>
-        </Col>
+      {/* Summary Stat Cards */}
+      <Row gutter={[16, 16]} style={{ marginBottom: 20 }}>
+        {statCards.map((card) => (
+          <Col xs={12} sm={6} key={card.title}>
+            <Card
+              hoverable
+              onClick={() => setActiveTab(card.tab)}
+              styles={{ body: { padding: '16px 20px' } }}
+              style={{
+                borderRadius: 10,
+                cursor: 'pointer',
+                borderTop: `3px solid ${card.color}`,
+                boxShadow: '0 1px 4px rgba(0,0,0,0.07)',
+                transition: 'box-shadow 0.2s',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+                <div>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 6 }}>
+                    {card.title}
+                  </div>
+                  <div style={{ fontSize: 28, fontWeight: 700, color: card.value > 0 ? card.color : '#9ca3af', lineHeight: 1 }}>
+                    {card.value}
+                  </div>
+                  {card.badge && card.value > 0 && (
+                    <Tag color="red" style={{ fontSize: 10, marginTop: 6, padding: '0 5px' }}>{card.badge}</Tag>
+                  )}
+                </div>
+                <div style={{
+                  width: 40, height: 40, borderRadius: 10,
+                  background: card.bg,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  color: card.color,
+                }}>
+                  {card.icon}
+                </div>
+              </div>
+            </Card>
+          </Col>
+        ))}
       </Row>
 
-
-      {/* Pending manufacturing requests alert */}
+      {/* Alerts */}
       {counts.mfgPending.length > 0 && (
         <Alert
           type="warning"
           showIcon
           icon={<ExclamationCircleOutlined />}
-          className="mb-4"
+          style={{ marginBottom: 12, borderRadius: 8 }}
           message={
-            <span>
-              <strong>{counts.mfgPending.length}</strong> manufacturing request{counts.mfgPending.length > 1 ? 's' : ''} waiting for your approval —
-              Manufacturing team cannot proceed until you review
+            <span style={{ fontSize: 13 }}>
+              <strong>{counts.mfgPending.length}</strong> manufacturing request{counts.mfgPending.length > 1 ? 's' : ''} pending your approval —
+              the manufacturing team cannot proceed until reviewed.
             </span>
           }
           action={
@@ -435,95 +536,152 @@ export default function MaterialRequestsPage() {
           }
         />
       )}
-
       {counts.readyToIssue.length > 0 && (
         <Alert
           type="info"
           showIcon
           icon={<InboxOutlined />}
-          className="mb-4"
+          style={{ marginBottom: 12, borderRadius: 8 }}
           message={
-            <span>
+            <span style={{ fontSize: 13 }}>
               <strong>{counts.readyToIssue.length}</strong> approved request{counts.readyToIssue.length > 1 ? 's' : ''} ready for material issuance
             </span>
           }
         />
       )}
 
-      {/* Tabs */}
-      <Tabs
-        activeKey={activeTab}
-        onChange={(k) => setActiveTab(k as TabKey)}
-        className="mb-0"
-        items={[
-          { key: 'all', label: <span><InboxOutlined /> All Requests</span> },
-          {
-            key: 'pending',
-            label: (
-              <Badge count={counts.pending.length} size="small" offset={[8, 0]}>
-                <span><ClockCircleOutlined /> Pending</span>
-              </Badge>
-            ),
-          },
-          {
-            key: 'manufacturing',
-            label: (
-              <Badge count={counts.mfgPending.length} size="small" offset={[8, 0]} color="purple">
-                <span><ToolOutlined /> Manufacturing</span>
-              </Badge>
-            ),
-          },
-          { key: 'approved', label: <span><CheckCircleOutlined /> Approved</span> },
-          { key: 'fulfilled', label: <span><SendOutlined /> Fulfilled</span> },
-        ]}
-      />
+      {/* Main Card */}
+      <Card
+        style={{ borderRadius: 10, boxShadow: '0 1px 4px rgba(0,0,0,0.07)' }}
+        styles={{ body: { padding: 0 } }}
+      >
+        {/* Tabs */}
+        <div style={{ padding: '0 20px', borderBottom: '1px solid #f0f0f0' }}>
+          <Tabs
+            activeKey={activeTab}
+            onChange={(k) => setActiveTab(k as TabKey)}
+            style={{ marginBottom: 0 }}
+            items={[
+              {
+                key: 'all',
+                label: (
+                  <span style={{ fontSize: 13 }}>
+                    <InboxOutlined style={{ marginRight: 5 }} />All Requests
+                  </span>
+                ),
+              },
+              {
+                key: 'pending',
+                label: (
+                  <Badge count={counts.pending.length} size="small" offset={[6, 0]}>
+                    <span style={{ fontSize: 13, paddingRight: counts.pending.length > 0 ? 10 : 0 }}>
+                      <ClockCircleOutlined style={{ marginRight: 5 }} />Pending
+                    </span>
+                  </Badge>
+                ),
+              },
+              {
+                key: 'manufacturing',
+                label: (
+                  <Badge count={counts.mfgPending.length} size="small" offset={[6, 0]} color="purple">
+                    <span style={{ fontSize: 13, paddingRight: counts.mfgPending.length > 0 ? 10 : 0 }}>
+                      <ToolOutlined style={{ marginRight: 5 }} />Manufacturing
+                    </span>
+                  </Badge>
+                ),
+              },
+              {
+                key: 'approved',
+                label: (
+                  <span style={{ fontSize: 13 }}>
+                    <CheckCircleOutlined style={{ marginRight: 5 }} />Approved
+                  </span>
+                ),
+              },
+              {
+                key: 'fulfilled',
+                label: (
+                  <span style={{ fontSize: 13 }}>
+                    <SendOutlined style={{ marginRight: 5 }} />Fulfilled
+                  </span>
+                ),
+              },
+            ]}
+          />
+        </div>
 
-      <Card className="card-shadow">
-        {/* Filter bar inside card */}
-        <div className="flex flex-wrap items-center gap-3 mb-4 pb-4 border-b border-gray-100">
+        {/* Filter Bar */}
+        <div style={{ padding: '14px 20px', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10, borderBottom: '1px solid #f5f5f5', background: '#fafafa' }}>
+          <Input
+            placeholder="Search by request #, requester, purpose…"
+            prefix={<SearchOutlined style={{ color: '#9ca3af' }} />}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            allowClear
+            style={{ width: 280, borderRadius: 7 }}
+          />
           <Select
             placeholder="Filter by status"
             value={status}
             onChange={(v) => setStatus(v)}
-            style={{ width: 200 }}
+            style={{ width: 190, borderRadius: 7 }}
             allowClear
+            suffixIcon={<FilterOutlined style={{ color: '#9ca3af' }} />}
           >
             {MR_STATUS_OPTIONS.map((s) => (
               <Select.Option key={s.value} value={s.value}>{s.label}</Select.Option>
             ))}
           </Select>
-          {status && (
-            <Button icon={<ClearOutlined />} onClick={() => setStatus(undefined)} type="link" className="p-0">Clear</Button>
+          {(status || search) && (
+            <Button
+              icon={<ClearOutlined />}
+              size="small"
+              onClick={() => { setStatus(undefined); setSearch(''); }}
+              type="link"
+              style={{ padding: 0, color: '#6b7280' }}
+            >
+              Clear filters
+            </Button>
           )}
-          <Text type="secondary" className="ml-auto">{filteredData.length} request(s)</Text>
+          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              {filteredData.length} request{filteredData.length !== 1 ? 's' : ''}
+            </Text>
+          </div>
         </div>
 
-        <Table
-          columns={columns}
-          dataSource={filteredData}
-          rowKey="id"
-          loading={isLoading}
-          expandable={{
-            expandedRowRender,
-            rowExpandable: (record) => (record.items?.length || 0) > 0,
-          }}
-          pagination={{
-            pageSize: 20,
-            showSizeChanger: true,
-            showTotal: (total, range) => `${range[0]}-${range[1]} of ${total}`,
-          }}
-          onRow={(record) => ({
-            onClick: () => router.push(`/material-requests/${record.id}`),
-            style: { cursor: 'pointer' },
-          })}
-          scroll={{ x: 1000 }}
-          rowClassName={(record) => {
-            if (record.status === 'pending' && isManufacturingRequest(record)) return 'bg-purple-50';
-            if (record.status === 'pending') return 'bg-orange-50';
-            if (record.status === 'approved') return 'bg-green-50';
-            return '';
-          }}
-        />
+        {/* Table */}
+        <div style={{ padding: '0 0 4px' }}>
+          <Table
+            columns={columns}
+            dataSource={filteredData}
+            rowKey="id"
+            loading={isLoading}
+            expandable={{
+              expandedRowRender,
+              rowExpandable: (record) => (record.items?.length || 0) > 0,
+            }}
+            pagination={{
+              pageSize: 20,
+              showSizeChanger: true,
+              showTotal: (total, range) => `${range[0]}–${range[1]} of ${total} requests`,
+              style: { padding: '12px 20px' },
+            }}
+            onRow={(record) => ({
+              onClick: () => router.push(`/material-requests/${record.id}`),
+              style: { cursor: 'pointer' },
+            })}
+            scroll={{ x: 1100 }}
+            size="middle"
+            rowClassName={(record) => {
+              if (record.status === 'pending' && isManufacturingRequest(record)) return 'bg-purple-50';
+              if (record.status === 'pending') return 'bg-orange-50';
+              if (record.status === 'approved') return 'bg-green-50';
+              return '';
+            }}
+            style={{ borderRadius: 0 }}
+          />
+        </div>
       </Card>
     </div>
   );

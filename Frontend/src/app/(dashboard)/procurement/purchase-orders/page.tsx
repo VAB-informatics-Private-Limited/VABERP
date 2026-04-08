@@ -43,7 +43,7 @@ export default function ProcurementPurchaseOrdersPage() {
       dataIndex: 'po_number',
       key: 'po_number',
       render: (text: string, record: PurchaseOrder) => (
-        <Button type="link" className="p-0 font-medium" onClick={() => router.push(`/procurement/purchase-orders/${record.id}`)}>
+        <Button type="link" className="p-0 font-medium" onClick={(e) => { e.stopPropagation(); router.push(`/procurement/purchase-orders/${record.id}`); }}>
           {text}
         </Button>
       ),
@@ -99,11 +99,11 @@ export default function ProcurementPurchaseOrdersPage() {
           <Button
             type="link"
             icon={<EyeOutlined />}
-            onClick={() => router.push(`/procurement/purchase-orders/${record.id}`)}
+            onClick={(e) => { e.stopPropagation(); router.push(`/procurement/purchase-orders/${record.id}`); }}
           />
           {hasPermission('orders', 'purchase_orders', 'delete') && record.status === 'draft' && (
             <Popconfirm title="Delete this purchase order?" onConfirm={() => deleteMutation.mutate(record.id)}>
-              <Button type="link" danger icon={<DeleteOutlined />} />
+              <Button type="link" danger icon={<DeleteOutlined />} onClick={(e) => e.stopPropagation()} />
             </Popconfirm>
           )}
         </Space>
@@ -147,6 +147,10 @@ export default function ProcurementPurchaseOrdersPage() {
           dataSource={data?.data || []}
           rowKey="id"
           loading={isLoading}
+          onRow={(record) => ({
+            onClick: () => router.push(`/procurement/purchase-orders/${record.id}`),
+            style: { cursor: 'pointer' },
+          })}
           pagination={{
             current: page,
             pageSize: 20,

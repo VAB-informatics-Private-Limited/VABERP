@@ -18,9 +18,9 @@ import { useRouter, useParams } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState, useMemo } from 'react';
 import dayjs from 'dayjs';
-import { getSalesOrderById, createInvoiceFromSO, updateSOStatus, deleteSalesOrder, sendToManufacturing, updateSalesOrder } from '@/lib/api/sales-orders';
+import { getSalesOrderById, createInvoiceFromSO, updateSOStatus, deleteSalesOrder, sendToManufacturing, updateSalesOrder, reportSODelay } from '@/lib/api/sales-orders';
 import { updatePOExpectedDelivery } from '@/lib/api/purchase-orders';
-import { getInvoiceList, getInvoiceById, recordPayment } from '@/lib/api/invoices';
+import { getInvoiceList, getInvoiceById, recordPayment, verifyPayment } from '@/lib/api/invoices';
 import { getJobCardList, jobCardDispatchAction } from '@/lib/api/manufacturing';
 import apiClient from '@/lib/api/client';
 import { SO_STATUS_OPTIONS, SalesOrderItem } from '@/types/sales-order';
@@ -54,14 +54,23 @@ export default function PurchaseOrderDetailPage() {
   const [holdModalOpen, setHoldModalOpen] = useState(false);
   const [holdReason, setHoldReason] = useState('');
 
-  // Add Invoice form modal
+  // Generate Invoice modal
   const [addInvoiceOpen, setAddInvoiceOpen] = useState(false);
   const [addInvoiceForm] = Form.useForm();
-  const [addInvoicePaymentMethod, setAddInvoicePaymentMethod] = useState<string | undefined>();
+  const [invoiceAmountInput, setInvoiceAmountInput] = useState<number>(0);
+
+  // Per-invoice Record Payment modal
+  const [paymentModalInvoiceId, setPaymentModalInvoiceId] = useState<number | null>(null);
+  const [perInvoicePaymentForm] = Form.useForm();
+  const [perInvoicePaymentMethod, setPerInvoicePaymentMethod] = useState<string | undefined>();
 
   // ETA modal state
   const [etaModalOpen, setEtaModalOpen] = useState(false);
   const [etaValue, setEtaValue] = useState<dayjs.Dayjs | null>(null);
+
+  // Delay report modal state
+  const [delayModalOpen, setDelayModalOpen] = useState(false);
+  const [delayNote, setDelayNote] = useState('');
 
   // Edit mode state
   const [editMode, setEditMode] = useState(false);
@@ -78,6 +87,8 @@ export default function PurchaseOrderDetailPage() {
     queryKey: ['purchase-order', poId],
     queryFn: () => getSalesOrderById(poId),
     enabled: !!poId,
+    refetchInterval: 15000,
+    refetchOnWindowFocus: true,
   });
 
   // ── Fetch invoices for this PO ────────────────────────────────────────────
@@ -85,6 +96,8 @@ export default function PurchaseOrderDetailPage() {
     queryKey: ['po-invoices', poId],
     queryFn: () => getInvoiceList({ page: 1, pageSize: 100, salesOrderId: poId }),
     enabled: !!poId,
+    refetchInterval: 15000, // auto-refresh every 15 seconds so all users see live invoice data
+    refetchOnWindowFocus: true,
   });
 
   // ── Fetch selected invoice detail (for drawer) ────────────────────────────
@@ -132,9 +145,9 @@ export default function PurchaseOrderDetailPage() {
       message.error(err?.response?.data?.message || 'Failed to perform dispatch action'),
   });
 
-  // ── Add Invoice / Record Payment ─────────────────────────────────────────
+  // ── Generate Invoice ──────────────────────────────────────────────────────
   const invoiceMutation = useMutation({
-    mutationFn: (data: { amount: number; invoiceDate?: string; paymentMethod?: string; notes?: string }) =>
+    mutationFn: (data: { amount: number; invoiceDate?: string; notes?: string }) =>
       createInvoiceFromSO(poId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['po-invoices', poId] });
@@ -142,11 +155,40 @@ export default function PurchaseOrderDetailPage() {
       queryClient.invalidateQueries({ queryKey: ['invoices'] });
       setAddInvoiceOpen(false);
       addInvoiceForm.resetFields();
-      setAddInvoicePaymentMethod(undefined);
-      message.success('Payment recorded successfully');
+      message.success('Invoice generated successfully');
+    },
+    onError: (err: any) =>
+      message.error(err?.response?.data?.message || 'Failed to generate invoice'),
+  });
+
+  // ── Per-invoice Record Payment ────────────────────────────────────────────
+  const perInvoicePaymentMutation = useMutation({
+    mutationFn: (data: PaymentFormData) => recordPayment(paymentModalInvoiceId!, data),
+    onSuccess: () => {
+      message.success('Payment recorded — under processing until verified');
+      queryClient.invalidateQueries({ queryKey: ['po-invoices', poId] });
+      queryClient.invalidateQueries({ queryKey: ['purchase-order', poId] });
+      queryClient.invalidateQueries({ queryKey: ['invoice', paymentModalInvoiceId] });
+      setPaymentModalInvoiceId(null);
+      perInvoicePaymentForm.resetFields();
+      setPerInvoicePaymentMethod(undefined);
     },
     onError: (err: any) =>
       message.error(err?.response?.data?.message || 'Failed to record payment'),
+  });
+
+  // ── Verify Payment ────────────────────────────────────────────────────────
+  const verifyPaymentMutation = useMutation({
+    mutationFn: ({ invoiceId, paymentId }: { invoiceId: number; paymentId: number }) =>
+      verifyPayment(invoiceId, paymentId),
+    onSuccess: (_, vars) => {
+      message.success('Payment verified — marked as paid successfully');
+      queryClient.invalidateQueries({ queryKey: ['po-invoices', poId] });
+      queryClient.invalidateQueries({ queryKey: ['purchase-order', poId] });
+      queryClient.invalidateQueries({ queryKey: ['invoice', vars.invoiceId] });
+    },
+    onError: (err: any) =>
+      message.error(err?.response?.data?.message || 'Failed to verify payment'),
   });
 
   // ── Hold / Resume ─────────────────────────────────────────────────────────
@@ -230,6 +272,18 @@ export default function PurchaseOrderDetailPage() {
       message.error(err?.response?.data?.message || 'Failed to update delivery date'),
   });
 
+  const delayMutation = useMutation({
+    mutationFn: (note: string) => reportSODelay(poId, note),
+    onSuccess: () => {
+      message.success('Delay reported');
+      queryClient.invalidateQueries({ queryKey: ['purchase-order', poId] });
+      setDelayModalOpen(false);
+      setDelayNote('');
+    },
+    onError: (err: any) =>
+      message.error(err?.response?.data?.message || 'Failed to report delay'),
+  });
+
   // ── Record payment ────────────────────────────────────────────────────────
   const paymentMutation = useMutation({
     mutationFn: (data: PaymentFormData) => recordPayment(drawerInvoiceId!, data),
@@ -246,7 +300,7 @@ export default function PurchaseOrderDetailPage() {
   });
 
   const po = poData?.data;
-  const linkedInvoices = (invoicesData?.data || []).filter((inv) => inv.sales_order_id === poId);
+  const linkedInvoices = invoicesData?.data || [];
   const invoice = invoiceDetail?.data;
 
   // Dispatch-ready computed values
@@ -302,16 +356,14 @@ export default function PurchaseOrderDetailPage() {
 
   const handleCreateInvoiceClick = () => {
     addInvoiceForm.resetFields();
-    addInvoiceForm.setFieldsValue({ invoice_date: dayjs() });
-    setAddInvoicePaymentMethod(undefined);
+    setInvoiceAmountInput(0);
     setAddInvoiceOpen(true);
   };
 
   const handleAddInvoiceSubmit = (values: any) => {
     invoiceMutation.mutate({
       amount: values.amount,
-      invoiceDate: values.invoice_date?.format('YYYY-MM-DD'),
-      paymentMethod: values.payment_method,
+      invoiceDate: dayjs().format('YYYY-MM-DD'),
       notes: values.notes,
     });
   };
@@ -470,9 +522,9 @@ export default function PurchaseOrderDetailPage() {
     {
       title: 'Actions',
       key: 'actions',
-      width: 180,
+      width: 220,
       render: (_, record) => (
-        <Space size={4}>
+        <Space size={4} onClick={(e) => e.stopPropagation()}>
           <Tooltip title="View Details">
             <Button size="small" onClick={() => setDrawerInvoiceId(record.id)}>
               View
@@ -498,16 +550,22 @@ export default function PurchaseOrderDetailPage() {
               }}
             />
           </Tooltip>
-          <Tooltip title="View / Record Payment">
-            <Button
-              size="small"
-              icon={<DollarOutlined />}
-              onClick={() => {
-                setDrawerInvoiceId(record.id);
-                paymentForm.setFieldsValue({ payment_date: dayjs() });
-              }}
-            />
-          </Tooltip>
+          {record.status !== 'fully_paid' && record.status !== 'cancelled' && (
+            <Tooltip title="Record Payment">
+              <Button
+                size="small"
+                type="primary"
+                icon={<DollarOutlined />}
+                onClick={() => {
+                  setPaymentModalInvoiceId(record.id);
+                  perInvoicePaymentForm.resetFields();
+                  setPerInvoicePaymentMethod(undefined);
+                }}
+              >
+                Pay
+              </Button>
+            </Tooltip>
+          )}
         </Space>
       ),
     },
@@ -523,12 +581,41 @@ export default function PurchaseOrderDetailPage() {
       key: 'amount',
       render: (v) => <span className="font-semibold text-green-600">{fmt(v)}</span>,
     },
+    { title: 'Method', dataIndex: 'payment_method', key: 'payment_method', render: (v) => v || '-' },
     { title: 'Reference', dataIndex: 'reference_number', key: 'reference_number', render: (v) => v || '-' },
     {
       title: 'Status',
       dataIndex: 'status',
       key: 'status',
-      render: (s) => <Tag color={s === 'completed' ? 'green' : 'orange'}>{s}</Tag>,
+      render: (s, record) => (
+        <div className="flex items-center gap-2 flex-wrap">
+          {s === 'completed' ? (
+            <Tag color="green" icon={<CheckCircleOutlined />}>Paid Successfully</Tag>
+          ) : (
+            <Tag color="orange" icon={<SyncOutlined spin />}>Under Processing</Tag>
+          )}
+          {s === 'pending' && (
+            <Popconfirm
+              title="Verify this payment?"
+              description="This will mark the payment as paid successfully."
+              onConfirm={() => verifyPaymentMutation.mutate({ invoiceId: record.invoice_id, paymentId: record.id })}
+              okText="Verify"
+              cancelText="Cancel"
+            >
+              <Button size="small" type="primary" icon={<CheckOutlined />} loading={verifyPaymentMutation.isPending}>
+                Verify
+              </Button>
+            </Popconfirm>
+          )}
+          <Tooltip title="Download Receipt">
+            <Button
+              size="small"
+              icon={<PrinterOutlined />}
+              onClick={() => window.open(`/print/payment/${record.id}`, '_blank')}
+            />
+          </Tooltip>
+        </div>
+      ),
     },
   ];
 
@@ -670,15 +757,6 @@ export default function PurchaseOrderDetailPage() {
           )}
         </div>
         <Space>
-          {canEdit && !editMode && (
-            <Button
-              icon={<EditOutlined />}
-              onClick={enterEditMode}
-              className="border-blue-400 text-blue-600"
-            >
-              Edit PO
-            </Button>
-          )}
           {editMode && (
             <>
               <Button icon={<CloseOutlined />} onClick={cancelEditMode}>
@@ -742,7 +820,7 @@ export default function PurchaseOrderDetailPage() {
           >
             {po.status === 'on_hold' ? 'Resume Order' : 'Hold Order'}
           </Button>
-          {!['cancelled', 'delivered'].includes(po.status) && (
+          {!['cancelled', 'delivered', 'dispatched'].includes(po.status) && (
             <Button
               danger
               icon={<StopOutlined />}
@@ -765,14 +843,14 @@ export default function PurchaseOrderDetailPage() {
             </Button>
           </Popconfirm>
           {po.status !== 'cancelled' && po.status !== 'on_hold' && (
-            <Tooltip title={remainingBalance <= 0 ? 'This purchase order has been fully paid' : ''}>
+            <Tooltip title={remainingBalance <= 0 ? 'All PO value has been invoiced' : ''}>
               <Button
                 type="primary"
-                icon={<DollarOutlined />}
+                icon={<FileDoneOutlined />}
                 disabled={remainingBalance <= 0}
                 onClick={handleCreateInvoiceClick}
               >
-                {remainingBalance <= 0 ? 'Fully Paid' : 'Record Payment'}
+                {remainingBalance <= 0 ? 'Fully Invoiced' : 'Generate Invoice'}
               </Button>
             </Tooltip>
           )}
@@ -881,16 +959,15 @@ export default function PurchaseOrderDetailPage() {
         <Col xs={24} sm={8}>
           <Card className="card-shadow text-center">
             <Statistic
-              title="Remaining Balance"
-              value={remainingBalance}
+              title="Total Paid"
+              value={totalPaidOnInvoices}
               precision={2}
               prefix="₹"
-              valueStyle={{ color: remainingBalance > 0 ? '#f5222d' : '#52c41a', fontWeight: 'bold' }}
+              valueStyle={{ color: '#52c41a', fontWeight: 'bold' }}
               formatter={(v) => Number(v).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
             />
-            <div className="text-xs text-gray-400 mt-2">
-              {remainingBalance <= 0 ? '✓ Fully paid' : `${fmt(remainingBalance)} remaining`}
-            </div>
+            <Progress percent={paidPercent} size="small" strokeColor="#52c41a" showInfo={false} className="mt-2" />
+            <div className="text-xs text-gray-400 mt-1">{paidPercent}% of invoiced amount paid</div>
           </Card>
         </Col>
       </Row>
@@ -906,16 +983,25 @@ export default function PurchaseOrderDetailPage() {
               <Descriptions.Item label="Order Date">{po.order_date}</Descriptions.Item>
               <Descriptions.Item label="Customer">{po.customer_name}</Descriptions.Item>
               <Descriptions.Item label="Expected Delivery">
-                <Space size={8}>
-                  <CalendarOutlined className="text-gray-400" />
-                  {po.expected_delivery ? (
-                    <Text type={dayjs(po.expected_delivery).isBefore(dayjs(), 'day') ? 'danger' : undefined}>
-                      {dayjs(po.expected_delivery).format('DD MMM YYYY')}
-                      {dayjs(po.expected_delivery).isBefore(dayjs(), 'day') && ' (Overdue)'}
-                    </Text>
-                  ) : <Text type="secondary">Not set</Text>}
-                  <Button size="small" icon={<EditOutlined />} onClick={() => { setEtaValue(po.expected_delivery ? dayjs(po.expected_delivery) : null); setEtaModalOpen(true); }}>Set</Button>
-                </Space>
+                <div className="flex flex-col gap-1">
+                  <Space size={8}>
+                    <CalendarOutlined className="text-gray-400" />
+                    {po.expected_delivery ? (
+                      <Text type={dayjs(po.expected_delivery).isBefore(dayjs(), 'day') ? 'danger' : undefined}>
+                        {dayjs(po.expected_delivery).format('DD MMM YYYY')}
+                        {dayjs(po.expected_delivery).isBefore(dayjs(), 'day') && ' (Overdue)'}
+                      </Text>
+                    ) : <Text type="secondary">Not set</Text>}
+                    {po.expected_delivery && !['cancelled', 'delivered', 'dispatched'].includes(po.status) && (
+                      <Button size="small" danger onClick={() => { setDelayNote(po.delay_note || ''); setDelayModalOpen(true); }}>
+                        Report Delay
+                      </Button>
+                    )}
+                  </Space>
+                  {po.delay_note && (
+                    <Text type="warning" className="text-xs">⚠ Delay reported: {po.delay_note}</Text>
+                  )}
+                </div>
               </Descriptions.Item>
               {po.billing_address && (
                 <Descriptions.Item label="Billing Address" span={2}>{po.billing_address}</Descriptions.Item>
@@ -1137,7 +1223,7 @@ export default function PurchaseOrderDetailPage() {
               <FileDoneOutlined />
               Invoices
               {linkedInvoices.length > 0 && <Tag color="blue">{linkedInvoices.length}</Tag>}
-              {remainingBalance <= 0 && linkedInvoices.length > 0 && (
+              {totalBalanceDue <= 0 && linkedInvoices.length > 0 && (
                 <Tag color="success" icon={<CheckCircleOutlined />}>Fully Paid</Tag>
               )}
             </span>
@@ -1145,10 +1231,10 @@ export default function PurchaseOrderDetailPage() {
               <Button
                 type="primary"
                 size="small"
-                icon={<DollarOutlined />}
+                icon={<FileDoneOutlined />}
                 onClick={handleCreateInvoiceClick}
               >
-                Record Payment
+                Generate Invoice
               </Button>
             )}
           </div>
@@ -1165,10 +1251,10 @@ export default function PurchaseOrderDetailPage() {
             {canCreateInvoice && (
               <Button
                 type="primary"
-                icon={<PlusOutlined />}
+                icon={<FileDoneOutlined />}
                 onClick={handleCreateInvoiceClick}
               >
-                Add First Invoice
+                Generate First Invoice
               </Button>
             )}
           </div>
@@ -1181,6 +1267,10 @@ export default function PurchaseOrderDetailPage() {
             loading={invLoading}
             size="small"
             scroll={{ x: 800 }}
+            onRow={(record) => ({
+              onClick: () => router.push(`/invoices/${record.id}`),
+              style: { cursor: 'pointer' },
+            })}
             summary={() => (
               <Table.Summary.Row className="bg-gray-50">
                 <Table.Summary.Cell index={0} colSpan={3}>
@@ -1387,9 +1477,15 @@ export default function PurchaseOrderDetailPage() {
                   <span className="font-semibold">{fmt(invoice.grand_total)}</span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-gray-500">Total Paid</span>
+                  <span className="text-gray-500">Verified & Paid</span>
                   <span className="font-semibold text-green-600">{fmt(invoice.total_paid)}</span>
                 </div>
+                {Number(invoice.pending_amount ?? 0) > 0.005 && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-orange-500 flex items-center gap-1"><SyncOutlined spin />Under Processing</span>
+                    <span className="font-semibold text-orange-500">{fmt(invoice.pending_amount ?? 0)}</span>
+                  </div>
+                )}
                 <Divider className="my-1" />
                 <div className="flex justify-between text-base font-bold">
                   <span>Balance Due</span>
@@ -1398,8 +1494,8 @@ export default function PurchaseOrderDetailPage() {
                   </span>
                 </div>
                 <div className="text-center mt-1">
-                  <Tag color={Number(invoice.balance_due) <= 0.005 ? 'green' : 'orange'}>
-                    {Number(invoice.balance_due) <= 0.005 ? '✓ Fully Paid' : 'Partial Payment'}
+                  <Tag color={Number(invoice.balance_due) <= 0.005 ? 'green' : Number(invoice.pending_amount ?? 0) > 0.005 ? 'orange' : 'red'}>
+                    {Number(invoice.balance_due) <= 0.005 ? '✓ Fully Paid' : Number(invoice.pending_amount ?? 0) > 0.005 ? 'Pending Verification' : 'Partially Paid'}
                   </Tag>
                 </div>
               </div>
@@ -1441,7 +1537,7 @@ export default function PurchaseOrderDetailPage() {
         <Form form={paymentForm} layout="vertical" onFinish={(values) => {
           paymentMutation.mutate({
             amount: values.amount,
-            payment_date: values.payment_date?.format('YYYY-MM-DD'),
+            payment_date: dayjs().format('YYYY-MM-DD'),
             reference_number: values.reference_number,
             notes: values.notes,
           });
@@ -1468,8 +1564,8 @@ export default function PurchaseOrderDetailPage() {
               parser={(value) => Number(value!.replace(/,/g, '')) as unknown as number}
             />
           </Form.Item>
-          <Form.Item name="payment_date" label="Payment Date">
-            <DatePicker className="w-full" format="DD-MM-YYYY" />
+          <Form.Item label="Payment Date">
+            <Input value={dayjs().format('DD MMM YYYY, hh:mm A')} disabled className="bg-gray-50 text-gray-700 font-medium" />
           </Form.Item>
           <Form.Item name="reference_number" label="Reference / Transaction ID">
             <Input placeholder="Cheque No. / UPI Ref / Transaction ID" />
@@ -1477,30 +1573,33 @@ export default function PurchaseOrderDetailPage() {
           <Form.Item name="notes" label="Notes">
             <Input.TextArea rows={2} placeholder="Optional notes" />
           </Form.Item>
+          <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg mb-3 text-sm text-amber-700">
+            Payment will be saved as <strong>Under Processing</strong> until verified by your team.
+          </div>
           <div className="flex justify-end gap-2">
             <Button onClick={() => { setPaymentModalOpen(false); paymentForm.resetFields(); }}>
               Cancel
             </Button>
             <Button type="primary" htmlType="submit" loading={paymentMutation.isPending}>
-              Record Payment
+              Submit for Verification
             </Button>
           </div>
         </Form>
       </Modal>
 
-      {/* ── Record Payment Modal ─────────────────────────────────────────── */}
+      {/* ── Generate Invoice Modal ───────────────────────────────────────── */}
       <Modal
         title={
           <div className="flex items-center gap-2">
-            <DollarOutlined className="text-blue-500" />
-            <span>Record Payment</span>
+            <FileDoneOutlined className="text-blue-500" />
+            <span>Generate Invoice</span>
           </div>
         }
         open={addInvoiceOpen}
-        onCancel={() => { setAddInvoiceOpen(false); addInvoiceForm.resetFields(); setAddInvoicePaymentMethod(undefined); }}
+        onCancel={() => { setAddInvoiceOpen(false); addInvoiceForm.resetFields(); setInvoiceAmountInput(0); }}
         footer={null}
         maskClosable={false}
-        width={480}
+        width={440}
       >
         {/* PO balance reference — read-only */}
         <div className="mb-5">
@@ -1514,13 +1613,13 @@ export default function PurchaseOrderDetailPage() {
             </div>
             {totalInvoiced > 0 && (
               <div className="flex justify-between items-center px-3 py-2 bg-orange-50 border-b">
-                <span className="text-gray-600">Already Paid</span>
+                <span className="text-gray-600">Already Invoiced</span>
                 <span className="font-semibold text-orange-500">− {fmt(totalInvoiced)}</span>
               </div>
             )}
             <div className="flex justify-between items-center px-3 py-2.5 bg-green-50">
-              <span className="font-semibold text-gray-700">Balance Remaining</span>
-              <span className="font-bold text-lg text-green-700">{fmt(remainingBalance)}</span>
+              <span className="font-semibold text-gray-700">Remaining to Invoice</span>
+              <span className="font-bold text-lg text-green-700">{fmt(Math.max(0, remainingBalance - (invoiceAmountInput || 0)))}</span>
             </div>
           </div>
         </div>
@@ -1530,75 +1629,168 @@ export default function PurchaseOrderDetailPage() {
           layout="vertical"
           onFinish={handleAddInvoiceSubmit}
         >
-          <Row gutter={12}>
-            <Col span={12}>
-              <Form.Item
-                name="amount"
-                label="Amount (₹)"
-                rules={[
-                  { required: true, message: 'Enter payment amount' },
-                  { type: 'number', min: 0.01, message: 'Must be greater than 0' },
-                  { type: 'number', max: remainingBalance, message: `Cannot exceed ${fmt(remainingBalance)}` },
-                ]}
-              >
-                <InputNumber
-                  className="w-full"
-                  prefix="₹"
-                  precision={2}
-                  min={0.01}
-                  placeholder="Enter amount"
-                  formatter={(value) => value ? `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',') : ''}
-                  // @ts-ignore
-                  parser={(value) => Number((value || '').replace(/,/g, ''))}
-                />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item name="invoice_date" label="Payment Date">
-                <DatePicker className="w-full" format="DD-MM-YYYY" />
-              </Form.Item>
-            </Col>
-          </Row>
-
-          <Form.Item name="payment_method" label="Payment Method" rules={[{ required: true, message: 'Select payment method' }]}>
-            <Select placeholder="Select method" onChange={(val) => { setAddInvoicePaymentMethod(val); addInvoiceForm.setFieldValue('reference_number', undefined); }}>
-              <Select.Option value="bank_transfer">Bank Transfer</Select.Option>
-              <Select.Option value="cheque">Cheque</Select.Option>
-              <Select.Option value="upi">UPI</Select.Option>
-              <Select.Option value="cash">Cash</Select.Option>
-            </Select>
+          <Form.Item
+            name="amount"
+            label="Invoice Amount (₹)"
+            rules={[
+              { required: true, message: 'Enter invoice amount' },
+              { type: 'number', min: 0.01, message: 'Must be greater than 0' },
+              { type: 'number', max: remainingBalance, message: `Cannot exceed ${fmt(remainingBalance)}` },
+            ]}
+          >
+            <InputNumber
+              className="w-full"
+              prefix="₹"
+              precision={2}
+              min={0.01}
+              placeholder={`Max: ${fmt(remainingBalance)}`}
+              formatter={(value) => value ? `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',') : ''}
+              // @ts-ignore
+              parser={(value) => Number((value || '').replace(/,/g, ''))}
+              onChange={(val) => setInvoiceAmountInput(Number(val) || 0)}
+            />
           </Form.Item>
-
-          {addInvoicePaymentMethod === 'bank_transfer' && (
-            <Form.Item name="reference_number" label="Transaction ID" rules={[{ required: true, message: 'Enter transaction ID' }]}>
-              <Input placeholder="Enter bank transaction ID" />
-            </Form.Item>
-          )}
-          {addInvoicePaymentMethod === 'cheque' && (
-            <Form.Item name="reference_number" label="Cheque Number" rules={[{ required: true, message: 'Enter cheque number' }]}>
-              <Input placeholder="Enter cheque number" />
-            </Form.Item>
-          )}
-          {addInvoicePaymentMethod === 'upi' && (
-            <Form.Item name="reference_number" label="UPI Transaction ID" rules={[{ required: true, message: 'Enter UPI transaction ID' }]}>
-              <Input placeholder="Enter UPI transaction ID / UTR" />
-            </Form.Item>
-          )}
 
           <Form.Item name="notes" label="Notes (optional)">
             <Input.TextArea rows={2} placeholder="Optional notes..." />
           </Form.Item>
 
           <div className="flex justify-end gap-2 mt-2">
-            <Button onClick={() => { setAddInvoiceOpen(false); addInvoiceForm.resetFields(); setAddInvoicePaymentMethod(undefined); }}>
+            <Button onClick={() => { setAddInvoiceOpen(false); addInvoiceForm.resetFields(); }}>
               Cancel
             </Button>
-            <Button type="primary" htmlType="submit" loading={invoiceMutation.isPending}>
-              Record Payment
+            <Button type="primary" htmlType="submit" loading={invoiceMutation.isPending} icon={<FileDoneOutlined />}>
+              Generate Invoice
             </Button>
           </div>
         </Form>
       </Modal>
+
+      {/* ── Per-Invoice Record Payment Modal ─────────────────────────────── */}
+      {(() => {
+        const targetInvoice = linkedInvoices.find((inv) => inv.id === paymentModalInvoiceId);
+        return (
+          <Modal
+            title={
+              <div className="flex items-center gap-2">
+                <DollarOutlined className="text-green-500" />
+                <span>Record Payment</span>
+                {targetInvoice && (
+                  <span className="text-sm font-normal text-gray-500 ml-1">— {targetInvoice.invoice_number}</span>
+                )}
+              </div>
+            }
+            open={!!paymentModalInvoiceId}
+            onCancel={() => { setPaymentModalInvoiceId(null); perInvoicePaymentForm.resetFields(); setPerInvoicePaymentMethod(undefined); }}
+            footer={null}
+            maskClosable={false}
+            width={480}
+          >
+            {targetInvoice && (
+              <div className="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-100">
+                <div className="flex justify-between text-sm mb-1">
+                  <span className="text-gray-500">Invoice Amount</span>
+                  <span className="font-semibold">{fmt(targetInvoice.grand_total)}</span>
+                </div>
+                <div className="flex justify-between text-sm mb-1">
+                  <span className="text-gray-500">Already Paid</span>
+                  <span className="font-semibold text-green-600">{fmt(targetInvoice.total_paid)}</span>
+                </div>
+                <div className="flex justify-between text-base font-bold">
+                  <span>Balance Due</span>
+                  <span className="text-red-600">{fmt(targetInvoice.balance_due)}</span>
+                </div>
+              </div>
+            )}
+            <Form
+              form={perInvoicePaymentForm}
+              layout="vertical"
+              onFinish={(values) => {
+                perInvoicePaymentMutation.mutate({
+                  amount: values.amount,
+                  payment_date: dayjs().format('YYYY-MM-DD'),
+                  payment_method: values.payment_method,
+                  reference_number: values.reference_number,
+                  notes: values.notes,
+                });
+              }}
+            >
+              <Row gutter={12}>
+                <Col span={12}>
+                  <Form.Item
+                    name="amount"
+                    label="Payment Amount (₹)"
+                    rules={[
+                      { required: true, message: 'Enter amount' },
+                      { type: 'number', min: 0.01, message: 'Must be > 0' },
+                      {
+                        type: 'number',
+                        max: targetInvoice ? Number(targetInvoice.balance_due) : undefined,
+                        message: `Cannot exceed ${fmt(Number(targetInvoice?.balance_due || 0))}`,
+                      },
+                    ]}
+                  >
+                    <InputNumber
+                      className="w-full"
+                      prefix="₹"
+                      precision={2}
+                      min={0.01}
+                      placeholder={`Max: ${fmt(Number(targetInvoice?.balance_due || 0))}`}
+                      // @ts-ignore
+                      parser={(value) => Number((value || '').replace(/,/g, ''))}
+                    />
+                  </Form.Item>
+                </Col>
+                <Col span={12}>
+                  <Form.Item label="Payment Date">
+                    <Input value={dayjs().format('DD MMM YYYY')} disabled className="bg-gray-50 text-gray-700" />
+                  </Form.Item>
+                </Col>
+              </Row>
+              <Form.Item name="payment_method" label="Payment Method" rules={[{ required: true, message: 'Select payment method' }]}>
+                <Select
+                  placeholder="Select method"
+                  onChange={(val) => { setPerInvoicePaymentMethod(val); perInvoicePaymentForm.setFieldValue('reference_number', undefined); }}
+                >
+                  <Select.Option value="bank_transfer">Bank Transfer</Select.Option>
+                  <Select.Option value="cheque">Cheque</Select.Option>
+                  <Select.Option value="upi">UPI</Select.Option>
+                  <Select.Option value="cash">Cash</Select.Option>
+                </Select>
+              </Form.Item>
+              {perInvoicePaymentMethod === 'bank_transfer' && (
+                <Form.Item name="reference_number" label="Transaction ID" rules={[{ required: true, message: 'Enter transaction ID' }]}>
+                  <Input placeholder="Enter bank transaction ID" />
+                </Form.Item>
+              )}
+              {perInvoicePaymentMethod === 'cheque' && (
+                <Form.Item name="reference_number" label="Cheque Number" rules={[{ required: true, message: 'Enter cheque number' }]}>
+                  <Input placeholder="Enter cheque number" />
+                </Form.Item>
+              )}
+              {perInvoicePaymentMethod === 'upi' && (
+                <Form.Item name="reference_number" label="UPI Transaction ID" rules={[{ required: true, message: 'Enter UPI transaction ID' }]}>
+                  <Input placeholder="Enter UPI transaction ID / UTR" />
+                </Form.Item>
+              )}
+              <Form.Item name="notes" label="Notes (optional)">
+                <Input.TextArea rows={2} placeholder="Optional notes..." />
+              </Form.Item>
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg mb-3 text-sm text-amber-700">
+                Payment will be saved as <strong>Under Processing</strong> until verified by your team.
+              </div>
+              <div className="flex justify-end gap-2 mt-2">
+                <Button onClick={() => { setPaymentModalInvoiceId(null); perInvoicePaymentForm.resetFields(); setPerInvoicePaymentMethod(undefined); }}>
+                  Cancel
+                </Button>
+                <Button type="primary" htmlType="submit" loading={perInvoicePaymentMutation.isPending} icon={<DollarOutlined />}>
+                  Submit for Verification
+                </Button>
+              </div>
+            </Form>
+          </Modal>
+        );
+      })()}
 
       {/* ── Change Notes Modal (for versioned update) ──────────────────────── */}
       <Modal
@@ -1679,6 +1871,30 @@ export default function PurchaseOrderDetailPage() {
             value={etaValue}
             onChange={(date) => setEtaValue(date)}
             placeholder="Select expected delivery date"
+          />
+        </div>
+      </Modal>
+
+      {/* Report Delay Modal */}
+      <Modal
+        title={<span><WarningOutlined className="text-orange-500 mr-2" />Report Delivery Delay</span>}
+        open={delayModalOpen}
+        onCancel={() => { setDelayModalOpen(false); setDelayNote(''); }}
+        onOk={() => delayMutation.mutate(delayNote)}
+        okText="Submit"
+        okButtonProps={{ danger: true, loading: delayMutation.isPending, disabled: !delayNote.trim() }}
+        cancelText="Cancel"
+        width={420}
+      >
+        <div className="py-2">
+          <p className="text-gray-600 text-sm mb-3">
+            Expected Delivery: <strong>{po?.expected_delivery ? dayjs(po.expected_delivery).format('DD MMM YYYY') : '—'}</strong>
+          </p>
+          <Input.TextArea
+            rows={3}
+            placeholder="e.g. Supplier delayed shipment by 5 days due to material shortage..."
+            value={delayNote}
+            onChange={(e) => setDelayNote(e.target.value)}
           />
         </div>
       </Modal>

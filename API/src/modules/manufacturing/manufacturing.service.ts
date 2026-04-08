@@ -1577,9 +1577,25 @@ export class ManufacturingService {
       }),
     );
 
+    // Compute totalPaid from completed payments for all POs in one query
+    let paidMap: Map<number, number> = new Map();
+    if (data.length > 0) {
+      const poIds = data.map((po) => po.id);
+      const paidRows = await this.dataSource.query(`
+        SELECT inv.sales_order_id AS "soId", COALESCE(SUM(p.amount), 0) AS "totalPaid"
+        FROM payments p
+        INNER JOIN invoices inv ON inv.id = p.invoice_id
+        WHERE inv.sales_order_id = ANY($1) AND p.status = 'completed'
+        GROUP BY inv.sales_order_id
+      `, [poIds]);
+      paidMap = new Map(paidRows.map((r: any) => [Number(r.soId), Number(r.totalPaid)]));
+    }
+
+    const enrichedData = data.map((po) => ({ ...po, totalPaid: paidMap.get(po.id) || 0 }));
+
     return {
       message: 'Purchase orders for manufacturing fetched successfully',
-      data,
+      data: enrichedData,
       totalRecords: total,
       page: pageNum,
       limit: limitNum,

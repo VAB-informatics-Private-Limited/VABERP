@@ -22,6 +22,8 @@ import { InterestStatusesModule } from './modules/interest-statuses/interest-sta
 import { EmailTemplatesModule } from './modules/email-templates/email-templates.module';
 import { SourcesModule } from './modules/sources/sources.module';
 import { InvoicesModule } from './modules/invoices/invoices.module';
+import { ProformaInvoicesModule } from './modules/proforma-invoices/proforma-invoices.module';
+import { PrintTemplatesModule } from './modules/print-templates/print-templates.module';
 import { SalesOrdersModule } from './modules/sales-orders/sales-orders.module';
 import { MaterialRequestsModule } from './modules/material-requests/material-requests.module';
 import { PurchaseOrdersModule } from './modules/purchase-orders/purchase-orders.module';
@@ -41,6 +43,7 @@ import { ResellersModule } from './modules/resellers/resellers.module';
 import { CrmModule } from './modules/crm/crm.module';
 import { TasksModule } from './modules/tasks/tasks.module';
 import { TeamUpdatesModule } from './modules/team-updates/team-updates.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import databaseConfig from './config/database.config';
 import jwtConfig from './config/jwt.config';
@@ -99,6 +102,8 @@ import jwtConfig from './config/jwt.config';
     EmailTemplatesModule,
     SourcesModule,
     InvoicesModule,
+    ProformaInvoicesModule,
+    PrintTemplatesModule,
     SalesOrdersModule,
     MaterialRequestsModule,
     PurchaseOrdersModule,
@@ -118,6 +123,7 @@ import jwtConfig from './config/jwt.config';
     CrmModule,
     TasksModule,
     TeamUpdatesModule,
+    NotificationsModule,
     ScheduleModule.forRoot(),
   ],
   providers: [

@@ -6,6 +6,7 @@ import { ArrowLeftOutlined, EditOutlined, FilePdfOutlined, SendOutlined, Printer
 import { useRouter, useParams } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getQuotationById, updateQuotationStatus, acceptQuotation, updateQuotationETA } from '@/lib/api/quotations';
+import { createPIFromQuotation } from '@/lib/api/proforma-invoices';
 import dayjs from 'dayjs';
 import { useAuthStore, usePermissions } from '@/stores/authStore';
 import { QUOTATION_STATUS_OPTIONS, QuotationItem } from '@/types/quotation';
@@ -70,6 +71,15 @@ export default function ViewQuotationPage() {
     onError: (err: any) => {
       message.error(err?.response?.data?.message || 'Failed to accept quotation');
     },
+  });
+
+  const generatePIMutation = useMutation({
+    mutationFn: () => createPIFromQuotation(quotationId),
+    onSuccess: (result) => {
+      message.success(`Proforma Invoice ${result.data.pi_number} created`);
+      router.push(`/proforma-invoices/${result.data.id}`);
+    },
+    onError: (err: any) => message.error(err?.response?.data?.message || 'Failed to generate Proforma Invoice'),
   });
 
   const [acceptModalOpen, setAcceptModalOpen] = useState(false);
@@ -215,7 +225,7 @@ export default function ViewQuotationPage() {
           <Tag color={getStatusColor(quotation.status)}>{getStatusLabel(quotation.status)}</Tag>
         </div>
         <Space wrap>
-          <Button icon={<PrinterOutlined />} onClick={handlePrint}> 
+          <Button icon={<PrinterOutlined />} onClick={handlePrint}>
             Print
           </Button>
           <Button icon={<DownloadOutlined />} onClick={handleDownloadPDF}>
@@ -249,6 +259,15 @@ export default function ViewQuotationPage() {
               </Button>
             </>
           )}
+          {quotation.status === 'sent' && !quotation.is_locked && (
+            <Button
+              icon={<FileTextOutlined />}
+              onClick={() => generatePIMutation.mutate()}
+              loading={generatePIMutation.isPending}
+            >
+              Generate Proforma Invoice
+            </Button>
+          )}
           {(quotation.status === 'sent' || quotation.status === 'draft') && !quotation.is_locked && hasPermission('sales', 'quotations', 'edit') && (
             <>
               <Button
@@ -264,7 +283,7 @@ export default function ViewQuotationPage() {
                 icon={<CheckCircleOutlined />}
                 onClick={() => setAcceptModalOpen(true)}
               >
-                Transfer to Purchase Order
+                Close Sale & Transfer to PO
               </Button>
             </>
           )}
@@ -412,6 +431,15 @@ export default function ViewQuotationPage() {
                   ) : <Text type="secondary" className="text-sm">Not set</Text>}
                   <Button size="small" onClick={() => { setEtaValue(quotation.expected_delivery ? dayjs(quotation.expected_delivery) : null); setEtaModalOpen(true); }}>Set</Button>
                 </Space>
+                {quotation.delay_note && (
+                  <div className="mt-2 flex items-start gap-2 bg-orange-50 border border-orange-200 rounded px-3 py-2">
+                    <span className="text-orange-500 font-bold text-sm">⚠</span>
+                    <div>
+                      <div className="text-orange-700 font-semibold text-xs uppercase tracking-wide mb-0.5">Delay Reported</div>
+                      <div className="text-orange-800 text-sm">{quotation.delay_note}</div>
+                    </div>
+                  </div>
+                )}
               </div>
             </Col>
           </Row>

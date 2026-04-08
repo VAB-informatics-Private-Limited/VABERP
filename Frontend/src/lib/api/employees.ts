@@ -308,6 +308,9 @@ export interface EmployeePermissionsResponse {
   permissions: MenuPermissions;
   dataStartDate: string | null;
   ownDataOnly: boolean;
+  updatedAt: string | null;
+  updatedBy: number | null;
+  updatedByName: string | null;
 }
 
 export async function getEmployeePermissions(employeeId: number): Promise<ApiResponse<EmployeePermissionsResponse>> {
@@ -323,6 +326,9 @@ export async function getEmployeePermissions(employeeId: number): Promise<ApiRes
       permissions: isWrapped ? normalizePermissions(rawData.permissions) : (rawData ? normalizePermissions(rawData) : {}),
       dataStartDate: isWrapped ? rawData.dataStartDate ?? null : null,
       ownDataOnly: isWrapped ? rawData.ownDataOnly ?? false : false,
+      updatedAt: isWrapped ? rawData.updatedAt ?? null : null,
+      updatedBy: isWrapped ? rawData.updatedBy ?? null : null,
+      updatedByName: isWrapped ? rawData.updatedByName ?? null : null,
     },
   };
 }

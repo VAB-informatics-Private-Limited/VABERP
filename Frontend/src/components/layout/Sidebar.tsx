@@ -26,6 +26,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { getPermissions } from '@/lib/api/auth';
 import { normalizePermissions } from '@/lib/api/employees';
 import { getMaterialRequestList } from '@/lib/api/material-requests';
+import { getNotificationCounts } from '@/lib/api/notifications';
 import { MenuPermissions } from '@/types/auth';
 import type { MenuProps } from 'antd';
 
@@ -94,32 +95,81 @@ export function Sidebar({ collapsed, inDrawer, onMenuClick }: SidebarProps) {
   });
   const pendingMRCount = mrData?.data?.length || 0;
 
+  const { data: notifCounts } = useQuery({
+    queryKey: ['sidebar-notification-counts'],
+    queryFn: getNotificationCounts,
+    refetchInterval: 30000,
+  });
+
+  // Map backend module keys → sidebar menu keys
+  const MODULE_MENU_MAP: Record<string, string> = {
+    orders: 'orders-menu',
+    inventory: 'inventory-menu',
+    procurement: 'procurement-menu',
+    manufacturing: 'manufacturing-menu',
+    invoicing: 'invoicing-menu',
+    sales: 'sales-menu',
+    dispatch: 'dispatch-menu',
+  };
+  // Map backend sub_module keys → sidebar path keys
+  const SUBMODULE_PATH_MAP: Record<string, string> = {
+    'purchase-orders': '/purchase-orders',
+    'material-requests': '/material-requests',
+    indents: '/procurement/indents',
+    'rfq-quotations': '/procurement/rfq-quotations',
+    'job-cards': '/manufacturing/stages',
+    invoices: '/invoices',
+    payments: '/payments',
+    quotations: '/quotations',
+    'goods-receipts': '/inventory/goods-receipts',
+  };
+
+  // Helper: badge count for a menu key
+  const menuBadge = (menuKey: string): number => {
+    if (!notifCounts) return 0;
+    // Check if it's a module key (e.g. 'orders-menu')
+    for (const [mod, mk] of Object.entries(MODULE_MENU_MAP)) {
+      if (mk === menuKey) return notifCounts.byModule?.[mod] || 0;
+    }
+    // Check if it's a path key (e.g. '/purchase-orders')
+    for (const [sub, path] of Object.entries(SUBMODULE_PATH_MAP)) {
+      if (path === menuKey) return notifCounts.bySubModule?.[sub] || 0;
+    }
+    return 0;
+  };
+
+  const withBadge = (label: string, menuKey: string) => {
+    const count = menuBadge(menuKey);
+    if (count === 0) return label;
+    return (
+      <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        {label}
+        <Badge count={count} size="small" style={{ boxShadow: 'none', fontSize: 10 }} />
+      </span>
+    );
+  };
+
   // ── 1. SALES ─────────────────────────────────────────────────────────────
-  // Enquiries, Follow-ups, Customers, Quotations
   const salesChildren = [
-    canView('enquiry', 'enquiries')   && { key: '/enquiries',  label: 'Enquiries' },
-    canView('enquiry', 'follow_ups')  && { key: '/follow-ups', label: 'Follow-ups' },
-    canView('sales',   'customers')   && { key: '/customers',  label: 'Customers' },
-    canView('sales',   'quotations')  && { key: '/quotations', label: 'Quotations' },
+    canView('enquiry', 'enquiries')   && { key: '/enquiries',  label: withBadge('Enquiries', '/enquiries') },
+    canView('enquiry', 'follow_ups')  && { key: '/follow-ups', label: withBadge('Follow-ups', '/follow-ups') },
+    canView('sales',   'customers')   && { key: '/customers',  label: withBadge('Customers', '/customers') },
+    canView('sales',   'quotations')  && { key: '/quotations', label: withBadge('Quotations', '/quotations') },
   ].filter(Boolean);
 
   // ── 2. ORDERS ────────────────────────────────────────────────────────────
-  // Purchase Orders (sales-side) + Sales Orders
   const ordersChildren = [
-    canView('orders', 'purchase_orders') && { key: '/purchase-orders', label: 'Purchase Orders' },
-    canView('orders', 'sales_orders')    && { key: '/sales-orders',    label: 'Sales Orders' },
+    canView('orders', 'purchase_orders') && { key: '/purchase-orders', label: withBadge('Purchase Orders', '/purchase-orders') },
+    canView('orders', 'sales_orders')    && { key: '/sales-orders',    label: withBadge('Sales Orders', '/sales-orders') },
   ].filter(Boolean);
 
   // ── 3. MANUFACTURING ─────────────────────────────────────────────────────
-  // Overview, Job Cards, Process Templates
   const manufacturingChildren = [
     canView('orders', 'manufacturing') && { key: '/manufacturing',           label: 'Overview' },
-    canView('orders', 'job_cards')     && { key: '/manufacturing/stages',    label: 'Job Cards' },
-    canView('orders', 'manufacturing') && { key: '/manufacturing/processes', label: 'Process Templates' },
+    canView('orders', 'job_cards')     && { key: '/manufacturing/stages',    label: withBadge('Job Cards', '/manufacturing/stages') },
   ].filter(Boolean);
 
   // ── DISPATCH ─────────────────────────────────────────────────────────────
-  // Dispatch Status, Dispatched Orders
   const dispatchChildren = [
     canView('orders', 'manufacturing') && { key: '/manufacture-status',            label: 'Dispatch Status' },
     canView('orders', 'manufacturing') && { key: '/manufacture-status/dispatched', label: 'Dispatched Orders' },
@@ -139,27 +189,27 @@ export function Sidebar({ collapsed, inDrawer, onMenuClick }: SidebarProps) {
     canView('inventory', 'material_requests') && {
       key: '/material-requests',
       label: (
-        <span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           Material Requests
-          {pendingMRCount > 0 && <Badge count={pendingMRCount} size="small" offset={[4, -2]} />}
+          {pendingMRCount > 0 && <Badge count={pendingMRCount} size="small" style={{ boxShadow: 'none', fontSize: 10 }} />}
         </span>
       ),
     },
-    canView('inventory', 'goods_receipts') && { key: '/inventory/goods-receipts', label: 'Goods Receipts (GRN)' },
+    canView('inventory', 'goods_receipts') && { key: '/inventory/goods-receipts', label: withBadge('Goods Receipts (GRN)', '/inventory/goods-receipts') },
   ].filter(Boolean);
 
   // ── 6. PROCUREMENT ───────────────────────────────────────────────────────
-  // Indents, RFQ Quotations, Vendors — Purchase Orders moved to Orders group
   const procurementChildren = [
-    canView('procurement', 'indents')   && { key: '/procurement/indents',         label: 'Indents' },
-    canView('procurement', 'rfqs')      && { key: '/procurement/rfq-quotations',  label: 'RFQ Quotations' },
+    canView('procurement', 'indents')   && { key: '/procurement/indents',         label: withBadge('Indents', '/procurement/indents') },
+    canView('procurement', 'rfqs')      && { key: '/procurement/rfq-quotations',  label: withBadge('RFQ Quotations', '/procurement/rfq-quotations') },
     canView('procurement', 'suppliers') && { key: '/procurement/suppliers',       label: 'Vendors' },
   ].filter(Boolean);
 
   // ── 7. INVOICING ─────────────────────────────────────────────────────────
   const invoicingChildren = [
-    canView('invoicing', 'invoices')  && { key: '/invoices',  label: 'Invoices' },
-    canView('invoicing', 'payments')  && { key: '/payments',  label: 'Payments' },
+    canView('invoicing', 'invoices')           && { key: '/invoices',           label: withBadge('Invoices', '/invoices') },
+    canView('invoicing', 'proforma_invoices')  && { key: '/proforma-invoices',  label: 'Proforma Invoices' },
+    canView('invoicing', 'payments')           && { key: '/payments',           label: withBadge('Payments', '/payments') },
   ].filter(Boolean);
 
   // ── 8. EMPLOYEES ─────────────────────────────────────────────────────────
@@ -185,25 +235,25 @@ export function Sidebar({ collapsed, inDrawer, onMenuClick }: SidebarProps) {
     salesChildren.length > 0 && {
       key: 'sales-menu',
       icon: <ShoppingCartOutlined />,
-      label: 'Sales',
+      label: withBadge('Sales', 'sales-menu'),
       children: salesChildren,
     },
     ordersChildren.length > 0 && {
       key: 'orders-menu',
       icon: <FileDoneOutlined />,
-      label: 'Orders',
+      label: withBadge('Orders', 'orders-menu'),
       children: ordersChildren,
     },
     manufacturingChildren.length > 0 && {
       key: 'manufacturing-menu',
       icon: <ToolOutlined />,
-      label: 'Manufacturing',
+      label: withBadge('Manufacturing', 'manufacturing-menu'),
       children: manufacturingChildren,
     },
     dispatchChildren.length > 0 && {
       key: 'dispatch-menu',
       icon: <SendOutlined />,
-      label: 'Dispatch',
+      label: withBadge('Dispatch', 'dispatch-menu'),
       children: dispatchChildren,
     },
     productsChildren.length > 0 && {
@@ -215,19 +265,19 @@ export function Sidebar({ collapsed, inDrawer, onMenuClick }: SidebarProps) {
     inventoryChildren.length > 0 && {
       key: 'inventory-menu',
       icon: <InboxOutlined />,
-      label: 'Inventory',
+      label: withBadge('Inventory', 'inventory-menu'),
       children: inventoryChildren,
     },
     procurementChildren.length > 0 && {
       key: 'procurement-menu',
       icon: <ShoppingOutlined />,
-      label: 'Procurement',
+      label: withBadge('Procurement', 'procurement-menu'),
       children: procurementChildren,
     },
     invoicingChildren.length > 0 && {
       key: 'invoicing-menu',
       icon: <DollarOutlined />,
-      label: 'Invoicing',
+      label: withBadge('Invoicing', 'invoicing-menu'),
       children: invoicingChildren,
     },
     employeesChildren.length > 0 && {
@@ -241,11 +291,6 @@ export function Sidebar({ collapsed, inDrawer, onMenuClick }: SidebarProps) {
       icon: <BarChartOutlined />,
       label: 'Reports',
       children: reportsChildren,
-    },
-    canView('tasks') && {
-      key: '/tasks',
-      icon: <CheckSquareOutlined />,
-      label: 'Tasks',
     },
     isReportingHead && {
       key: '/team',

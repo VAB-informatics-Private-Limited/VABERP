@@ -43,6 +43,7 @@ export async function getAuditLogs(params: {
   fromDate?: string;
   toDate?: string;
   userName?: string;
+  userId?: number;
 }): Promise<PaginatedResponse<AuditLog>> {
   const queryParams: Record<string, unknown> = {
     page: params.page,
@@ -54,6 +55,7 @@ export async function getAuditLogs(params: {
   if (params.fromDate) queryParams.fromDate = params.fromDate;
   if (params.toDate) queryParams.toDate = params.toDate;
   if (params.userName) queryParams.userName = params.userName;
+  if (params.userId) queryParams.userId = params.userId;
 
   const response = await apiClient.get('/audit-logs', { params: queryParams });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

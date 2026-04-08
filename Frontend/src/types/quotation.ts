@@ -84,6 +84,7 @@ export interface Quotation {
   tax_amount?: number;
   total_amount: number;
   notes?: string;
+  delay_note?: string | null;
   terms_conditions?: string;
   status: 'draft' | 'sent' | 'accepted' | 'rejected' | 'expired';
   created_by: number;

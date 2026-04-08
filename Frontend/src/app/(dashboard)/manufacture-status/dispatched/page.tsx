@@ -4,13 +4,11 @@ import { useState, useMemo } from 'react';
 import {
   Typography, Input, Tag, Card, Table, Spin, Row, Col,
   Statistic, Space, Descriptions, Empty, DatePicker, Button,
-  Timeline,
 } from 'antd';
 import {
   SearchOutlined, CheckCircleOutlined, CarOutlined,
   CalendarOutlined, UserOutlined, FileTextOutlined,
-  ArrowLeftOutlined, DollarOutlined, ShoppingCartOutlined,
-  ToolOutlined, ClockCircleOutlined,
+  ArrowLeftOutlined, ToolOutlined, ClockCircleOutlined,
 } from '@ant-design/icons';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
@@ -19,7 +17,7 @@ import {
 } from '@/lib/api/manufacturing';
 import { getManufacturingPurchaseOrders } from '@/lib/api/bom';
 import { useAuthStore } from '@/stores/authStore';
-import { JobCard, JOB_CARD_STATUS_OPTIONS } from '@/types/manufacturing';
+import { JobCard } from '@/types/manufacturing';
 import { ManufacturingPO } from '@/types/bom';
 import dayjs from 'dayjs';
 
@@ -45,57 +43,36 @@ export default function DispatchedOrdersPage() {
   const [expandedKeys, setExpandedKeys] = useState<number[]>([]);
 
   // ── Queries ──
+  // Only need POs — job card status is already embedded in each PO's job_cards array.
+  // This avoids a separate /manufacturing/jobs call that requires job_cards.view permission.
   const { data: poData, isLoading } = useQuery({
-    queryKey: ['mfg-purchase-orders', enterpriseId],
+    queryKey: ['mfg-dispatched-pos', enterpriseId],
     queryFn: () => getManufacturingPurchaseOrders({ pageSize: 500 }),
     enabled: !!enterpriseId,
   });
 
-  const { data: jobData } = useQuery({
-    queryKey: ['all-job-cards', enterpriseId],
-    queryFn: () => getJobCardList({ enterpriseId: enterpriseId!, pageSize: 500 }),
-    enabled: !!enterpriseId,
-  });
-
-  const allJobs: JobCard[] = jobData?.data || [];
   const allPOs: ManufacturingPO[] = poData?.data || [];
 
-  // Only POs where ALL job cards are dispatched
+  // Only POs where status = dispatched (backend sets this when all job cards are dispatched)
   const dispatchedPOs = useMemo(() => {
     return allPOs
+      .filter(po => po.status === 'dispatched')
       .map(po => {
-        const jcs = allJobs.filter(j => j.sales_order_id === po.id);
-        if (jcs.length === 0) return null;
-        const allDispatched = jcs.every(j => j.status === 'dispatched');
-        if (!allDispatched) return null;
-
-        // Compute dispatch date as the latest completed_date among the job cards
-        const dispatchDates = jcs
-          .map(j => j.completed_date)
-          .filter(Boolean)
-          .map(d => dayjs(d));
-        const lastDispatchDate = dispatchDates.length > 0
-          ? dispatchDates.reduce((a, b) => (a.isAfter(b) ? a : b))
-          : null;
-
+        const jcs = po.job_cards || [];
         const totalQty = jcs.reduce((s, j) => s + Number(j.quantity || 0), 0);
         const totalCompleted = jcs.reduce((s, j) => s + Number(j.quantity_completed || 0), 0);
+        // Use created_date as a fallback dispatch date (PO's last modified)
+        const dispatchDate = po.created_date ? dayjs(po.created_date) : null;
 
         return {
           ...po,
-          _jobCards: jcs,
-          _dispatchDate: lastDispatchDate,
+          _jobCardCount: jcs.length,
+          _dispatchDate: dispatchDate,
           _totalQty: totalQty,
           _totalCompleted: totalCompleted,
         };
-      })
-      .filter(Boolean) as (ManufacturingPO & {
-        _jobCards: JobCard[];
-        _dispatchDate: dayjs.Dayjs | null;
-        _totalQty: number;
-        _totalCompleted: number;
-      })[];
-  }, [allPOs, allJobs]);
+      });
+  }, [allPOs]);
 
   // Apply filters
   const filteredPOs = useMemo(() => {
@@ -125,7 +102,7 @@ export default function DispatchedOrdersPage() {
   // Stats
   const stats = useMemo(() => {
     const totalValue = dispatchedPOs.reduce((s, po) => s + Number(po.grand_total || 0), 0);
-    const totalItems = dispatchedPOs.reduce((s, po) => s + (po._jobCards?.length || 0), 0);
+    const totalItems = dispatchedPOs.reduce((s, po) => s + (po._jobCardCount || 0), 0);
     const thisMonth = dispatchedPOs.filter(po =>
       po._dispatchDate && po._dispatchDate.isSame(dayjs(), 'month')
     ).length;
@@ -137,21 +114,26 @@ export default function DispatchedOrdersPage() {
     };
   }, [dispatchedPOs]);
 
-  // Load expanded data
+  // Load expanded data — fetch full job cards for this specific PO, then load stages
   const loadExpandedData = async (po: any) => {
     if (expandedData[po.id] && !expandedData[po.id].loading) return;
-    setExpandedData(prev => ({ ...prev, [po.id]: { jobCards: po._jobCards, stages: {}, loading: true } }));
+    setExpandedData(prev => ({ ...prev, [po.id]: { jobCards: [], stages: {}, loading: true } }));
     try {
+      // Fetch full job card details for this PO
+      const jcRes = await getJobCardList({ salesOrderId: po.id, pageSize: 100 });
+      const jcs: JobCard[] = jcRes.data || [];
       const stages: Record<number, any[]> = {};
-      for (const jc of po._jobCards) {
+      for (const jc of jcs) {
         try {
           const stageRes = await getJobCardProcesses(jc.id);
           stages[jc.id] = stageRes.data || [];
         } catch { stages[jc.id] = []; }
       }
-      setExpandedData(prev => ({ ...prev, [po.id]: { jobCards: po._jobCards, stages, loading: false } }));
+      setExpandedData(prev => ({ ...prev, [po.id]: { jobCards: jcs, stages, loading: false } }));
     } catch {
-      setExpandedData(prev => ({ ...prev, [po.id]: { ...prev[po.id], loading: false } }));
+      // Fallback to minimal job card data from PO if full fetch fails
+      const fallback = (po.job_cards || []).map((jc: any) => ({ ...jc, job_card_number: jc.job_number }));
+      setExpandedData(prev => ({ ...prev, [po.id]: { jobCards: fallback, stages: {}, loading: false } }));
     }
   };
 
@@ -411,7 +393,7 @@ export default function DispatchedOrdersPage() {
                 key: 'jobCards',
                 width: 90,
                 render: (_, record: any) => (
-                  <Tag color="green">{record._jobCards.length} dispatched</Tag>
+                  <Tag color="green">{record._jobCardCount} dispatched</Tag>
                 ),
               },
               {

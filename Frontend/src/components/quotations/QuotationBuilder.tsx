@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Form, Input, DatePicker, Button, Card, Table, InputNumber, Select, Row, Col, Divider, message, Space, Alert } from 'antd';
+import { Form, Input, DatePicker, Button, Card, Table, InputNumber, Select, Row, Col, Divider, message, Space, Alert, Modal } from 'antd';
 import { ArrowLeftOutlined, PlusOutlined, DeleteOutlined, SaveOutlined, SendOutlined, CheckCircleOutlined } from '@ant-design/icons';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
@@ -27,6 +27,7 @@ interface QuotationBuilderProps {
 export function QuotationBuilder({ initialData, initialEnquiryData, onSubmit, loading, submitText, isEdit, onCancel }: QuotationBuilderProps) {
   const router = useRouter();
   const [form] = Form.useForm();
+  const quotationDate = Form.useWatch('quotation_date', form);
   const { getEnterpriseId } = useAuthStore();
   const enterpriseId = getEnterpriseId();
 
@@ -193,6 +194,38 @@ export function QuotationBuilder({ initialData, initialEnquiryData, onSubmit, lo
       items,
     };
     onSubmit(formData);
+  };
+
+  const FIELD_LABELS: Record<string, string> = {
+    customer_name: 'Customer Name',
+    mobile: 'Mobile Number',
+    quotation_date: 'Quotation Date',
+    valid_until: 'Valid Until',
+    expected_delivery: 'Expected Delivery Date',
+    email: 'Email',
+    address: 'Address',
+    city: 'City',
+    state: 'State',
+    country: 'Country',
+    enquiry_id: 'Enquiry',
+    customer_id: 'Customer',
+    status: 'Status',
+    notes: 'Notes',
+  };
+
+  const handleFinishFailed = ({ errorFields }: { errorFields: { name: (string | number)[]; errors: string[] }[] }) => {
+    const missing = errorFields.map((f) => FIELD_LABELS[String(f.name[0])] || String(f.name[0]));
+    Modal.error({
+      title: 'Please fill in the required fields',
+      content: (
+        <ul className="mt-2 list-disc pl-4">
+          {missing.map((label) => (
+            <li key={label} className="text-red-600 font-medium">{label}</li>
+          ))}
+        </ul>
+      ),
+      okText: 'OK',
+    });
   };
 
   const handleMobileBlur = async (e: React.FocusEvent<HTMLInputElement>) => {
@@ -398,7 +431,7 @@ export function QuotationBuilder({ initialData, initialEnquiryData, onSubmit, lo
       };
 
   return (
-    <Form form={form} layout="vertical" onFinish={handleFinish} initialValues={initialValues}>
+    <Form form={form} layout="vertical" onFinish={handleFinish} onFinishFailed={handleFinishFailed} scrollToFirstError={false} initialValues={initialValues}>
       {!onCancel && (
         <div className="mb-4">
           <Button icon={<ArrowLeftOutlined />} onClick={() => router.push('/quotations')}>
@@ -551,11 +584,11 @@ export function QuotationBuilder({ initialData, initialEnquiryData, onSubmit, lo
               label="Quotation Date"
               rules={[{ required: true, message: 'Required' }]}
             >
-              <DatePicker className="w-full" format="DD-MM-YYYY" />
+              <DatePicker className="w-full" format="DD-MM-YYYY" disabledDate={(d) => d && d < dayjs().startOf('day')} />
             </Form.Item>
 
             <Form.Item name="valid_until" label="Valid Until">
-              <DatePicker className="w-full" format="DD-MM-YYYY" />
+              <DatePicker className="w-full" format="DD-MM-YYYY" disabledDate={(d) => d && d < (quotationDate ?? dayjs()).startOf('day')} />
             </Form.Item>
 
             <Form.Item name="expected_delivery" label="Expected Delivery Date">
@@ -624,6 +657,7 @@ export function QuotationBuilder({ initialData, initialEnquiryData, onSubmit, lo
                 icon={<SaveOutlined />}
                 htmlType="submit"
                 loading={loading}
+                disabled={loading}
                 block
                 size="large"
               >

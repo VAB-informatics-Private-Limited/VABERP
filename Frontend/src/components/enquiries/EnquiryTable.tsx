@@ -133,13 +133,13 @@ export function EnquiryTable({ data, loading, pagination }: EnquiryTableProps) {
           <Button
             type="text"
             icon={<EyeOutlined />}
-            onClick={() => router.push(`/enquiries/${record.id}`)}
+            onClick={(e) => { e.stopPropagation(); router.push(`/enquiries/${record.id}`); }}
           />
           {hasPermission('enquiry', 'enquiries', 'edit') && (
             <Button
               type="text"
               icon={<EditOutlined />}
-              onClick={() => router.push(`/enquiries/${record.id}/edit`)}
+              onClick={(e) => { e.stopPropagation(); router.push(`/enquiries/${record.id}/edit`); }}
             />
           )}
           {hasPermission('enquiry', 'enquiries', 'delete') && (
@@ -150,7 +150,7 @@ export function EnquiryTable({ data, loading, pagination }: EnquiryTableProps) {
               okText="Yes"
               cancelText="No"
             >
-              <Button type="text" danger icon={<DeleteOutlined />} />
+              <Button type="text" danger icon={<DeleteOutlined />} onClick={(e) => e.stopPropagation()} />
             </Popconfirm>
           )}
         </Space>
@@ -164,6 +164,10 @@ export function EnquiryTable({ data, loading, pagination }: EnquiryTableProps) {
       dataSource={data}
       rowKey="id"
       loading={loading}
+      onRow={(record) => ({
+        onClick: () => router.push(`/enquiries/${record.id}`),
+        style: { cursor: 'pointer' },
+      })}
       pagination={
         pagination
           ? {

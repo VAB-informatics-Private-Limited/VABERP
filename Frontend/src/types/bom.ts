@@ -69,5 +69,8 @@ export interface ManufacturingPO {
   material_request_id?: number;
   manufacturing_priority?: number;
   manufacturing_notes?: string;
+  invoiced_amount?: number;
+  remaining_amount?: number;
+  total_paid?: number;
   created_date: string;
 }

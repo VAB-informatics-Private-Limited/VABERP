@@ -228,7 +228,7 @@ export default function MaterialRequestDetailPage() {
       if (item.status === 'pending') {
         const isShort = item.available_stock < item.quantity_requested;
         initial[item.id] = {
-          qty: isShort ? item.available_stock : item.quantity_requested,
+          qty: item.quantity_requested,
           status: isShort && item.available_stock === 0 ? 'rejected' : 'approved',
           notes: isShort && item.available_stock === 0 ? 'Insufficient stock' : '',
         };

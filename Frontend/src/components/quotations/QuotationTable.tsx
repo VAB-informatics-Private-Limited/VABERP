@@ -2,11 +2,12 @@
 
 import { Table, Button, Tag, Space, Popconfirm, message, Dropdown, Modal, Badge, Typography } from 'antd';
 import dayjs from 'dayjs';
-import { EyeOutlined, EditOutlined, DeleteOutlined, MoreOutlined, FilePdfOutlined, SendOutlined, ShoppingCartOutlined, HistoryOutlined, CheckCircleOutlined } from '@ant-design/icons';
+import { EyeOutlined, EditOutlined, DeleteOutlined, MoreOutlined, FilePdfOutlined, SendOutlined, ShoppingCartOutlined, HistoryOutlined, CheckCircleOutlined, FileTextOutlined } from '@ant-design/icons';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Quotation, QUOTATION_STATUS_OPTIONS } from '@/types/quotation';
 import { deleteQuotation, updateQuotationStatus, acceptQuotation } from '@/lib/api/quotations';
+import { createPIFromQuotation } from '@/lib/api/proforma-invoices';
 import { useAuthStore, usePermissions } from '@/stores/authStore';
 import type { ColumnsType } from 'antd/es/table';
 import type { MenuProps } from 'antd';
@@ -49,6 +50,17 @@ export function QuotationTable({ data, loading, pagination }: QuotationTableProp
     },
     onError: () => {
       message.error('Failed to update status');
+    },
+  });
+
+  const generatePIMutation = useMutation({
+    mutationFn: (id: number) => createPIFromQuotation(id),
+    onSuccess: (result) => {
+      message.success(`Proforma Invoice ${result.data.pi_number} created`);
+      router.push(`/proforma-invoices/${result.data.id}`);
+    },
+    onError: (err: any) => {
+      message.error(err?.response?.data?.message || 'Failed to generate Proforma Invoice');
     },
   });
 
@@ -193,14 +205,14 @@ export function QuotationTable({ data, loading, pagination }: QuotationTableProp
           <Button
             type="text"
             icon={<EyeOutlined />}
-            onClick={() => router.push(`/quotations/${record.id}`)}
+            onClick={(e) => { e.stopPropagation(); router.push(`/quotations/${record.id}`); }}
           />
           {!record.is_locked && hasPermission('sales', 'quotations', 'edit') && (
             <Button
               type="text"
               icon={<EditOutlined />}
               title="Revise Quotation"
-              onClick={() => router.push(`/quotations/${record.id}/edit`)}
+              onClick={(e) => { e.stopPropagation(); router.push(`/quotations/${record.id}/edit`); }}
             />
           )}
           <Dropdown
@@ -210,8 +222,17 @@ export function QuotationTable({ data, loading, pagination }: QuotationTableProp
                   key: 'pdf',
                   icon: <FilePdfOutlined />,
                   label: 'Download PDF',
-                  onClick: () => router.push(`/quotations/${record.id}?print=true`),
+                  onClick: (info) => { info.domEvent?.stopPropagation(); router.push(`/quotations/${record.id}?print=true`); },
                 },
+                ...(['sent', 'accepted'].includes(record.status) ? [{
+                  key: 'generate-pi',
+                  icon: <FileTextOutlined />,
+                  label: 'Generate Proforma Invoice',
+                  onClick: (info: any) => {
+                    info.domEvent?.stopPropagation();
+                    generatePIMutation.mutate(record.id);
+                  },
+                }] : []),
                 ...(record.status === 'draft' && hasPermission('sales', 'quotations', 'edit') ? [{
                   key: 'send',
                   icon: <SendOutlined />,
@@ -260,7 +281,7 @@ export function QuotationTable({ data, loading, pagination }: QuotationTableProp
             }}
             trigger={['click']}
           >
-            <Button type="text" icon={<MoreOutlined />} />
+            <Button type="text" icon={<MoreOutlined />} onClick={(e) => e.stopPropagation()} />
           </Dropdown>
         </Space>
       ),
@@ -273,6 +294,10 @@ export function QuotationTable({ data, loading, pagination }: QuotationTableProp
       dataSource={data}
       rowKey="id"
       loading={loading}
+      onRow={(record) => ({
+        onClick: () => router.push(`/quotations/${record.id}`),
+        style: { cursor: 'pointer' },
+      })}
       pagination={
         pagination
           ? {

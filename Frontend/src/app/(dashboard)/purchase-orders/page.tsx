@@ -213,14 +213,24 @@ export default function PurchaseOrdersPage() {
       ),
     },
     {
-      title: 'Remaining',
-      dataIndex: 'remaining_amount',
-      key: 'remaining_amount',
+      title: 'Paid',
+      dataIndex: 'total_paid',
+      key: 'total_paid',
       render: (v) => (
-        <span className={Number(v) > 0 ? 'text-red-600 font-semibold' : 'text-green-600 font-semibold'}>
-          {fmt(v ?? 0)}
-        </span>
+        <span className="text-green-600 font-semibold">{fmt(v ?? 0)}</span>
       ),
+    },
+    {
+      title: 'Balance Due',
+      key: 'balance_due',
+      render: (_, record) => {
+        const due = Number(record.grand_total) - Number(record.total_paid ?? 0);
+        return (
+          <span className={due > 0.005 ? 'text-red-600 font-semibold' : 'text-green-600 font-semibold'}>
+            {fmt(due)}
+          </span>
+        );
+      },
     },
     {
       title: 'Status',
@@ -239,7 +249,7 @@ export default function PurchaseOrdersPage() {
               type={dispatchReadyPOIds.includes(record.id) ? 'primary' : 'text'}
               size="small"
               icon={<EyeOutlined />}
-              onClick={() => router.push(`/purchase-orders/${record.id}`)}
+              onClick={(e) => { e.stopPropagation(); router.push(`/purchase-orders/${record.id}`); }}
             />
           </Tooltip>
           <Tooltip title={record.status === 'on_hold' ? 'Resume Order' : 'Hold Order'}>
@@ -247,7 +257,8 @@ export default function PurchaseOrdersPage() {
               type="text"
               icon={record.status === 'on_hold' ? <PlayCircleOutlined className="text-green-600" /> : <PauseCircleOutlined className="text-yellow-500" />}
               loading={holdMutation.isPending}
-              onClick={() => {
+              onClick={(e) => {
+                e.stopPropagation();
                 if (record.status === 'on_hold') {
                   holdMutation.mutate({ id: record.id, currentStatus: 'on_hold' });
                 } else {
@@ -267,7 +278,7 @@ export default function PurchaseOrdersPage() {
             cancelText="Cancel"
           >
             <Tooltip title="Delete">
-              <Button type="text" danger icon={<DeleteOutlined />} loading={deleteMutation.isPending} />
+              <Button type="text" danger icon={<DeleteOutlined />} loading={deleteMutation.isPending} onClick={(e) => e.stopPropagation()} />
             </Tooltip>
           </Popconfirm>
         </Space>
@@ -419,6 +430,10 @@ export default function PurchaseOrdersPage() {
           dataSource={data?.data || []}
           rowKey="id"
           loading={isLoading}
+          onRow={(record) => ({
+            onClick: () => router.push(`/purchase-orders/${record.id}`),
+            style: { cursor: 'pointer' },
+          })}
           pagination={{
             current: page,
             pageSize,

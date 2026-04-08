@@ -543,7 +543,7 @@ export class EmployeesService {
     };
   }
 
-  async updatePermissions(employeeId: number, enterpriseId: number, body: any) {
+  async updatePermissions(employeeId: number, enterpriseId: number, body: any, updatedBy?: number) {
     const employee = await this.employeeRepository.findOne({
       where: { id: employeeId, enterpriseId },
     });
@@ -572,6 +572,10 @@ export class EmployeesService {
 
     if (body.ownDataOnly !== undefined) {
       record.ownDataOnly = Boolean(body.ownDataOnly);
+    }
+
+    if (updatedBy !== undefined) {
+      record.updatedBy = updatedBy;
     }
 
     const saved = await this.permissionRepository.save(record);
@@ -616,12 +620,24 @@ export class EmployeesService {
       where: { employeeId },
     });
 
+    // Resolve who last updated permissions
+    let updatedByName: string | null = null;
+    if (record?.updatedBy) {
+      const updater = await this.employeeRepository.findOne({ where: { id: record.updatedBy } });
+      if (updater) {
+        updatedByName = `${updater.firstName} ${updater.lastName}`.trim();
+      }
+    }
+
     return {
       message: 'Permissions fetched successfully',
       data: {
         permissions: record?.permissions || buildEmptyPermissions(),
         dataStartDate: record?.dataStartDate ?? null,
         ownDataOnly: record?.ownDataOnly ?? false,
+        updatedAt: record?.updatedAt ?? null,
+        updatedBy: record?.updatedBy ?? null,
+        updatedByName: updatedByName,
       },
     };
   }

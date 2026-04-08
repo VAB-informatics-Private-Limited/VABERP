@@ -87,21 +87,21 @@ export function LeadTable({
       render: (_: unknown, r: CrmLead) => (
         <Space size="small">
           <Tooltip title="View">
-            <Button size="small" icon={<EyeOutlined />} onClick={() => router.push(`/crm/${r.id}`)} />
+            <Button size="small" icon={<EyeOutlined />} onClick={(e) => { e.stopPropagation(); router.push(`/crm/${r.id}`); }} />
           </Tooltip>
           {canEdit && (
             <Tooltip title="Edit">
-              <Button size="small" icon={<EditOutlined />} onClick={() => router.push(`/crm/${r.id}/edit`)} />
+              <Button size="small" icon={<EditOutlined />} onClick={(e) => { e.stopPropagation(); router.push(`/crm/${r.id}/edit`); }} />
             </Tooltip>
           )}
           {canAssign && onAssign && (
             <Tooltip title="Assign">
-              <Button size="small" icon={<UserSwitchOutlined />} onClick={() => onAssign(r)} />
+              <Button size="small" icon={<UserSwitchOutlined />} onClick={(e) => { e.stopPropagation(); onAssign(r); }} />
             </Tooltip>
           )}
           {canDelete && onDelete && (
             <Tooltip title="Delete">
-              <Button size="small" danger icon={<DeleteOutlined />} onClick={() => onDelete(r)} />
+              <Button size="small" danger icon={<DeleteOutlined />} onClick={(e) => { e.stopPropagation(); onDelete(r); }} />
             </Tooltip>
           )}
         </Space>
@@ -116,6 +116,10 @@ export function LeadTable({
       rowKey="id"
       loading={loading}
       size="small"
+      onRow={(record) => ({
+        onClick: () => router.push(`/crm/${record.id}`),
+        style: { cursor: 'pointer' },
+      })}
       pagination={{
         current: page,
         pageSize,

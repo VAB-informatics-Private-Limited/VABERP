@@ -64,6 +64,9 @@ export class SalesOrder {
   @Column({ name: 'expected_delivery', type: 'date', nullable: true })
   expectedDelivery: Date | null;
 
+  @Column({ name: 'delay_note', type: 'text', nullable: true })
+  delayNote: string | null;
+
   @Column({ name: 'customer_name' })
   customerName: string;
 

@@ -17,6 +17,14 @@ async function bootstrap() {
   // Security headers
   app.use(helmet());
 
+  // Serve uploaded files (logos, etc.) statically
+  // Override CORP header so the frontend (different port) can load images cross-origin
+  const { join: pathJoin } = require('path');
+  app.use('/uploads', (req: any, res: any, next: any) => {
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    next();
+  }, require('express').static(pathJoin(process.cwd(), 'uploads')));
+
   // Global prefix
   app.setGlobalPrefix('api');
 

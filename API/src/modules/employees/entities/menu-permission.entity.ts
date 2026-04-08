@@ -4,6 +4,7 @@ import {
   Column,
   ManyToOne,
   JoinColumn,
+  UpdateDateColumn,
 } from 'typeorm';
 import { Employee } from './employee.entity';
 import { PermissionsJson } from '../../../common/constants/permissions';
@@ -28,4 +29,10 @@ export class MenuPermission {
 
   @Column({ name: 'own_data_only', type: 'boolean', default: false })
   ownDataOnly: boolean;
+
+  @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz', nullable: true })
+  updatedAt: Date | null;
+
+  @Column({ name: 'updated_by', type: 'int', nullable: true })
+  updatedBy: number | null;
 }

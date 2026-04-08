@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { Table, Tag, Card, Button, Typography, Tabs, Space, Progress, Tooltip } from 'antd';
-import { EyeOutlined, FileTextOutlined, TeamOutlined } from '@ant-design/icons';
+import { FileTextOutlined, TeamOutlined } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { getAllRFQs } from '@/lib/api/rfqs';
@@ -42,7 +42,7 @@ export default function RfqQuotationsPage() {
       render: (text: string, record: RfqListItem) => (
         <span
           className="font-medium text-blue-600 cursor-pointer hover:underline"
-          onClick={() => router.push(`/procurement/rfq-quotations/${record.id}`)}
+          onClick={(e) => { e.stopPropagation(); router.push(`/procurement/rfq-quotations/${record.id}`); }}
         >
           <FileTextOutlined className="mr-1" />
           {text}
@@ -115,19 +115,6 @@ export default function RfqQuotationsPage() {
       key: 'sent_date',
       render: (text: string) => (text ? dayjs(text).format('DD MMM YYYY') : <span className="text-gray-400">Not sent</span>),
     },
-    {
-      title: 'Action',
-      key: 'action',
-      render: (_: unknown, record: RfqListItem) => (
-        <Button
-          type="link"
-          icon={<EyeOutlined />}
-          onClick={() => router.push(`/procurement/rfq-quotations/${record.id}`)}
-        >
-          View
-        </Button>
-      ),
-    },
   ];
 
   const tabItems = [
@@ -165,6 +152,10 @@ export default function RfqQuotationsPage() {
           dataSource={data?.data || []}
           rowKey="id"
           loading={isLoading}
+          onRow={(record) => ({
+            onClick: () => router.push(`/procurement/rfq-quotations/${record.id}`),
+            style: { cursor: 'pointer' },
+          })}
           pagination={{
             current: page,
             pageSize,

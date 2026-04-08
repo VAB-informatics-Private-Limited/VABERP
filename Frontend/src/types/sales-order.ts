@@ -62,6 +62,7 @@ export interface SalesOrder {
   order_number: string;
   order_date: string;
   expected_delivery?: string;
+  delay_note?: string | null;
   customer_name: string;
   billing_address?: string;
   shipping_address?: string;
@@ -71,6 +72,7 @@ export interface SalesOrder {
   grand_total: number;
   invoiced_amount: number;
   remaining_amount: number;
+  total_paid?: number;
   notes?: string;
   hold_reason?: string;
   hold_acknowledged?: boolean;

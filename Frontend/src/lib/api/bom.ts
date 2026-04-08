@@ -81,6 +81,9 @@ function mapManufacturingPOFromBackend(data: any): ManufacturingPO {
     material_request_id: data.materialRequestId,
     manufacturing_priority: data.manufacturingPriority,
     manufacturing_notes: data.manufacturingNotes,
+    invoiced_amount: Number(data.invoicedAmount || 0),
+    remaining_amount: Number(data.grandTotal || 0) - Number(data.invoicedAmount || 0),
+    total_paid: Number(data.totalPaid || 0),
     created_date: data.createdDate,
   };
 }

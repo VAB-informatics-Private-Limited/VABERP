@@ -64,6 +64,17 @@ export class SalesOrdersController {
     return this.service.updateETA(id, enterpriseId, expectedDelivery);
   }
 
+  @Patch(':id/delay')
+  @ApiOperation({ summary: 'Report a delivery delay on a sales order' })
+  @RequirePermission('orders', 'sales_orders', 'edit')
+  async reportDelay(
+    @Param('id', ParseIntPipe) id: number,
+    @EnterpriseId() enterpriseId: number,
+    @Body('delayNote') delayNote: string,
+  ) {
+    return this.service.reportDelay(id, enterpriseId, delayNote);
+  }
+
   @Post()
   @ApiOperation({ summary: 'Create a new sales order' })
   @RequirePermission('orders', 'sales_orders', 'create')

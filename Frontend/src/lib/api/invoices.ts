@@ -19,6 +19,8 @@ function mapPaymentFromBackend(data: any): Payment {
       ? `${data.receivedByEmployee.firstName} ${data.receivedByEmployee.lastName || ''}`.trim()
       : undefined,
     status: data.status,
+    verified_by: data.verifiedBy,
+    verified_at: data.verifiedAt,
     created_date: data.createdDate,
   };
 }
@@ -44,6 +46,7 @@ function mapInvoiceFromBackend(data: any): Invoice {
     shipping_charges: Number(data.shippingCharges),
     grand_total: Number(data.grandTotal),
     total_paid: Number(data.totalPaid),
+    pending_amount: data.pendingAmount !== undefined ? Number(data.pendingAmount) : undefined,
     balance_due: Number(data.balanceDue),
     terms_conditions: data.termsConditions,
     notes: data.notes,
@@ -202,10 +205,31 @@ export async function recordPayment(invoiceId: number, data: PaymentFormData): P
   const payload = {
     amount: data.amount,
     paymentDate: data.payment_date,
+    paymentMethod: data.payment_method,
     referenceNumber: data.reference_number,
     notes: data.notes,
   };
   const response = await apiClient.post<ApiResponse>(`/invoices/${invoiceId}/payments`, payload);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const backendData = response.data as any;
+  return {
+    message: backendData.message,
+    data: backendData.data ? mapInvoiceFromBackend(backendData.data) : undefined,
+  };
+}
+
+export async function getPaymentById(paymentId: number): Promise<ApiResponse<Payment & { invoice?: any }>> {
+  const response = await apiClient.get(`/invoices/payments/${paymentId}`);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const backendData = response.data as any;
+  return {
+    message: backendData.message,
+    data: backendData.data ? { ...mapPaymentFromBackend(backendData.data), invoice: backendData.data.invoice } : undefined,
+  };
+}
+
+export async function verifyPayment(invoiceId: number, paymentId: number): Promise<ApiResponse<Invoice>> {
+  const response = await apiClient.patch<ApiResponse>(`/invoices/${invoiceId}/payments/${paymentId}/verify`);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const backendData = response.data as any;
   return {

@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { Typography, Card, Table, Tag, Button, Input, Space, DatePicker } from 'antd';
-import { SearchOutlined, ClearOutlined, EyeOutlined } from '@ant-design/icons';
+import { SearchOutlined, ClearOutlined } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { getAllPayments } from '@/lib/api/invoices';
@@ -60,7 +60,7 @@ export default function PaymentsPage() {
         <Button
           type="link"
           className="p-0 font-medium"
-          onClick={() => router.push(`/invoices/${record.invoice_id}`)}
+          onClick={(e) => { e.stopPropagation(); router.push(`/invoices/${record.invoice_id}`); }}
         >
           {text || '-'}
         </Button>
@@ -106,17 +106,6 @@ export default function PaymentsPage() {
         <Tag color={s === 'completed' ? 'green' : s === 'cancelled' ? 'red' : 'orange'}>
           {s?.toUpperCase()}
         </Tag>
-      ),
-    },
-    {
-      title: 'Action',
-      key: 'action',
-      render: (_: unknown, record: any) => (
-        <Button
-          type="link"
-          icon={<EyeOutlined />}
-          onClick={() => router.push(`/invoices/${record.invoice_id}`)}
-        />
       ),
     },
   ];
@@ -181,6 +170,10 @@ export default function PaymentsPage() {
           dataSource={data?.data || []}
           rowKey="id"
           loading={isLoading}
+          onRow={(record: any) => ({
+            onClick: () => router.push(`/invoices/${record.invoice_id}`),
+            style: { cursor: 'pointer' },
+          })}
           pagination={{
             current: page,
             pageSize,

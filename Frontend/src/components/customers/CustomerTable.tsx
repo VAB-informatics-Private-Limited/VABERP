@@ -108,13 +108,13 @@ export function CustomerTable({ data, loading, pagination }: CustomerTableProps)
           <Button
             type="text"
             icon={<EyeOutlined />}
-            onClick={() => router.push(`/customers/${record.id}`)}
+            onClick={(e) => { e.stopPropagation(); router.push(`/customers/${record.id}`); }}
           />
           {hasPermission('sales', 'customers', 'edit') && (
             <Button
               type="text"
               icon={<EditOutlined />}
-              onClick={() => router.push(`/customers/${record.id}/edit`)}
+              onClick={(e) => { e.stopPropagation(); router.push(`/customers/${record.id}/edit`); }}
             />
           )}
           {hasPermission('sales', 'customers', 'delete') && (
@@ -125,7 +125,7 @@ export function CustomerTable({ data, loading, pagination }: CustomerTableProps)
               okText="Yes"
               cancelText="No"
             >
-              <Button type="text" danger icon={<DeleteOutlined />} />
+              <Button type="text" danger icon={<DeleteOutlined />} onClick={(e) => e.stopPropagation()} />
             </Popconfirm>
           )}
         </Space>
@@ -139,6 +139,10 @@ export function CustomerTable({ data, loading, pagination }: CustomerTableProps)
       dataSource={data}
       rowKey="id"
       loading={loading}
+      onRow={(record) => ({
+        onClick: () => router.push(`/customers/${record.id}`),
+        style: { cursor: 'pointer' },
+      })}
       scroll={{ x: 800 }}
       pagination={{
         current: pagination.current,

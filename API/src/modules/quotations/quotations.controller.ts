@@ -55,7 +55,9 @@ export class QuotationsController {
     @Query('fromDate') fromDate?: string,
     @Query('toDate') toDate?: string,
   ) {
+    const isManager = user?.isReportingHead === true && user?.type === 'employee';
     const effectiveOwnDataOnly = ownDataOnly || (user?.type === 'employee' && !user?.isReportingHead);
+    const effectiveManagerUserId = isManager ? currentUserId : undefined;
     return this.quotationsService.findAll(
       enterpriseId,
       page,
@@ -67,6 +69,7 @@ export class QuotationsController {
       dataStartDate,
       effectiveOwnDataOnly,
       currentUserId,
+      effectiveManagerUserId,
     );
   }
 

@@ -15,6 +15,7 @@ import { RawMaterialLedger } from '../raw-materials/entities/raw-material-ledger
 import { CreatePurchaseOrderDto } from './dto/create-purchase-order.dto';
 import { IndentsService } from '../indents/indents.service';
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class PurchaseOrdersService {
@@ -43,9 +44,18 @@ export class PurchaseOrdersService {
     private rawMaterialLedgerRepository: Repository<RawMaterialLedger>,
     private indentsService: IndentsService,
     private auditLogsService: AuditLogsService,
+    private notificationsService: NotificationsService,
   ) {}
 
-  async findAll(enterpriseId: number, page = 1, limit = 20, status?: string) {
+  async findAll(
+    enterpriseId: number,
+    page = 1,
+    limit = 20,
+    status?: string,
+    ownDataOnly = false,
+    currentUserId?: number,
+    managerUserId?: number,
+  ) {
     const query = this.poRepository
       .createQueryBuilder('po')
       .leftJoinAndSelect('po.createdByEmployee', 'createdBy')
@@ -53,6 +63,17 @@ export class PurchaseOrdersService {
       .where('po.enterpriseId = :enterpriseId', { enterpriseId });
 
     if (status) query.andWhere('po.status = :status', { status });
+
+    if (ownDataOnly && currentUserId) {
+      // Employee sees only POs they created
+      query.andWhere('po.createdBy = :currentUserId', { currentUserId });
+    } else if (managerUserId) {
+      // Manager sees own POs + all direct reports' POs
+      query.andWhere(
+        `(po.createdBy = :managerUserId OR po.createdBy IN (SELECT e.id FROM employees e WHERE e.reporting_to = :managerUserId AND e.enterprise_id = :enterpriseId))`,
+        { managerUserId, enterpriseId },
+      );
+    }
 
     const pageNum = Number(page) || 1;
     const limitNum = Number(limit) || 20;
@@ -138,6 +159,15 @@ export class PurchaseOrdersService {
       userId,
       enterpriseId,
     }).catch(() => {});
+    this.notificationsService.create({
+      enterpriseId,
+      title: 'New Purchase Order Created',
+      message: `Purchase order ${poNumber} has been created and is pending approval.`,
+      type: 'purchase_order_created',
+      module: 'procurement',
+      subModule: 'purchase-orders',
+      link: `/procurement/purchase-orders/${savedPo.id}`,
+    });
     return createResult;
   }
 
@@ -274,6 +304,15 @@ export class PurchaseOrdersService {
       userId,
       enterpriseId,
     }).catch(() => {});
+    this.notificationsService.create({
+      enterpriseId,
+      title: 'Purchase Order Created from Indent',
+      message: `Purchase order ${poNumber} has been created from indent and is pending approval.`,
+      type: 'purchase_order_created',
+      module: 'procurement',
+      subModule: 'purchase-orders',
+      link: `/procurement/purchase-orders/${savedPo.id}`,
+    });
     return createFromIndentResult;
   }
 

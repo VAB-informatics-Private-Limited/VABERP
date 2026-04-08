@@ -102,7 +102,7 @@ export function EmployeeTable({ data, loading, pagination }: EmployeeTableProps)
             <Button
               type="text"
               icon={<KeyOutlined />}
-              onClick={() => router.push(`/employees/${record.id}/permissions`)}
+              onClick={(e) => { e.stopPropagation(); router.push(`/employees/${record.id}/permissions`); }}
               title="Manage Permissions"
             />
           )}
@@ -110,7 +110,7 @@ export function EmployeeTable({ data, loading, pagination }: EmployeeTableProps)
             <Button
               type="text"
               icon={<EditOutlined />}
-              onClick={() => router.push(`/employees/${record.id}/edit`)}
+              onClick={(e) => { e.stopPropagation(); router.push(`/employees/${record.id}/edit`); }}
             />
           )}
           {hasPermission('employees', 'all_employees', 'delete') && (
@@ -121,7 +121,7 @@ export function EmployeeTable({ data, loading, pagination }: EmployeeTableProps)
               okText="Yes"
               cancelText="No"
             >
-              <Button type="text" danger icon={<DeleteOutlined />} />
+              <Button type="text" danger icon={<DeleteOutlined />} onClick={(e) => e.stopPropagation()} />
             </Popconfirm>
           )}
         </Space>
@@ -135,6 +135,10 @@ export function EmployeeTable({ data, loading, pagination }: EmployeeTableProps)
       dataSource={data}
       rowKey="id"
       loading={loading}
+      onRow={(record) => ({
+        onClick: () => router.push(`/employees/${record.id}`),
+        style: { cursor: 'pointer' },
+      })}
       scroll={{ x: 1200 }}
       pagination={
         pagination

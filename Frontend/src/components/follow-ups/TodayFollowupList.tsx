@@ -67,8 +67,11 @@ export function TodayFollowupList({ data, loading }: TodayFollowupListProps) {
       title: 'Customer',
       key: 'customer',
       render: (_, record) => (
-        <div>
-          <div className="font-medium">{record.customer_name}</div>
+        <div
+          className="cursor-pointer"
+          onClick={() => router.push(`/enquiries/${record.enquiry_id}`)}
+        >
+          <div className="font-medium text-blue-600 hover:underline">{record.customer_name}</div>
           {record.business_name && (
             <div className="text-gray-500 text-sm">{record.business_name}</div>
           )}
@@ -173,6 +176,15 @@ export function TodayFollowupList({ data, loading }: TodayFollowupListProps) {
           showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} follow-ups`,
         }}
         scroll={{ x: 1000 }}
+        onRow={(record) => ({
+          onClick: (e) => {
+            // Don't navigate if clicking a button or link inside the row
+            const target = e.target as HTMLElement;
+            if (target.closest('button') || target.closest('a')) return;
+            router.push(`/enquiries/${record.enquiry_id}`);
+          },
+          style: { cursor: 'pointer' },
+        })}
       />
 
       <Modal

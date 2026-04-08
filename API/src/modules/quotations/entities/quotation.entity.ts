@@ -101,6 +101,9 @@ export class Quotation {
   @Column({ nullable: true, type: 'text' })
   notes: string;
 
+  @Column({ name: 'delay_note', nullable: true, type: 'text' })
+  delayNote: string;
+
   @Column({ default: 'draft' })
   status: string; // 'draft', 'sent', 'accepted', 'rejected', 'expired'
 
