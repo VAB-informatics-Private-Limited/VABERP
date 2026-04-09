@@ -4,8 +4,7 @@ import { useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { getInvoiceById } from '@/lib/api/invoices';
-import { useAuthStore } from '@/stores/authStore';
-import { Enterprise } from '@/types';
+import { PrintLayout } from '@/components/print-engine/PrintLayout';
 import dayjs from 'dayjs';
 
 const fmt = (v: number) =>
@@ -19,8 +18,6 @@ const fmtDate = (d?: string | null) => {
 export default function InvoicePrintPage() {
   const params = useParams();
   const invoiceId = Number(params.id);
-  const { user } = useAuthStore();
-  const businessName = (user as Enterprise)?.business_name || 'Your Company';
 
   const { data: invoiceData, isLoading } = useQuery({
     queryKey: ['invoice-print', invoiceId],
@@ -49,13 +46,11 @@ export default function InvoicePrintPage() {
   const balanceDue = Number(invoice.balance_due);
 
   return (
-    <div style={{ fontFamily: 'Arial, sans-serif', fontSize: 12, color: '#111', padding: '32px', maxWidth: 800, margin: '0 auto' }}>
-      {/* Header */}
+    <PrintLayout>
+    <div style={{ fontFamily: 'Arial, sans-serif', fontSize: 12, color: '#111', maxWidth: 800, margin: '0 auto' }}>
+      {/* Invoice Title Row */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24, paddingBottom: 16, borderBottom: '2px solid #222' }}>
-        <div>
-          <div style={{ fontSize: 22, fontWeight: 700, color: '#111' }}>{businessName}</div>
-          <div style={{ fontSize: 11, color: '#888', marginTop: 4 }}>Tax Invoice</div>
-        </div>
+        <div style={{ fontSize: 11, color: '#888' }}>Tax Invoice</div>
         <div style={{ textAlign: 'right' }}>
           <div style={{ fontSize: 28, fontWeight: 700, color: '#333', marginBottom: 4 }}>INVOICE</div>
           <div style={{ fontSize: 14, fontWeight: 600 }}>{invoice.invoice_number}</div>
@@ -176,5 +171,6 @@ export default function InvoicePrintPage() {
         </button>
       </div>
     </div>
+    </PrintLayout>
   );
 }

@@ -4,8 +4,7 @@ import { useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { getPaymentById } from '@/lib/api/invoices';
-import { useAuthStore } from '@/stores/authStore';
-import { Enterprise } from '@/types';
+import { PrintLayout } from '@/components/print-engine/PrintLayout';
 import dayjs from 'dayjs';
 
 const fmt = (v: number) =>
@@ -28,11 +27,6 @@ const METHOD_LABELS: Record<string, string> = {
 export default function PaymentReceiptPage() {
   const params = useParams();
   const paymentId = Number(params.id);
-  const { user } = useAuthStore();
-  const businessName = (user as Enterprise)?.business_name || 'Your Company';
-  const businessAddress = (user as any)?.address || '';
-  const businessGst = (user as any)?.gst_number || '';
-  const businessPhone = (user as any)?.phone || '';
 
   const { data, isLoading } = useQuery({
     queryKey: ['payment-receipt', paymentId],
@@ -59,16 +53,12 @@ export default function PaymentReceiptPage() {
   }
 
   return (
-    <div style={{ fontFamily: 'Arial, sans-serif', fontSize: 12, color: '#111', padding: '40px', maxWidth: 680, margin: '0 auto' }}>
+    <PrintLayout>
+    <div style={{ fontFamily: 'Arial, sans-serif', fontSize: 12, color: '#111', maxWidth: 680, margin: '0 auto' }}>
 
-      {/* Header */}
+      {/* Receipt Title Row */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 28, paddingBottom: 20, borderBottom: '3px solid #111' }}>
-        <div>
-          <div style={{ fontSize: 22, fontWeight: 700 }}>{businessName}</div>
-          {businessAddress && <div style={{ fontSize: 10, color: '#777', marginTop: 3 }}>{businessAddress}</div>}
-          {businessGst && <div style={{ fontSize: 10, color: '#777' }}>GSTIN: {businessGst}</div>}
-          {businessPhone && <div style={{ fontSize: 10, color: '#777' }}>{businessPhone}</div>}
-        </div>
+        <div />
         <div style={{ textAlign: 'right' }}>
           <div style={{ fontSize: 26, fontWeight: 800, letterSpacing: 1, color: '#111' }}>PAYMENT RECEIPT</div>
           <div style={{ fontSize: 16, fontWeight: 700, color: '#1677ff', marginTop: 4 }}>{payment.payment_number}</div>
@@ -181,5 +171,6 @@ export default function PaymentReceiptPage() {
         </button>
       </div>
     </div>
+    </PrintLayout>
   );
 }
