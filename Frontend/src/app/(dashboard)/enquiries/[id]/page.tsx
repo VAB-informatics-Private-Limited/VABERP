@@ -22,6 +22,9 @@ import { useState } from 'react';
 import { getEnquiryById, getFollowupHistory, addFollowup, getEnquiryQuotations } from '@/lib/api/enquiries';
 import { addQuotation } from '@/lib/api/quotations';
 import { useAuthStore } from '@/stores/authStore';
+import { getPrintTemplateConfig } from '@/lib/api/print-templates';
+import { PrintHeader } from '@/components/print-engine/PrintHeader';
+import { DEFAULT_PRINT_TEMPLATE } from '@/types/print-template';
 import { FollowupTimeline } from '@/components/enquiries/FollowupTimeline';
 import { FollowupForm } from '@/components/enquiries/FollowupForm';
 import { QuotationBuilder } from '@/components/quotations/QuotationBuilder';
@@ -41,6 +44,12 @@ export default function ViewEnquiryPage() {
 
   const [followupModalOpen, setFollowupModalOpen] = useState(false);
   const [quotationDrawerOpen, setQuotationDrawerOpen] = useState(false);
+
+  const { data: printConfig } = useQuery({
+    queryKey: ['print-template-config'],
+    queryFn: getPrintTemplateConfig,
+    staleTime: 5 * 60 * 1000,
+  });
 
   const { data: enquiryData, isLoading: enquiryLoading } = useQuery({
     queryKey: ['enquiry', enquiryId],
@@ -187,13 +196,16 @@ export default function ViewEnquiryPage() {
         </Space>
       </div>
 
-      {/* Print Header */}
+      {/* Print Header — shows letterhead from print template CMS */}
       <div className="hidden print:block print:mb-6">
-        <Title level={3} className="!mb-1">ENQUIRY DETAILS</Title>
-        <div className="text-lg font-medium">{enquiry.customer_name}</div>
-        <Tag color={getStatusColor(enquiry.interest_status)}>
-          {getStatusLabel(enquiry.interest_status)}
-        </Tag>
+        <PrintHeader config={printConfig ?? DEFAULT_PRINT_TEMPLATE} />
+        <div className="mt-4">
+          <Title level={3} className="!mb-1">ENQUIRY DETAILS</Title>
+          <div className="text-lg font-medium">{enquiry.customer_name}</div>
+          <Tag color={getStatusColor(enquiry.interest_status)}>
+            {getStatusLabel(enquiry.interest_status)}
+          </Tag>
+        </div>
       </div>
 
       {/* Top Summary Bar */}
