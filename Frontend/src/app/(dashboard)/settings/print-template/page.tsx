@@ -188,13 +188,7 @@ export default function PrintTemplatePage() {
     });
   };
 
-  const currentLogoUrl = previewConfig?.logo_url
-    ? previewConfig.logo_url.startsWith('http')
-      ? previewConfig.logo_url
-      : `${API_URL}${previewConfig.logo_url}`
-    : savedConfig?.logo_url
-      ? `${API_URL}${savedConfig.logo_url}`
-      : null;
+  const currentLogoUrl = previewConfig?.logo_url || savedConfig?.logo_url || null;
 
   const tabItems = [
     {

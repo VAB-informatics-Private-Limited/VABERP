@@ -5,8 +5,6 @@ interface PrintHeaderProps {
   config: PrintTemplateConfig;
 }
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://64.235.43.187:2261';
-
 export function PrintHeader({ config }: PrintHeaderProps) {
   const isCompact = config.header_style === 'compact';
   const align = config.header_alignment ?? 'left';
@@ -16,10 +14,12 @@ export function PrintHeader({ config }: PrintHeaderProps) {
   const isCenter = align === 'center';
   const isRight = align === 'right';
 
+  // Use relative path so it goes through Next.js /uploads proxy (same-origin, no CORS issues).
+  // If an absolute URL was stored (legacy), use it as-is.
   const logoUrl = config.logo_url
     ? config.logo_url.startsWith('http')
       ? config.logo_url
-      : `${API_URL}${config.logo_url}`
+      : config.logo_url  // relative path like /uploads/logos/... served via Next.js rewrite
     : null;
 
   return (
