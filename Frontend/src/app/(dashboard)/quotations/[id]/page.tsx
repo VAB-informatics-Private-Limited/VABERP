@@ -10,10 +10,9 @@ import { createPIFromQuotation } from '@/lib/api/proforma-invoices';
 import dayjs from 'dayjs';
 import { useAuthStore, usePermissions } from '@/stores/authStore';
 import { QUOTATION_STATUS_OPTIONS, QuotationItem } from '@/types/quotation';
-import { downloadPdf, printPage } from '@/lib/utils/printPdf';
+import { printPage } from '@/lib/utils/printPdf';
 import { SendEmailModal } from '@/components/common/SendEmailModal';
 import QuotationVersionHistory from '@/components/quotations/QuotationVersionHistory';
-import { PrintLayout } from '@/components/print-engine/PrintLayout';
 import type { ColumnsType } from 'antd/es/table';
 
 const { Title, Text } = Typography;
@@ -177,14 +176,8 @@ export default function ViewQuotationPage() {
     printPage();
   };
 
-  const handleDownloadPDF = async () => {
-    await downloadPdf({
-      filename: `Quotation-${quotation?.quotation_number || quotationId}.pdf`,
-      element: printRef.current || undefined,
-      onStart: () => message.loading({ content: 'Generating PDF...', key: 'pdf' }),
-      onSuccess: () => message.success({ content: 'PDF downloaded successfully', key: 'pdf' }),
-      onError: () => message.error({ content: 'Failed to generate PDF', key: 'pdf' }),
-    });
+  const handleDownloadPDF = () => {
+    window.open(`/print/quotation/${quotationId}`, '_blank');
   };
 
   const [emailModalOpen, setEmailModalOpen] = useState(false);
@@ -407,7 +400,7 @@ export default function ViewQuotationPage() {
         />
       )}
 
-      <PrintLayout ref={printRef} className="printable-area">
+      <div ref={printRef} className="printable-area">
       <Card className="card-shadow mb-4 print:shadow-none print:border">
         <div className="print:mb-8">
           <Row justify="space-between" align="top">
@@ -520,7 +513,7 @@ export default function ViewQuotationPage() {
           </>
         )}
       </Card>
-      </PrintLayout>
+      </div>
 
       {/* Version history — hidden from print */}
       <QuotationVersionHistory
