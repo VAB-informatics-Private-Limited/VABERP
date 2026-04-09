@@ -7,7 +7,6 @@ import { useRouter } from 'next/navigation';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Quotation, QUOTATION_STATUS_OPTIONS } from '@/types/quotation';
 import { deleteQuotation, updateQuotationStatus, acceptQuotation } from '@/lib/api/quotations';
-import { createPIFromQuotation } from '@/lib/api/proforma-invoices';
 import { useAuthStore, usePermissions } from '@/stores/authStore';
 import type { ColumnsType } from 'antd/es/table';
 import type { MenuProps } from 'antd';
@@ -50,17 +49,6 @@ export function QuotationTable({ data, loading, pagination }: QuotationTableProp
     },
     onError: () => {
       message.error('Failed to update status');
-    },
-  });
-
-  const generatePIMutation = useMutation({
-    mutationFn: (id: number) => createPIFromQuotation(id),
-    onSuccess: (result) => {
-      message.success(`Proforma Invoice ${result.data.pi_number} created`);
-      router.push(`/proforma-invoices/${result.data.id}`);
-    },
-    onError: (err: any) => {
-      message.error(err?.response?.data?.message || 'Failed to generate Proforma Invoice');
     },
   });
 
@@ -224,15 +212,6 @@ export function QuotationTable({ data, loading, pagination }: QuotationTableProp
                   label: 'Download PDF',
                   onClick: (info) => { info.domEvent?.stopPropagation(); router.push(`/quotations/${record.id}?print=true`); },
                 },
-                ...(['sent', 'accepted'].includes(record.status) ? [{
-                  key: 'generate-pi',
-                  icon: <FileTextOutlined />,
-                  label: 'Generate Proforma Invoice',
-                  onClick: (info: any) => {
-                    info.domEvent?.stopPropagation();
-                    generatePIMutation.mutate(record.id);
-                  },
-                }] : []),
                 ...(record.status === 'draft' && hasPermission('sales', 'quotations', 'edit') ? [{
                   key: 'send',
                   icon: <SendOutlined />,

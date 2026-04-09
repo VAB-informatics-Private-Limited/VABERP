@@ -208,7 +208,6 @@ export function Sidebar({ collapsed, inDrawer, onMenuClick }: SidebarProps) {
   // ── 7. INVOICING ─────────────────────────────────────────────────────────
   const invoicingChildren = [
     canView('invoicing', 'invoices')           && { key: '/invoices',           label: withBadge('Invoices', '/invoices') },
-    canView('invoicing', 'proforma_invoices')  && { key: '/proforma-invoices',  label: 'Proforma Invoices' },
     canView('invoicing', 'payments')           && { key: '/payments',           label: withBadge('Payments', '/payments') },
   ].filter(Boolean);
 

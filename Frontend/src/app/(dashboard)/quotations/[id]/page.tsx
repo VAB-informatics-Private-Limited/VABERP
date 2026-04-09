@@ -6,7 +6,6 @@ import { ArrowLeftOutlined, EditOutlined, FilePdfOutlined, SendOutlined, Printer
 import { useRouter, useParams } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getQuotationById, updateQuotationStatus, acceptQuotation, updateQuotationETA } from '@/lib/api/quotations';
-import { createPIFromQuotation } from '@/lib/api/proforma-invoices';
 import dayjs from 'dayjs';
 import { useAuthStore, usePermissions } from '@/stores/authStore';
 import { QUOTATION_STATUS_OPTIONS, QuotationItem } from '@/types/quotation';
@@ -71,15 +70,6 @@ export default function ViewQuotationPage() {
     onError: (err: any) => {
       message.error(err?.response?.data?.message || 'Failed to accept quotation');
     },
-  });
-
-  const generatePIMutation = useMutation({
-    mutationFn: () => createPIFromQuotation(quotationId),
-    onSuccess: (result) => {
-      message.success(`Proforma Invoice ${result.data.pi_number} created`);
-      router.push(`/proforma-invoices/${result.data.id}`);
-    },
-    onError: (err: any) => message.error(err?.response?.data?.message || 'Failed to generate Proforma Invoice'),
   });
 
   const [acceptModalOpen, setAcceptModalOpen] = useState(false);
@@ -252,15 +242,6 @@ export default function ViewQuotationPage() {
                 {quotation.current_version > 1 ? 'Revise' : 'Edit'}
               </Button>
             </>
-          )}
-          {quotation.status === 'sent' && !quotation.is_locked && (
-            <Button
-              icon={<FileTextOutlined />}
-              onClick={() => generatePIMutation.mutate()}
-              loading={generatePIMutation.isPending}
-            >
-              Generate Proforma Invoice
-            </Button>
           )}
           {(quotation.status === 'sent' || quotation.status === 'draft') && !quotation.is_locked && hasPermission('sales', 'quotations', 'edit') && (
             <>
