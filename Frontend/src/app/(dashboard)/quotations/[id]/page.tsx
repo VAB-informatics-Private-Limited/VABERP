@@ -13,6 +13,7 @@ import { QUOTATION_STATUS_OPTIONS, QuotationItem } from '@/types/quotation';
 import { downloadPdf, printPage } from '@/lib/utils/printPdf';
 import { SendEmailModal } from '@/components/common/SendEmailModal';
 import QuotationVersionHistory from '@/components/quotations/QuotationVersionHistory';
+import { PrintLayout } from '@/components/print-engine/PrintLayout';
 import type { ColumnsType } from 'antd/es/table';
 
 const { Title, Text } = Typography;
@@ -406,7 +407,7 @@ export default function ViewQuotationPage() {
         />
       )}
 
-      <div ref={printRef} className="printable-area">
+      <PrintLayout ref={printRef} className="printable-area">
       <Card className="card-shadow mb-4 print:shadow-none print:border">
         <div className="print:mb-8">
           <Row justify="space-between" align="top">
@@ -519,7 +520,7 @@ export default function ViewQuotationPage() {
           </>
         )}
       </Card>
-    </div>
+      </PrintLayout>
 
       {/* Version history — hidden from print */}
       <QuotationVersionHistory
