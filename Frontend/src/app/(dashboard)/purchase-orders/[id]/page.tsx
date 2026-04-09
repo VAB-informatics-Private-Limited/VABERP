@@ -234,6 +234,17 @@ export default function PurchaseOrderDetailPage() {
     onError: (err: any) => message.error(err?.response?.data?.message || 'Failed to cancel purchase order'),
   });
 
+  // ── Under Verification ────────────────────────────────────────────────────
+  const verificationMutation = useMutation({
+    mutationFn: () => updateSOStatus(poId, 'under_verification'),
+    onSuccess: () => {
+      message.success('Purchase order marked as Under Verification');
+      queryClient.invalidateQueries({ queryKey: ['purchase-order', poId] });
+      queryClient.invalidateQueries({ queryKey: ['purchase-orders-list'] });
+    },
+    onError: () => message.error('Failed to update status'),
+  });
+
   // ── Delete PO ─────────────────────────────────────────────────────────────
   const deleteMutation = useMutation({
     mutationFn: () => deleteSalesOrder(poId),
@@ -805,6 +816,23 @@ export default function PurchaseOrderDetailPage() {
               Transfer to Manufacturing
             </Button>
           )}
+          {!['cancelled', 'delivered', 'dispatched', 'under_verification', 'on_hold'].includes(po.status) && (
+            <Button
+              icon={<SyncOutlined />}
+              onClick={() =>
+                Modal.confirm({
+                  title: 'Send to Under Verification?',
+                  content: 'This will mark the purchase order as Under Verification and record the timestamp.',
+                  okText: 'Confirm',
+                  onOk: () => verificationMutation.mutate(),
+                })
+              }
+              loading={verificationMutation.isPending}
+              className="border-orange-400 text-orange-600"
+            >
+              Under Verification
+            </Button>
+          )}
           <Button
             icon={po.status === 'on_hold' ? <PlayCircleOutlined /> : <PauseCircleOutlined />}
             loading={holdMutation.isPending}
@@ -1003,6 +1031,13 @@ export default function PurchaseOrderDetailPage() {
                   )}
                 </div>
               </Descriptions.Item>
+              {po.under_verification_at && (
+                <Descriptions.Item label="Under Verification Since">
+                  <Tag color="volcano">
+                    {dayjs(po.under_verification_at).format('DD MMM YYYY, hh:mm A')}
+                  </Tag>
+                </Descriptions.Item>
+              )}
               {po.billing_address && (
                 <Descriptions.Item label="Billing Address" span={2}>{po.billing_address}</Descriptions.Item>
               )}

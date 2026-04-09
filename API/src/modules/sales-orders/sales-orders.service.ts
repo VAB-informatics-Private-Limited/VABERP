@@ -338,6 +338,9 @@ This is an automated notification.`;
           }
         }
       }
+    } else if (status === 'under_verification') {
+      // Record timestamp when verification started
+      updateData.underVerificationAt = new Date();
     } else if (status === 'on_hold') {
       // Store hold reason (optional) and pause all related job cards
       updateData.holdReason = holdReason || null;

@@ -45,6 +45,7 @@ function mapSOFromBackend(data: any): SalesOrder {
     hold_reason: data.holdReason || undefined,
     hold_acknowledged: data.holdAcknowledged || false,
     status: data.status,
+    under_verification_at: data.underVerificationAt || null,
     sent_to_manufacturing: data.sentToManufacturing || false,
     current_version: data.currentVersion || 1,
     updated_by: data.updatedBy,

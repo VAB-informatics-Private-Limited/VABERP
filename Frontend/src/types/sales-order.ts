@@ -77,6 +77,7 @@ export interface SalesOrder {
   hold_reason?: string;
   hold_acknowledged?: boolean;
   status: string;
+  under_verification_at?: string | null;
   sent_to_manufacturing?: boolean;
   current_version: number;
   updated_by?: number;
@@ -90,6 +91,7 @@ export const SO_STATUS_OPTIONS = [
   { value: 'confirmed', label: 'Confirmed', color: 'blue' },
   { value: 'on_hold', label: 'On Hold', color: 'gold' },
   { value: 'in_production', label: 'In Production', color: 'orange' },
+  { value: 'under_verification', label: 'Under Verification', color: 'volcano' },
   { value: 'ready', label: 'Ready', color: 'cyan' },
   { value: 'dispatched', label: 'Dispatched', color: 'purple' },
   { value: 'delivered', label: 'Delivered', color: 'green' },

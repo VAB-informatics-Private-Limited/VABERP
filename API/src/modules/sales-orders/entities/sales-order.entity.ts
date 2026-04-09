@@ -116,7 +116,10 @@ export class SalesOrder {
   holdAcknowledged: boolean;
 
   @Column({ default: 'confirmed' })
-  status: string; // 'confirmed', 'in_production', 'ready', 'dispatched', 'delivered', 'cancelled', 'on_hold'
+  status: string; // 'confirmed', 'in_production', 'ready', 'dispatched', 'delivered', 'cancelled', 'on_hold', 'under_verification'
+
+  @Column({ name: 'under_verification_at', type: 'timestamptz', nullable: true })
+  underVerificationAt: Date | null;
 
   @Column({ name: 'current_version', default: 1 })
   currentVersion: number;
