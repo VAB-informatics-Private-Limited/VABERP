@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ManufacturingController } from './manufacturing.controller';
 import { ManufacturingService } from './manufacturing.service';
+import { ServiceProductsModule } from '../service-products/service-products.module';
 import { JobCard } from './entities/job-card.entity';
 import { JobCardProgress } from './entities/job-card-progress.entity';
 import { JobCardStageHistory } from './entities/job-card-stage-history.entity';
@@ -21,6 +22,7 @@ import { RawMaterialLedger } from '../raw-materials/entities/raw-material-ledger
 
 @Module({
   imports: [
+    ServiceProductsModule,
     TypeOrmModule.forFeature([
       JobCard, JobCardProgress, JobCardStageHistory, ProcessStage, ProcessTemplate,
       Bom, BomItem,

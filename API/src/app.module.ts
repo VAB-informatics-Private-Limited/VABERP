@@ -44,6 +44,10 @@ import { CrmModule } from './modules/crm/crm.module';
 import { TasksModule } from './modules/tasks/tasks.module';
 import { TeamUpdatesModule } from './modules/team-updates/team-updates.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
+import { ProductTypesModule } from './modules/product-types/product-types.module';
+import { ServiceProductsModule } from './modules/service-products/service-products.module';
+import { ServiceEventsModule } from './modules/service-events/service-events.module';
+import { ServiceBookingsModule } from './modules/service-bookings/service-bookings.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import databaseConfig from './config/database.config';
 import jwtConfig from './config/jwt.config';
@@ -124,6 +128,10 @@ import jwtConfig from './config/jwt.config';
     TasksModule,
     TeamUpdatesModule,
     NotificationsModule,
+    ProductTypesModule,
+    ServiceProductsModule,
+    ServiceEventsModule,
+    ServiceBookingsModule,
     ScheduleModule.forRoot(),
   ],
   providers: [

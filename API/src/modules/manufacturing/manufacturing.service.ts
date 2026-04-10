@@ -20,6 +20,7 @@ import { RawMaterialLedger } from '../raw-materials/entities/raw-material-ledger
 import { CreateJobCardDto, UpdateStageDto, CreateProcessTemplateDto, CreateBomDto } from './dto';
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import { EmailService } from '../email/email.service';
+import { ServiceProductsService } from '../service-products/service-products.service';
 
 // Allowed status transitions — strict enforcement
 // Stock verification is handled by Inventory module, not Manufacturing
@@ -79,6 +80,7 @@ export class ManufacturingService {
     private auditLogsService: AuditLogsService,
     private emailService: EmailService,
     private dataSource: DataSource,
+    private serviceProductsService: ServiceProductsService,
   ) {}
 
   // ========== Job Cards ==========
@@ -827,6 +829,18 @@ export class ManufacturingService {
       oldValues: { status: oldStatus, dispatchOnHold: jobCard.dispatchOnHold },
       newValues: updateData,
     });
+
+    // Auto-create a service product record when a job card is dispatched
+    if (action === 'dispatch') {
+      this.serviceProductsService.createFromJobCard({
+        id: jobCard.id,
+        enterpriseId: jobCard.enterpriseId,
+        customerId: jobCard.customerId,
+        customerName: jobCard.customerName,
+        productId: jobCard.productId,
+        actualCompletion: updateData.actualCompletion,
+      }).catch(() => {});
+    }
 
     return this.findOne(jobId, enterpriseId);
   }

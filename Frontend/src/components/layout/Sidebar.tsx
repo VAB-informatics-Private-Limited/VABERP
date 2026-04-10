@@ -18,6 +18,7 @@ import {
   CheckSquareOutlined,
   BellOutlined,
   SendOutlined,
+  CustomerServiceOutlined,
 } from '@ant-design/icons';
 import { useRouter, usePathname } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
@@ -218,6 +219,13 @@ export function Sidebar({ collapsed, inDrawer, onMenuClick }: SidebarProps) {
     canView('employees', 'designations')  && { key: '/employees/designations', label: 'Designations' },
   ].filter(Boolean);
 
+  // ── AFTER-SALES ──────────────────────────────────────────────────────────
+  const afterSalesChildren = [
+    canView('service_management', 'service_products') && { key: '/service-products', label: 'Registered Products' },
+    canView('service_management', 'service_events')   && { key: '/service-events',   label: 'Lifecycle Events' },
+    canView('service_management', 'service_bookings') && { key: '/service-bookings', label: 'Service Bookings' },
+  ].filter(Boolean);
+
   // ── 9. REPORTS ───────────────────────────────────────────────────────────
   const reportsChildren = [
     canView('reports', 'dashboard_reports') && { key: '/analytics', label: 'Analytics' },
@@ -285,6 +293,12 @@ export function Sidebar({ collapsed, inDrawer, onMenuClick }: SidebarProps) {
       label: 'Employees',
       children: employeesChildren,
     },
+    afterSalesChildren.length > 0 && {
+      key: 'after-sales-menu',
+      icon: <CustomerServiceOutlined />,
+      label: 'After-Sales',
+      children: afterSalesChildren,
+    },
     reportsChildren.length > 0 && {
       key: 'reports-menu',
       icon: <BarChartOutlined />,
@@ -302,9 +316,13 @@ export function Sidebar({ collapsed, inDrawer, onMenuClick }: SidebarProps) {
       label: 'Manager Updates',
     },
     canView('configurations') && {
-      key: '/settings',
+      key: 'settings-menu',
       icon: <SettingOutlined />,
       label: 'Settings',
+      children: [
+        { key: '/settings', label: 'General Settings' },
+        canView('service_management', 'product_types') && { key: '/settings/product-types', label: 'Product Types' },
+      ].filter(Boolean),
     },
   ].filter(Boolean) as MenuProps['items'];
 

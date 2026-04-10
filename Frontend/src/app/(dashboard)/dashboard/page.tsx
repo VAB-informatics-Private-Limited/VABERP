@@ -4,12 +4,16 @@ import { Row, Col } from 'antd';
 import {
   PhoneOutlined,
   TeamOutlined,
-  RiseOutlined,
+  ShoppingCartOutlined,
   ClockCircleOutlined,
   FileTextOutlined,
-  ToolOutlined,
+  UserOutlined,
   WarningOutlined,
   ExclamationCircleOutlined,
+  CustomerServiceOutlined,
+  CheckCircleOutlined,
+  BellOutlined,
+  DollarOutlined,
 } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
 import { KpiCard } from '@/components/dashboard/KpiCard';
@@ -18,6 +22,7 @@ import { SalesPipelineChart } from '@/components/dashboard/SalesPipelineChart';
 import { RecentActivity } from '@/components/dashboard/RecentActivity';
 import { useAuthStore } from '@/stores/authStore';
 import { getDashboard } from '@/lib/api';
+import { getRevenueSummary } from '@/lib/api/service-products';
 
 export default function DashboardPage() {
   const { user, userType, getEnterpriseId } = useAuthStore();
@@ -26,6 +31,12 @@ export default function DashboardPage() {
   const { data: dashboardData, isLoading } = useQuery({
     queryKey: ['dashboard', enterpriseId],
     queryFn: () => getDashboard(),
+    enabled: !!enterpriseId,
+  });
+
+  const { data: revenueSummary } = useQuery({
+    queryKey: ['service-revenue-summary'],
+    queryFn: getRevenueSummary,
     enabled: !!enterpriseId,
   });
 
@@ -53,7 +64,8 @@ export default function DashboardPage() {
         { name: 'Total Customers', value: dashboard.totalCustomers || 0 },
         { name: "Today's Follow-ups", value: dashboard.todayFollowups || 0 },
         { name: 'Overdue Follow-ups', value: dashboard.overdueFollowups || 0 },
-        { name: 'Active Jobs', value: dashboard.activeJobs || 0 },
+        { name: 'Active Orders', value: dashboard.activeOrders || 0 },
+        { name: 'Active Employees', value: dashboard.activeEmployees || 0 },
         { name: 'Total Quotations', value: dashboard.totalQuotations || 0 },
       ]
     : [];
@@ -80,9 +92,9 @@ export default function DashboardPage() {
         </Col>
         <Col xs={24} sm={12} lg={6}>
           <KpiCard
-            title="Active Prospects"
-            value={dashboard?.totalProspects || 0}
-            icon={<RiseOutlined />}
+            title="Active Orders"
+            value={dashboard?.activeOrders || 0}
+            icon={<ShoppingCartOutlined />}
             loading={isLoading}
             color="#52c41a"
           />
@@ -129,9 +141,9 @@ export default function DashboardPage() {
         </Col>
         <Col xs={24} sm={12} lg={6}>
           <KpiCard
-            title="Active Jobs"
-            value={dashboard?.activeJobs || 0}
-            icon={<ToolOutlined />}
+            title="Active Employees"
+            value={dashboard?.activeEmployees || 0}
+            icon={<UserOutlined />}
             loading={isLoading}
             color="#2f54eb"
           />
@@ -146,6 +158,47 @@ export default function DashboardPage() {
           />
         </Col>
       </Row>
+
+      {/* After-Sales Revenue */}
+      {revenueSummary && (
+        <>
+          <p style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#94a3b8', margin: '0 0 12px 0' }}>After-Sales</p>
+          <Row gutter={[20, 20]} className="mb-8">
+            <Col xs={24} sm={12} lg={6}>
+              <KpiCard
+                title="Registered Products"
+                value={revenueSummary.totalProducts}
+                icon={<CustomerServiceOutlined />}
+                color="#1677ff"
+              />
+            </Col>
+            <Col xs={24} sm={12} lg={6}>
+              <KpiCard
+                title="Services Completed"
+                value={revenueSummary.completedBookings}
+                icon={<CheckCircleOutlined />}
+                color="#52c41a"
+              />
+            </Col>
+            <Col xs={24} sm={12} lg={6}>
+              <KpiCard
+                title="Pending Reminders"
+                value={revenueSummary.pendingReminders}
+                icon={<BellOutlined />}
+                color={revenueSummary.pendingReminders > 0 ? '#fa8c16' : '#8c8c8c'}
+              />
+            </Col>
+            <Col xs={24} sm={12} lg={6}>
+              <KpiCard
+                title="Service Revenue (₹)"
+                value={revenueSummary.totalRevenue}
+                icon={<DollarOutlined />}
+                color="#722ed1"
+              />
+            </Col>
+          </Row>
+        </>
+      )}
 
       {/* Charts and Lists */}
       <p style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#94a3b8', marginBottom: '12px' }}>Analytics</p>
