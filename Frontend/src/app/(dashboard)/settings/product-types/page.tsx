@@ -25,6 +25,7 @@ import {
   updateProductType,
   deleteProductType,
 } from '@/lib/api/product-types';
+import { getDropdownProductsList } from '@/lib/api/products';
 import { useAuthStore, usePermissions } from '@/stores/authStore';
 import type { ProductType, ServiceRule } from '@/types/product-type';
 
@@ -51,6 +52,12 @@ export default function ProductTypesSettingsPage() {
     queryKey: ['product-types'],
     queryFn: getProductTypes,
     enabled: !!enterpriseId,
+  });
+
+  const { data: productsData, isLoading: productsLoading } = useQuery({
+    queryKey: ['products-dropdown'],
+    queryFn: () => getDropdownProductsList(),
+    enabled: !!enterpriseId && modalOpen,
   });
 
   const createMutation = useMutation({
@@ -110,10 +117,12 @@ export default function ProductTypesSettingsPage() {
   };
 
   const onFinish = (values: any) => {
+    // Strip the productId helper field before submitting
+    const { productId: _pid, ...payload } = values;
     if (editingPt) {
-      updateMutation.mutate({ id: editingPt.id, payload: values });
+      updateMutation.mutate({ id: editingPt.id, payload });
     } else {
-      createMutation.mutate(values);
+      createMutation.mutate(payload);
     }
   };
 
@@ -157,6 +166,11 @@ export default function ProductTypesSettingsPage() {
       ),
     },
   ];
+
+  const productOptions = (productsData?.data ?? []).map((p) => ({
+    value: p.id,
+    label: p.product_code ? `${p.product_name} (${p.product_code})` : p.product_name,
+  }));
 
   return (
     <div>
@@ -205,7 +219,34 @@ export default function ProductTypesSettingsPage() {
         okText={editingPt ? 'Save' : 'Create'}
       >
         <Form form={form} layout="vertical" onFinish={onFinish}>
-          <Form.Item label="Name" name="name" rules={[{ required: true }]}>
+
+          {/* Product selector — only shown when creating, not editing */}
+          {!editingPt && (
+            <Form.Item
+              label="Select from Products Catalog"
+              name="productId"
+              help="Pick a product to auto-fill the name, or leave blank to type manually."
+            >
+              <Select
+                showSearch
+                allowClear
+                placeholder="Search and select a product…"
+                optionFilterProp="label"
+                loading={productsLoading}
+                options={productOptions}
+                notFoundContent={productsLoading ? 'Loading…' : 'No products found'}
+                onChange={(id) => {
+                  if (id == null) return;
+                  const product = productsData?.data?.find((p) => p.id === id);
+                  if (product) {
+                    form.setFieldValue('name', product.product_name);
+                  }
+                }}
+              />
+            </Form.Item>
+          )}
+
+          <Form.Item label="Name" name="name" rules={[{ required: true, message: 'Name is required' }]}>
             <Input placeholder="e.g. AC, RO Water Purifier, Laptop" />
           </Form.Item>
           <Form.Item label="Warranty Duration (months)" name="warrantyMonths" initialValue={12}>

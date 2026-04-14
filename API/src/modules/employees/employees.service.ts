@@ -358,6 +358,30 @@ export class EmployeesService {
     };
   }
 
+  async findByPermissionModule(enterpriseId: number, module: string) {
+    const records = await this.permissionRepository
+      .createQueryBuilder('mp')
+      .innerJoinAndSelect('mp.employee', 'emp')
+      .where('emp.enterpriseId = :enterpriseId', { enterpriseId })
+      .andWhere('emp.status = :status', { status: 'active' })
+      .getMany();
+
+    const eligible = records
+      .filter((p) => {
+        const mod = (p.permissions as any)?.[module];
+        if (!mod) return false;
+        return Object.values(mod).some(
+          (sub: any) =>
+            typeof sub === 'object' &&
+            sub !== null &&
+            Object.values(sub).some((v: any) => v === 1),
+        );
+      })
+      .map((p) => p.employee);
+
+    return { message: 'Employees fetched', data: eligible };
+  }
+
   async findAll(enterpriseId: number, page = 1, limit = 20, search?: string) {
     const pageNum = Number(page) || 1;
     const limitNum = Number(limit) || 20;

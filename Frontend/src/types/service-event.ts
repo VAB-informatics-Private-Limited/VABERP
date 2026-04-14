@@ -16,6 +16,8 @@ export interface ServiceEvent {
   status: ServiceEventStatus;
   reminder_count: number;
   last_reminder_at: string | null;
+  assigned_to: number | null;
+  assigned_employee?: { id: number; first_name: string; last_name: string } | null;
   service_product?: ServiceProduct;
   created_date: string;
   modified_date: string;

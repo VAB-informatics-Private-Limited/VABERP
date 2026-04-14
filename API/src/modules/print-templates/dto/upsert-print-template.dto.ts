@@ -62,5 +62,26 @@ export class UpsertPrintTemplateDto {
   showWatermark?: boolean;
 
   @IsOptional() @IsString()
+  primaryColor?: string;
+
+  @IsOptional() @IsString()
+  secondaryColor?: string;
+
+  @IsOptional() @IsString()
+  accentColor?: string;
+
+  @IsOptional() @IsString()
+  fontFamily?: string;
+
+  @IsOptional() @IsString()
+  signatureUrl?: string;
+
+  @IsOptional() @IsBoolean()
+  showSignature?: boolean;
+
+  @IsOptional() @IsBoolean()
+  showPageNumber?: boolean;
+
+  @IsOptional() @IsString()
   changeNotes?: string;
 }

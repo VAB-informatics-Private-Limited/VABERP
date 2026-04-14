@@ -234,17 +234,6 @@ export default function PurchaseOrderDetailPage() {
     onError: (err: any) => message.error(err?.response?.data?.message || 'Failed to cancel purchase order'),
   });
 
-  // ── Under Verification ────────────────────────────────────────────────────
-  const verificationMutation = useMutation({
-    mutationFn: () => updateSOStatus(poId, 'under_verification'),
-    onSuccess: () => {
-      message.success('Purchase order marked as Under Verification');
-      queryClient.invalidateQueries({ queryKey: ['purchase-order', poId] });
-      queryClient.invalidateQueries({ queryKey: ['purchase-orders-list'] });
-    },
-    onError: () => message.error('Failed to update status'),
-  });
-
   // ── Delete PO ─────────────────────────────────────────────────────────────
   const deleteMutation = useMutation({
     mutationFn: () => deleteSalesOrder(poId),
@@ -514,6 +503,20 @@ export default function PurchaseOrderDetailPage() {
       render: (v) => <span className="text-green-600 font-semibold">{fmt(v || 0)}</span>,
     },
     {
+      title: 'Under Verification',
+      key: 'pending_amount',
+      render: (_: any, record: InvoiceWithRunning) => {
+        const pending = Number((record as any).pending_amount ?? 0);
+        if (pending <= 0.005) return <span className="text-gray-300 text-xs">—</span>;
+        return (
+          <span className="flex items-center gap-1 text-orange-500 font-semibold">
+            <SyncOutlined spin style={{ fontSize: 11 }} />
+            {fmt(pending)}
+          </span>
+        );
+      },
+    },
+    {
       title: 'Balance Due',
       dataIndex: 'balance_due',
       key: 'balance_due',
@@ -526,9 +529,19 @@ export default function PurchaseOrderDetailPage() {
     {
       title: 'Status',
       key: 'status',
-      render: (_: any, record: InvoiceWithRunning) => (
-        <Tag color={getInvStatusColor(record.status)}>{getInvStatusLabel(record.status)}</Tag>
-      ),
+      render: (_: any, record: InvoiceWithRunning) => {
+        const pending = Number((record as any).pending_amount ?? 0);
+        return (
+          <div className="flex flex-col gap-1">
+            <Tag color={getInvStatusColor(record.status)}>{getInvStatusLabel(record.status)}</Tag>
+            {pending > 0.005 && (
+              <Tag color="orange" icon={<SyncOutlined spin />} style={{ fontSize: 11 }}>
+                Pending Verification
+              </Tag>
+            )}
+          </div>
+        );
+      },
     },
     {
       title: 'Actions',
@@ -545,7 +558,7 @@ export default function PurchaseOrderDetailPage() {
             <Button
               size="small"
               icon={<PrinterOutlined />}
-              onClick={() => router.push(`/invoices/${record.id}?print=true`)}
+              onClick={() => window.open(`/print/invoice/${record.id}`, '_blank')}
             />
           </Tooltip>
           <Tooltip title={copiedId === record.id ? 'Link copied!' : 'Share invoice link'}>
@@ -816,23 +829,6 @@ export default function PurchaseOrderDetailPage() {
               Transfer to Manufacturing
             </Button>
           )}
-          {!['cancelled', 'delivered', 'dispatched', 'under_verification', 'on_hold'].includes(po.status) && (
-            <Button
-              icon={<SyncOutlined />}
-              onClick={() =>
-                Modal.confirm({
-                  title: 'Send to Under Verification?',
-                  content: 'This will mark the purchase order as Under Verification and record the timestamp.',
-                  okText: 'Confirm',
-                  onOk: () => verificationMutation.mutate(),
-                })
-              }
-              loading={verificationMutation.isPending}
-              className="border-orange-400 text-orange-600"
-            >
-              Under Verification
-            </Button>
-          )}
           <Button
             icon={po.status === 'on_hold' ? <PlayCircleOutlined /> : <PauseCircleOutlined />}
             loading={holdMutation.isPending}
@@ -958,7 +954,7 @@ export default function PurchaseOrderDetailPage() {
 
       {/* Balance summary cards */}
       <Row gutter={[16, 16]} className="mb-4">
-        <Col xs={24} sm={8}>
+        <Col xs={24} sm={6}>
           <Card className="card-shadow text-center">
             <Statistic
               title="PO Total"
@@ -970,7 +966,7 @@ export default function PurchaseOrderDetailPage() {
             />
           </Card>
         </Col>
-        <Col xs={24} sm={8}>
+        <Col xs={24} sm={6}>
           <Card className="card-shadow text-center">
             <Statistic
               title="Total Invoiced"
@@ -984,18 +980,34 @@ export default function PurchaseOrderDetailPage() {
             <div className="text-xs text-gray-400 mt-1">{invoicedPercent}% of PO invoiced</div>
           </Card>
         </Col>
-        <Col xs={24} sm={8}>
+        <Col xs={24} sm={6}>
           <Card className="card-shadow text-center">
             <Statistic
-              title="Total Paid"
-              value={totalPaidOnInvoices}
+              title="Invoice Balance Due"
+              value={totalBalanceDue}
               precision={2}
               prefix="₹"
-              valueStyle={{ color: '#52c41a', fontWeight: 'bold' }}
+              valueStyle={{ color: totalBalanceDue > 0.005 ? '#dc2626' : '#52c41a', fontWeight: 'bold' }}
               formatter={(v) => Number(v).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
             />
-            <Progress percent={paidPercent} size="small" strokeColor="#52c41a" showInfo={false} className="mt-2" />
-            <div className="text-xs text-gray-400 mt-1">{paidPercent}% of invoiced amount paid</div>
+            <div className="text-xs mt-2" style={{ color: totalBalanceDue > 0.005 ? '#dc2626' : '#52c41a' }}>
+              {totalBalanceDue > 0.005 ? 'Payment pending' : '✓ Fully paid'}
+            </div>
+          </Card>
+        </Col>
+        <Col xs={24} sm={6}>
+          <Card className="card-shadow text-center" style={{ borderColor: (poTotal - totalPaidOnInvoices) > 0.005 ? '#f5222d' : '#52c41a', borderWidth: 1 }}>
+            <Statistic
+              title="Total PO Balance to be Paid"
+              value={poTotal - totalPaidOnInvoices}
+              precision={2}
+              prefix="₹"
+              valueStyle={{ color: (poTotal - totalPaidOnInvoices) > 0.005 ? '#f5222d' : '#52c41a', fontWeight: 'bold' }}
+              formatter={(v) => Number(v).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+            />
+            <div className="text-xs mt-2" style={{ color: (poTotal - totalPaidOnInvoices) > 0.005 ? '#f5222d' : '#52c41a' }}>
+              {(poTotal - totalPaidOnInvoices) > 0.005 ? 'Outstanding balance' : '✓ Fully settled'}
+            </div>
           </Card>
         </Col>
       </Row>
@@ -1349,17 +1361,27 @@ export default function PurchaseOrderDetailPage() {
         onClose={() => { setDrawerInvoiceId(null); setPaymentModalOpen(false); }}
         width={720}
         extra={
-          invoice && Number(invoice.balance_due) > 0 && invoice.status !== 'cancelled' ? (
-            <Button
-              type="primary"
-              icon={<DollarOutlined />}
-              onClick={() => {
-                paymentForm.setFieldsValue({ payment_date: dayjs() });
-                setPaymentModalOpen(true);
-              }}
-            >
-              Record Payment
-            </Button>
+          invoice ? (
+            <Space>
+              <Button
+                icon={<PrinterOutlined />}
+                onClick={() => window.open(`/print/invoice/${invoice.id}?pdf=1`, '_blank')}
+              >
+                Download Invoice
+              </Button>
+              {Number(invoice.balance_due) > 0 && invoice.status !== 'cancelled' && (
+                <Button
+                  type="primary"
+                  icon={<DollarOutlined />}
+                  onClick={() => {
+                    paymentForm.setFieldsValue({ payment_date: dayjs() });
+                    setPaymentModalOpen(true);
+                  }}
+                >
+                  Record Payment
+                </Button>
+              )}
+            </Space>
           ) : null
         }
       >

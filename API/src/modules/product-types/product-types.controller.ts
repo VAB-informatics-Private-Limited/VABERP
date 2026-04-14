@@ -12,8 +12,7 @@ import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { ProductTypesService } from './product-types.service';
 import { CreateProductTypeDto } from './dto/create-product-type.dto';
 import { UpdateProductTypeDto } from './dto/update-product-type.dto';
-import { EnterpriseId } from '../../common/decorators/enterprise-id.decorator';
-import { RequirePermission } from '../../common/decorators/require-permission.decorator';
+import { EnterpriseId, RequirePermission } from '../../common/decorators';
 
 @ApiTags('Product Types')
 @ApiBearerAuth('JWT-auth')

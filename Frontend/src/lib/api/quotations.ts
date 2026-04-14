@@ -183,19 +183,19 @@ export async function updateQuotation(
 
   const payload = {
     enquiryId: data.enquiry_id,
-    customerId: data.customer_id,
+    customerId: data.customer_id || undefined,
     customerName: data.customer_name,
-    email: data.customer_email,
-    mobile: data.customer_mobile,
-    billingAddress: data.billing_address,
-    shippingAddress: data.shipping_address,
+    email: data.customer_email || undefined,
+    mobile: data.customer_mobile || undefined,
+    billingAddress: data.billing_address || undefined,
+    shippingAddress: data.shipping_address || undefined,
     quotationDate: data.quotation_date,
-    validUntil: data.valid_until,
+    validUntil: data.valid_until || undefined,
     expectedDelivery: data.expected_delivery || undefined,
-    notes: data.notes,
-    termsConditions: data.terms_conditions,
+    notes: data.notes || undefined,
+    termsConditions: data.terms_conditions || undefined,
     status: data.status,
-    changeNotes: data.change_notes,
+    changeNotes: data.change_notes || undefined,
     items,
   };
   const response = await apiClient.put<ApiResponse>(`/quotations/${id}`, payload);

@@ -1,6 +1,7 @@
 'use client';
 
-import { Layout, Button, Dropdown, Badge, List, Typography, Empty, Divider, Spin } from 'antd';
+import React from 'react';
+import { Layout, Button, Dropdown, Badge, List, Typography, Empty, Divider, Spin, Drawer, Tabs, Tag } from 'antd';
 import {
   MenuFoldOutlined,
   MenuUnfoldOutlined,
@@ -38,6 +39,9 @@ export function Header({ collapsed, onToggle }: HeaderProps) {
   const router = useRouter();
   const { user, userType, logout } = useAuthStore();
   const queryClient = useQueryClient();
+  const [notifOpen, setNotifOpen] = React.useState(false);
+  const [allNotifDrawerOpen, setAllNotifDrawerOpen] = React.useState(false);
+  const [allNotifFilter, setAllNotifFilter] = React.useState<'all' | 'unread'>('all');
 
   const getUserName = () => {
     if (!user) return 'User';
@@ -79,11 +83,19 @@ export function Header({ collapsed, onToggle }: HeaderProps) {
     refetchInterval: 30000,
   });
 
+  const { data: allNotifData, isLoading: allNotifLoading } = useQuery({
+    queryKey: ['notifications-all'],
+    queryFn: () => getNotifications({ limit: 100 }),
+    enabled: allNotifDrawerOpen,
+    refetchOnWindowFocus: true,
+  });
+
   const markReadMutation = useMutation({
     mutationFn: markNotificationRead,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['notification-counts'] });
       queryClient.invalidateQueries({ queryKey: ['notifications-recent'] });
+      queryClient.invalidateQueries({ queryKey: ['notifications-all'] });
       queryClient.invalidateQueries({ queryKey: ['sidebar-notification-counts'] });
     },
   });
@@ -93,6 +105,7 @@ export function Header({ collapsed, onToggle }: HeaderProps) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['notification-counts'] });
       queryClient.invalidateQueries({ queryKey: ['notifications-recent'] });
+      queryClient.invalidateQueries({ queryKey: ['notifications-all'] });
       queryClient.invalidateQueries({ queryKey: ['sidebar-notification-counts'] });
     },
   });
@@ -101,6 +114,7 @@ export function Header({ collapsed, onToggle }: HeaderProps) {
   const notifications: AppNotification[] = notifData?.data || [];
 
   const handleNotificationClick = (n: AppNotification) => {
+    setNotifOpen(false);
     if (!n.is_read) markReadMutation.mutate(n.id);
     if (n.link) router.push(n.link);
   };
@@ -160,10 +174,11 @@ export function Header({ collapsed, onToggle }: HeaderProps) {
               key={n.id}
               onClick={() => handleNotificationClick(n)}
               style={{
-                padding: '12px 16px',
+                padding: '12px 16px 12px 13px',
                 cursor: n.link ? 'pointer' : 'default',
                 background: n.is_read ? '#fff' : '#f0f7ff',
-                borderBottom: '1px solid #f5f5f5',
+                borderBottom: '1px solid #f0f0f0',
+                borderLeft: n.is_read ? '3px solid transparent' : '3px solid #1677ff',
                 transition: 'background 0.15s',
                 display: 'flex',
                 gap: 10,
@@ -176,10 +191,22 @@ export function Header({ collapsed, onToggle }: HeaderProps) {
               <div style={{
                 width: 8, height: 8, borderRadius: '50%', flexShrink: 0, marginTop: 5,
                 background: n.is_read ? 'transparent' : '#1677ff',
+                boxShadow: n.is_read ? 'none' : '0 0 0 3px #bfdbfe',
               }} />
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 13, fontWeight: n.is_read ? 400 : 600, color: '#111827', marginBottom: 2 }}>
-                  {n.title}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                  <span style={{ fontSize: 13, fontWeight: n.is_read ? 400 : 600, color: n.is_read ? '#374151' : '#111827' }}>
+                    {n.title}
+                  </span>
+                  {!n.is_read && (
+                    <span style={{
+                      fontSize: 10, fontWeight: 700, color: '#1677ff',
+                      background: '#dbeafe', borderRadius: 4,
+                      padding: '1px 5px', lineHeight: '16px', flexShrink: 0,
+                    }}>
+                      NEW
+                    </span>
+                  )}
                 </div>
                 <div style={{ fontSize: 12, color: '#6b7280', lineHeight: 1.4 }}>
                   {n.message}
@@ -193,13 +220,16 @@ export function Header({ collapsed, onToggle }: HeaderProps) {
         )}
       </div>
 
-      {notifications.length > 0 && (
-        <div style={{ padding: '10px 16px', borderTop: '1px solid #f5f5f5', textAlign: 'center' }}>
-          <Button type="link" size="small" style={{ fontSize: 12, color: '#6b7280' }}>
-            View all notifications
-          </Button>
-        </div>
-      )}
+      <div style={{ padding: '10px 16px', borderTop: '1px solid #f5f5f5', textAlign: 'center' }}>
+        <Button
+          type="link"
+          size="small"
+          style={{ fontSize: 12, color: '#3b82f6', fontWeight: 500 }}
+          onClick={() => { setNotifOpen(false); setAllNotifDrawerOpen(true); }}
+        >
+          View all notifications →
+        </Button>
+      </div>
     </div>
   );
 
@@ -256,6 +286,8 @@ export function Header({ collapsed, onToggle }: HeaderProps) {
           dropdownRender={() => notificationDropdown}
           trigger={['click']}
           placement="bottomRight"
+          open={notifOpen}
+          onOpenChange={setNotifOpen}
         >
           <Button
             type="text"
@@ -327,6 +359,155 @@ export function Header({ collapsed, onToggle }: HeaderProps) {
           </div>
         </Dropdown>
       </div>
+      {/* ── All Notifications Drawer ── */}
+      <Drawer
+        title={
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <BellOutlined style={{ fontSize: 18, color: '#3b82f6' }} />
+              <span style={{ fontSize: 16, fontWeight: 700, color: '#0f172a' }}>Notifications</span>
+              {totalUnread > 0 && (
+                <Badge count={totalUnread} style={{ background: '#3b82f6' }} />
+              )}
+            </div>
+            {totalUnread > 0 && (
+              <Button
+                size="small"
+                icon={<CheckOutlined />}
+                loading={markAllReadMutation.isPending}
+                onClick={() => markAllReadMutation.mutate()}
+                style={{ fontSize: 12, borderColor: '#3b82f6', color: '#3b82f6' }}
+              >
+                Mark all read
+              </Button>
+            )}
+          </div>
+        }
+        placement="right"
+        width={480}
+        open={allNotifDrawerOpen}
+        onClose={() => setAllNotifDrawerOpen(false)}
+        closable
+        styles={{ header: { borderBottom: '1px solid #f1f5f9', padding: '16px 20px' }, body: { padding: 0 } }}
+      >
+        {/* Filter tabs */}
+        <div style={{ padding: '0 20px', borderBottom: '1px solid #f1f5f9' }}>
+          <Tabs
+            activeKey={allNotifFilter}
+            onChange={(k) => setAllNotifFilter(k as 'all' | 'unread')}
+            size="small"
+            items={[
+              { key: 'all', label: 'All' },
+              {
+                key: 'unread',
+                label: (
+                  <span>
+                    Unread{' '}
+                    {totalUnread > 0 && (
+                      <Tag color="blue" style={{ fontSize: 10, lineHeight: '16px', padding: '0 5px', marginLeft: 4 }}>
+                        {totalUnread}
+                      </Tag>
+                    )}
+                  </span>
+                ),
+              },
+            ]}
+          />
+        </div>
+
+        {/* Notification list */}
+        <div style={{ overflowY: 'auto', height: 'calc(100vh - 160px)' }}>
+          {allNotifLoading ? (
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 200 }}>
+              <Spin />
+            </div>
+          ) : (() => {
+            const all: AppNotification[] = allNotifData?.data || [];
+            const filtered = allNotifFilter === 'unread' ? all.filter((n) => !n.is_read) : all;
+
+            if (filtered.length === 0) {
+              return (
+                <Empty
+                  description={allNotifFilter === 'unread' ? 'No unread notifications' : 'No notifications yet'}
+                  image={Empty.PRESENTED_IMAGE_SIMPLE}
+                  style={{ padding: '60px 0' }}
+                />
+              );
+            }
+
+            return filtered.map((n) => (
+              <div
+                key={n.id}
+                onClick={() => {
+                  if (!n.is_read) markReadMutation.mutate(n.id);
+                  if (n.link) { setAllNotifDrawerOpen(false); router.push(n.link); }
+                }}
+                style={{
+                  padding: '16px 20px 14px 17px',
+                  cursor: n.link ? 'pointer' : 'default',
+                  background: n.is_read ? '#fff' : '#f0f7ff',
+                  borderBottom: '1px solid #f1f5f9',
+                  borderLeft: n.is_read ? '3px solid transparent' : '3px solid #3b82f6',
+                  display: 'flex',
+                  gap: 12,
+                  alignItems: 'flex-start',
+                  transition: 'background 0.15s',
+                }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.background = n.is_read ? '#f8fafc' : '#e6f0ff'; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.background = n.is_read ? '#fff' : '#f0f7ff'; }}
+              >
+                {/* Icon circle */}
+                <div style={{
+                  width: 36, height: 36, borderRadius: '50%', flexShrink: 0,
+                  background: n.is_read ? '#f1f5f9' : '#dbeafe',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  <BellOutlined style={{ fontSize: 15, color: n.is_read ? '#94a3b8' : '#3b82f6' }} />
+                </div>
+
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
+                    <span style={{
+                      fontSize: 13, fontWeight: n.is_read ? 500 : 700,
+                      color: n.is_read ? '#374151' : '#0f172a',
+                      flex: 1, minWidth: 0,
+                    }}>
+                      {n.title}
+                    </span>
+                    {!n.is_read && (
+                      <span style={{
+                        fontSize: 10, fontWeight: 700, color: '#3b82f6',
+                        background: '#dbeafe', borderRadius: 4,
+                        padding: '1px 6px', flexShrink: 0,
+                      }}>
+                        NEW
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ fontSize: 12, color: '#6b7280', lineHeight: 1.5, marginBottom: 6 }}>
+                    {n.message}
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: 11, color: '#9ca3af' }}>
+                      {dayjs(n.created_at).fromNow()}
+                    </span>
+                    {n.module && (
+                      <Tag style={{ fontSize: 10, lineHeight: '16px', padding: '0 5px', margin: 0, textTransform: 'capitalize' }}>
+                        {n.module.replace(/_/g, ' ')}
+                      </Tag>
+                    )}
+                    {n.link && (
+                      <span style={{ fontSize: 11, color: '#3b82f6', marginLeft: 'auto' }}>
+                        View →
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ));
+          })()}
+        </div>
+      </Drawer>
     </AntHeader>
   );
 }

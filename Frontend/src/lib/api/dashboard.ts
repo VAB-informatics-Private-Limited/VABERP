@@ -27,6 +27,8 @@ export interface DashboardData {
   pendingJobs: number;
   completedJobs: number;
   lowStockAlerts: number;
+  activeOrders: number;
+  activeEmployees: number;
   pipelineStats: { status: string; count: string }[];
   quotationValues: { status: string; totalValue: string }[];
   recentActivities: ActivityItem[];
@@ -46,10 +48,24 @@ export async function getDashboard(): Promise<ApiResponse<DashboardData>> {
 
 // Get Today's Follow-ups
 export async function getTodayFollowups(params?: DashboardParams): Promise<ApiResponse<FollowupItem[]>> {
-  const response = await apiClient.get<ApiResponse<FollowupItem[]>>('/enquiries/today-followups', {
+  const response = await apiClient.get('/enquiries/today', {
     params: { assignedTo: params?.employee_id },
   });
-  return response.data;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const raw = response.data as any;
+  const mapped: FollowupItem[] = (raw.data || []).map((e: any) => ({
+    id: e.id,
+    business_name: e.businessName || e.customerName || '',
+    contact_person: e.customerName || '',
+    mobile: e.mobile || '',
+    interest_status: e.interestStatus || '',
+    followup_date: e.nextFollowupDate || '',
+    remarks: e.remarks || '',
+    employee_name: e.assignedEmployee
+      ? `${e.assignedEmployee.firstName || ''} ${e.assignedEmployee.lastName || ''}`.trim()
+      : undefined,
+  }));
+  return { message: raw.message, data: mapped };
 }
 
 // Get Sales Enquiry Reports (for total enquiries count)

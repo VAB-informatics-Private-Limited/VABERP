@@ -6,6 +6,8 @@ import { Customer } from '../customers/entities/customer.entity';
 import { Quotation } from '../quotations/entities/quotation.entity';
 import { JobCard } from '../manufacturing/entities/job-card.entity';
 import { Inventory } from '../inventory/entities/inventory.entity';
+import { RawMaterial } from '../raw-materials/entities/raw-material.entity';
+import { SalesOrder } from '../sales-orders/entities/sales-order.entity';
 import { Employee } from '../employees/entities/employee.entity';
 
 @Injectable()
@@ -21,6 +23,10 @@ export class ReportsService {
     private jobCardRepository: Repository<JobCard>,
     @InjectRepository(Inventory)
     private inventoryRepository: Repository<Inventory>,
+    @InjectRepository(RawMaterial)
+    private rawMaterialRepository: Repository<RawMaterial>,
+    @InjectRepository(SalesOrder)
+    private salesOrderRepository: Repository<SalesOrder>,
     @InjectRepository(Employee)
     private employeeRepository: Repository<Employee>,
   ) {}
@@ -45,6 +51,8 @@ export class ReportsService {
       pendingJobs,
       completedJobs,
       lowStockAlerts,
+      activeOrders,
+      activeEmployees,
       pipelineStats,
       quotationValues,
       recentEnquiries,
@@ -80,12 +88,28 @@ export class ReportsService {
       this.jobCardRepository.count({ where: { enterpriseId, status: 'pending' } }),
       // Completed jobs
       this.jobCardRepository.count({ where: { enterpriseId, status: 'completed' } }),
-      // Low stock alerts
-      this.inventoryRepository
-        .createQueryBuilder('inventory')
-        .where('inventory.enterpriseId = :enterpriseId', { enterpriseId })
-        .andWhere('inventory.currentStock <= inventory.minStockLevel')
+      // Low stock alerts: inventory + raw materials, below min level OR out of stock
+      Promise.all([
+        this.inventoryRepository
+          .createQueryBuilder('inventory')
+          .where('inventory.enterpriseId = :enterpriseId', { enterpriseId })
+          .andWhere('(inventory.currentStock = 0 OR (inventory.minStockLevel > 0 AND inventory.currentStock <= inventory.minStockLevel))')
+          .getCount(),
+        this.rawMaterialRepository
+          .createQueryBuilder('rm')
+          .where('rm.enterpriseId = :enterpriseId', { enterpriseId })
+          .andWhere('rm.status = :status', { status: 'active' })
+          .andWhere('(rm.currentStock = 0 OR (rm.minStockLevel > 0 AND rm.currentStock <= rm.minStockLevel))')
+          .getCount(),
+      ]).then(([invCount, rmCount]) => invCount + rmCount),
+      // Active purchase orders (not cancelled, delivered, or dispatched)
+      this.salesOrderRepository
+        .createQueryBuilder('so')
+        .where('so.enterpriseId = :enterpriseId', { enterpriseId })
+        .andWhere('so.status NOT IN (:...inactive)', { inactive: ['cancelled', 'delivered', 'dispatched'] })
         .getCount(),
+      // Active employees
+      this.employeeRepository.count({ where: { enterpriseId, status: 'active' } }),
       // Pipeline stats
       this.enquiryRepository
         .createQueryBuilder('enquiry')
@@ -179,6 +203,8 @@ export class ReportsService {
         pendingJobs,
         completedJobs,
         lowStockAlerts,
+        activeOrders,
+        activeEmployees,
         pipelineStats,
         quotationValues,
         recentActivities,

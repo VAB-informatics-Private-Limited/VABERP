@@ -189,7 +189,7 @@ export default function InvoiceDetailPage() {
           <Tag color={getStatusColor(invoice.status)}>{getStatusLabel(invoice.status)}</Tag>
         </div>
         <Space>
-          <Button icon={<PrinterOutlined />} onClick={() => window.print()}>Print</Button>
+          <Button icon={<PrinterOutlined />} onClick={() => window.open(`/print/invoice/${invoiceId}`, '_blank')}>Print / Download PDF</Button>
           {Number(invoice.total_paid) === 0 && invoice.status !== 'cancelled' && (
             <Button icon={<EditOutlined />} onClick={() => router.push(`/invoices/${invoiceId}/edit`)}>Edit</Button>
           )}

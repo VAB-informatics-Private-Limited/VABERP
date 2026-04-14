@@ -16,9 +16,7 @@ import {
   AssignTechnicianDto,
   CompleteBookingDto,
 } from './dto/create-service-booking.dto';
-import { EnterpriseId } from '../../common/decorators/enterprise-id.decorator';
-import { CurrentUser } from '../../common/decorators/current-user.decorator';
-import { RequirePermission } from '../../common/decorators/require-permission.decorator';
+import { EnterpriseId, CurrentUser, RequirePermission } from '../../common/decorators';
 
 @ApiTags('Service Bookings')
 @ApiBearerAuth('JWT-auth')

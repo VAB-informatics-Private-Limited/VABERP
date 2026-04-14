@@ -70,6 +70,23 @@ export const PERMISSION_STRUCTURE: Record<string, Record<string, string[]>> = {
     service_bookings: ['view', 'create', 'edit', 'delete'],
     service_revenue:  ['view'],
   },
+  machinery_management: {
+    machines:        ['view', 'create', 'edit', 'delete'],
+    work_orders:     ['view', 'create', 'edit', 'delete'],
+    reminder_rules:  ['view', 'create', 'edit', 'delete'],
+    vendors:         ['view', 'create', 'edit', 'delete'],
+    downtime:        ['view', 'create', 'edit'],
+  },
+  waste_management: {
+    waste_inventory: ['view', 'create', 'edit', 'delete'],
+    waste_disposal:  ['view', 'create', 'edit'],
+    waste_parties:   ['view', 'create', 'edit', 'delete'],
+    waste_analytics: ['view'],
+  },
+  organizer: {
+    items:       ['view', 'create', 'edit', 'delete'],
+    assignments: ['view', 'create'],
+  },
 };
 
 export type PermissionsJson = Record<string, Record<string, Record<string, number>>>;

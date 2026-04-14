@@ -68,6 +68,30 @@ export class PrintTemplateConfig {
   @Column({ name: 'show_watermark', default: false })
   showWatermark: boolean;
 
+  // ── Branding colors ───────────────────────────────────────────────────────
+  @Column({ name: 'primary_color', type: 'varchar', default: '#f97316' })
+  primaryColor: string;
+
+  @Column({ name: 'secondary_color', type: 'varchar', default: '#111827' })
+  secondaryColor: string;
+
+  @Column({ name: 'accent_color', type: 'varchar', nullable: true })
+  accentColor: string | null;
+
+  // ── Typography ────────────────────────────────────────────────────────────
+  @Column({ name: 'font_family', type: 'varchar', default: 'Arial, Helvetica, sans-serif' })
+  fontFamily: string;
+
+  // ── Signature ─────────────────────────────────────────────────────────────
+  @Column({ name: 'signature_url', type: 'text', nullable: true })
+  signatureUrl: string | null;
+
+  @Column({ name: 'show_signature', default: true })
+  showSignature: boolean;
+
+  @Column({ name: 'show_page_number', default: false })
+  showPageNumber: boolean;
+
   @Column({ name: 'current_version', default: 1 })
   currentVersion: number;
 

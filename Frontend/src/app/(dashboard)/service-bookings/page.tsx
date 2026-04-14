@@ -167,7 +167,7 @@ export default function ServiceBookingsPage() {
                   Assign
                 </Button>
               )}
-              {b.status !== 'cancelled' && hasPermission('service_management', 'service_bookings', 'edit') && (
+              {hasPermission('service_management', 'service_bookings', 'edit') && (
                 <Button
                   size="small"
                   onClick={() => { setCompleteModal(b); }}

@@ -1,6 +1,5 @@
 'use client';
 
-import { useState } from 'react';
 import {
   Typography,
   Card,
@@ -12,32 +11,40 @@ import {
   message,
   Space,
 } from 'antd';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createServiceProduct } from '@/lib/api/service-products';
 import { getProductTypes } from '@/lib/api/product-types';
-import { getCustomerList } from '@/lib/api/customers';
 import { useAuthStore } from '@/stores/authStore';
+import api from '@/lib/api/client';
 import dayjs from 'dayjs';
 
 const { Title } = Typography;
 
 export default function AddServiceProductPage() {
   const router = useRouter();
-  const { getEnterpriseId } = useAuthStore();
+  const { getEnterpriseId, userType } = useAuthStore();
   const enterpriseId = getEnterpriseId();
   const [form] = Form.useForm();
+  const [customerSearch, setCustomerSearch] = useState('');
   const queryClient = useQueryClient();
 
-  const { data: ptData } = useQuery({
+  const { data: ptData, isLoading: ptLoading } = useQuery({
     queryKey: ['product-types'],
     queryFn: getProductTypes,
     enabled: !!enterpriseId,
   });
 
-  const { data: customersData } = useQuery({
-    queryKey: ['customers-list'],
-    queryFn: () => getCustomerList({ enterpriseId: enterpriseId!, pageSize: 200 }),
+  // Use service-products/customers endpoint — works for both enterprise & employee
+  const { data: customersRaw = [], isLoading: customersLoading } = useQuery({
+    queryKey: ['service-customers', customerSearch],
+    queryFn: async () => {
+      const res = await api.get('/service-products/customers', {
+        params: customerSearch ? { search: customerSearch } : {},
+      });
+      return res.data ?? [];
+    },
     enabled: !!enterpriseId,
   });
 
@@ -72,17 +79,27 @@ export default function AddServiceProductPage() {
           <Form.Item label="Customer" name="customerId">
             <Select
               showSearch
-              placeholder="Select customer"
-              optionFilterProp="label"
-              options={(customersData?.data ?? []).map((c: any) => ({
+              placeholder="Search by name or mobile..."
+              filterOption={false}
+              onSearch={(v) => setCustomerSearch(v)}
+              loading={customersLoading}
+              notFoundContent={
+                customersLoading ? 'Loading…' : (
+                  <div className="text-gray-400 text-xs py-1 text-center">
+                    No customers found.{' '}
+                    <a href="/customers/add" className="text-blue-500">Add a customer</a>
+                  </div>
+                )
+              }
+              options={customersRaw.map((c: any) => ({
                 value: c.id,
-                label: `${c.customer_name}${c.mobile ? ` (${c.mobile})` : ''}`,
+                label: `${c.customerName ?? c.customer_name}${c.mobile ? ` — ${c.mobile}` : ''}`,
               }))}
               onChange={(id) => {
-                const customer = customersData?.data?.find((c: any) => c.id === id);
+                const customer = customersRaw.find((c: any) => c.id === id);
                 if (customer) {
                   form.setFieldsValue({
-                    customerName: customer.customer_name,
+                    customerName: customer.customerName ?? customer.customer_name,
                     customerMobile: customer.mobile,
                     customerAddress: [customer.address, customer.city, customer.state].filter(Boolean).join(', '),
                   });
@@ -108,6 +125,15 @@ export default function AddServiceProductPage() {
             <Select
               placeholder="Select product type (e.g. AC, RO)"
               allowClear
+              loading={ptLoading}
+              notFoundContent={
+                ptLoading ? 'Loading…' : (
+                  <div className="text-gray-400 text-xs py-1 text-center">
+                    No product types configured.{' '}
+                    <a href="/settings/product-types" className="text-blue-500">Create one in Settings</a>
+                  </div>
+                )
+              }
               options={(ptData?.data ?? []).map((pt) => ({ value: pt.id, label: `${pt.name} (${pt.warranty_months}m warranty)` }))}
             />
           </Form.Item>

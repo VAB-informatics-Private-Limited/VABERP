@@ -3,11 +3,13 @@
 import { Card, List, Tag, Empty, Button, Spin } from 'antd';
 import { PhoneOutlined, UserOutlined, ClockCircleOutlined } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
+import { useRouter } from 'next/navigation';
 import { getTodayFollowups } from '@/lib/api';
 import { useAuthStore } from '@/stores/authStore';
 import { FollowupItem } from '@/types';
 
 export function TodayFollowups() {
+  const router = useRouter();
   const { getEnterpriseId, getEmployeeId } = useAuthStore();
   const enterpriseId = getEnterpriseId();
   const employeeId = getEmployeeId();
@@ -46,7 +48,7 @@ export function TodayFollowups() {
           )}
         </div>
       }
-      extra={<Button type="link">View All</Button>}
+      extra={<Button type="link" onClick={() => router.push('/follow-ups')}>View All</Button>}
       className="card-shadow h-full"
     >
       {isLoading ? (

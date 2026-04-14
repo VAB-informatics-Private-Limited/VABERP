@@ -7,6 +7,8 @@ import { Customer } from '../customers/entities/customer.entity';
 import { Quotation } from '../quotations/entities/quotation.entity';
 import { JobCard } from '../manufacturing/entities/job-card.entity';
 import { Inventory } from '../inventory/entities/inventory.entity';
+import { RawMaterial } from '../raw-materials/entities/raw-material.entity';
+import { SalesOrder } from '../sales-orders/entities/sales-order.entity';
 import { Employee } from '../employees/entities/employee.entity';
 
 @Module({
@@ -17,6 +19,8 @@ import { Employee } from '../employees/entities/employee.entity';
       Quotation,
       JobCard,
       Inventory,
+      RawMaterial,
+      SalesOrder,
       Employee,
     ]),
   ],

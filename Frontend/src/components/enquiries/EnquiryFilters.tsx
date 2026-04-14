@@ -84,11 +84,9 @@ export function EnquiryFilters({ onSearch, onClear }: EnquiryFiltersProps) {
           style={{ width: 160 }}
           allowClear
         >
-          {INTEREST_STATUS_OPTIONS.map((s) => (
-            <Select.Option key={s.value} value={s.value}>
-              {s.label}
-            </Select.Option>
-          ))}
+          <Select.Option value="follow_up">Follow Up</Select.Option>
+          <Select.Option value="enquiry">Enquiry</Select.Option>
+          <Select.Option value="new_call">New Call</Select.Option>
         </Select>
         <Select
           placeholder="Lead Source"

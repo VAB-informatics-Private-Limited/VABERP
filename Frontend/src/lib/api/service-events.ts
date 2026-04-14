@@ -15,6 +15,16 @@ function mapServiceEvent(e: any): ServiceEvent {
     status: e.status,
     reminder_count: e.reminderCount ?? e.reminder_count ?? 0,
     last_reminder_at: e.lastReminderAt ?? e.last_reminder_at ?? null,
+    assigned_to: e.assignedTo ?? e.assigned_to ?? null,
+    assigned_employee: (() => {
+      const emp = e.assignedEmployee ?? e.assigned_employee ?? null;
+      if (!emp) return null;
+      return {
+        id: emp.id,
+        first_name: emp.firstName ?? emp.first_name ?? '',
+        last_name: emp.lastName ?? emp.last_name ?? '',
+      };
+    })(),
     service_product: e.serviceProduct ?? e.service_product,
     created_date: e.createdDate ?? e.created_date,
     modified_date: e.modifiedDate ?? e.modified_date,
@@ -38,3 +48,19 @@ export const getServiceEvents = (params?: {
 
 export const completeServiceEvent = (id: number) =>
   apiClient.patch(`/service-events/${id}/complete`).then((r) => r.data);
+
+export const assignServiceEvent = (id: number, employeeId: number | null) =>
+  apiClient.patch(`/service-events/${id}/assign`, { employeeId }).then((r) => r.data);
+
+export const getServiceEventsPendingCount = () =>
+  apiClient.get('/service-events/pending-count').then((r) => r.data.data as { total: number; overdue: number; upcoming: number; booked: number });
+
+export const getEmployeesWithPermission = (module: string) =>
+  apiClient.get('/employees/by-permission', { params: { module } }).then((r) =>
+    (r.data.data ?? []).map((e: any) => ({
+      id: e.id,
+      first_name: e.firstName ?? e.first_name ?? '',
+      last_name: e.lastName ?? e.last_name ?? '',
+      designation_name: e.designation?.name ?? e.designation_name ?? null,
+    })),
+  );

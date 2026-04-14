@@ -26,6 +26,13 @@ function mapConfig(data: any): PrintTemplateConfig {
     show_footer: data.show_footer ?? data.showFooter ?? false,
     watermark_text: data.watermark_text ?? data.watermarkText ?? null,
     show_watermark: data.show_watermark ?? data.showWatermark ?? false,
+    primary_color: data.primary_color ?? data.primaryColor ?? '#f97316',
+    secondary_color: data.secondary_color ?? data.secondaryColor ?? '#111827',
+    accent_color: data.accent_color ?? data.accentColor ?? null,
+    font_family: data.font_family ?? data.fontFamily ?? 'Arial, Helvetica, sans-serif',
+    signature_url: data.signature_url ?? data.signatureUrl ?? null,
+    show_signature: data.show_signature ?? data.showSignature ?? true,
+    show_page_number: data.show_page_number ?? data.showPageNumber ?? false,
     current_version: data.current_version ?? data.currentVersion ?? 0,
     updated_at: data.updated_at ?? data.updatedAt,
   };
@@ -60,6 +67,13 @@ export async function savePrintTemplateConfig(
     showFooter: payload.show_footer,
     watermarkText: payload.watermark_text,
     showWatermark: payload.show_watermark,
+    primaryColor: payload.primary_color,
+    secondaryColor: payload.secondary_color,
+    accentColor: payload.accent_color,
+    fontFamily: payload.font_family,
+    signatureUrl: payload.signature_url,
+    showSignature: payload.show_signature,
+    showPageNumber: payload.show_page_number,
     changeNotes: payload.changeNotes,
   };
   const res = await apiClient.put('/print-templates/config', body);

@@ -66,7 +66,14 @@ export class PrintTemplatesService {
     if (fields.footerText !== undefined) config!.footerText = fields.footerText;
     if (fields.showFooter !== undefined) config!.showFooter = fields.showFooter;
     if (fields.watermarkText !== undefined) config!.watermarkText = fields.watermarkText;
-    if (fields.showWatermark !== undefined) config!.showWatermark = fields.showWatermark;
+    if (fields.showWatermark !== undefined)   config!.showWatermark   = fields.showWatermark;
+    if (fields.primaryColor !== undefined)    config!.primaryColor    = fields.primaryColor;
+    if (fields.secondaryColor !== undefined)  config!.secondaryColor  = fields.secondaryColor;
+    if (fields.accentColor !== undefined)     config!.accentColor     = fields.accentColor;
+    if (fields.fontFamily !== undefined)      config!.fontFamily      = fields.fontFamily;
+    if (fields.signatureUrl !== undefined)    config!.signatureUrl    = fields.signatureUrl;
+    if (fields.showSignature !== undefined)   config!.showSignature   = fields.showSignature;
+    if (fields.showPageNumber !== undefined)  config!.showPageNumber  = fields.showPageNumber;
     config!.currentVersion = (config!.currentVersion ?? 0) + 1;
     config!.updatedBy = userId ?? null;
 
@@ -126,6 +133,13 @@ export class PrintTemplatesService {
         showFooter: snap.show_footer,
         watermarkText: snap.watermark_text,
         showWatermark: snap.show_watermark,
+        primaryColor: snap.primary_color,
+        secondaryColor: snap.secondary_color,
+        accentColor: snap.accent_color,
+        fontFamily: snap.font_family,
+        signatureUrl: snap.signature_url,
+        showSignature: snap.show_signature,
+        showPageNumber: snap.show_page_number,
         changeNotes: `Rolled back to version ${versionNumber}`,
       },
       userId,
@@ -155,6 +169,13 @@ export class PrintTemplatesService {
       show_footer: false,
       watermark_text: null,
       show_watermark: false,
+      primary_color: '#f97316',
+      secondary_color: '#111827',
+      accent_color: null,
+      font_family: 'Arial, Helvetica, sans-serif',
+      signature_url: null,
+      show_signature: true,
+      show_page_number: false,
       current_version: 0,
     };
   }
@@ -183,6 +204,13 @@ export class PrintTemplatesService {
       show_footer: c.showFooter,
       watermark_text: c.watermarkText,
       show_watermark: c.showWatermark,
+      primary_color: c.primaryColor ?? '#f97316',
+      secondary_color: c.secondaryColor ?? '#111827',
+      accent_color: c.accentColor ?? null,
+      font_family: c.fontFamily ?? 'Arial, Helvetica, sans-serif',
+      signature_url: c.signatureUrl ?? null,
+      show_signature: c.showSignature ?? true,
+      show_page_number: c.showPageNumber ?? false,
       current_version: c.currentVersion,
       updated_at: c.updatedAt,
     };

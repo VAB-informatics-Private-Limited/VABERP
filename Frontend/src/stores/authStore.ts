@@ -14,12 +14,14 @@ interface AuthState {
   isAuthenticated: boolean;
   permissions: MenuPermissions | null;
   token: string | null;
+  _hasHydrated: boolean;
 
   // Actions
   login: (user: Employee | Enterprise, userType: UserType, token?: string) => void;
   logout: () => void;
   setPermissions: (permissions: MenuPermissions) => void;
   setToken: (token: string) => void;
+  setHasHydrated: (v: boolean) => void;
   getEnterpriseId: () => number | null;
   getEmployeeId: () => number | null;
   isSubscriptionActive: () => boolean;
@@ -35,6 +37,7 @@ export const useAuthStore = create<AuthState>()(
       isAuthenticated: false,
       permissions: null,
       token: null,
+      _hasHydrated: false,
 
       login: (user, userType, token) => {
         set({
@@ -61,6 +64,10 @@ export const useAuthStore = create<AuthState>()(
 
       setToken: (token) => {
         set({ token });
+      },
+
+      setHasHydrated: (v) => {
+        set({ _hasHydrated: v });
       },
 
       getEnterpriseId: () => {
@@ -104,6 +111,9 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: 'auth-storage',
+      onRehydrateStorage: () => (state) => {
+        state?.setHasHydrated(true);
+      },
       partialize: (state) => ({
         user: state.user,
         userType: state.userType,

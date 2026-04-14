@@ -62,6 +62,7 @@ export class ServiceEventsService {
     const query = this.eventRepo
       .createQueryBuilder('e')
       .leftJoinAndSelect('e.serviceProduct', 'sp')
+      .leftJoinAndSelect('e.assignedEmployee', 'ae')
       .where('e.enterpriseId = :enterpriseId', { enterpriseId });
 
     if (status) query.andWhere('e.status = :status', { status });
@@ -77,6 +78,42 @@ export class ServiceEventsService {
       .getManyAndCount();
 
     return { message: 'Service events fetched successfully', data, totalRecords: total, page };
+  }
+
+  async assignTo(id: number, enterpriseId: number, employeeId: number | null) {
+    await this.eventRepo.update({ id, enterpriseId }, { assignedTo: employeeId });
+    return this.eventRepo.findOne({
+      where: { id, enterpriseId },
+      relations: ['serviceProduct', 'assignedEmployee'],
+    });
+  }
+
+  async getPendingCount(enterpriseId: number, assignedTo?: number) {
+    const baseQuery = this.eventRepo
+      .createQueryBuilder('e')
+      .where('e.enterpriseId = :enterpriseId', { enterpriseId });
+
+    if (assignedTo) {
+      baseQuery.andWhere('e.assignedTo = :assignedTo', { assignedTo });
+    }
+
+    const pendingQuery = baseQuery.clone()
+      .andWhere('e.status IN (:...statuses)', { statuses: ['pending', 'reminded'] });
+
+    const total = await pendingQuery.getCount();
+
+    const overdue = await pendingQuery
+      .clone()
+      .andWhere('e.dueDate < CURRENT_DATE')
+      .getCount();
+
+    const upcoming = total - overdue;
+
+    const booked = await baseQuery.clone()
+      .andWhere('e.status = :booked', { booked: 'booked' })
+      .getCount();
+
+    return { total, overdue, upcoming, booked };
   }
 
   async markBooked(id: number, enterpriseId: number) {

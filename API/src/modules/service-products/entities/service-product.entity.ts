@@ -49,13 +49,13 @@ export class ServiceProduct {
   @JoinColumn({ name: 'product_type_id' })
   productType: ProductType;
 
-  @Column({ name: 'job_card_id', nullable: true })
+  @Column({ name: 'job_card_id', type: 'int', nullable: true })
   jobCardId: number | null;
 
-  @Column({ name: 'serial_number', nullable: true })
+  @Column({ name: 'serial_number', type: 'varchar', nullable: true })
   serialNumber: string | null;
 
-  @Column({ name: 'model_number', nullable: true })
+  @Column({ name: 'model_number', type: 'varchar', nullable: true })
   modelNumber: string | null;
 
   @Column({ name: 'dispatch_date', type: 'date' })
@@ -71,10 +71,10 @@ export class ServiceProduct {
   status: string; // 'active' | 'inactive'
 
   // Denormalized customer info for quick access (no join needed for reminders)
-  @Column({ name: 'customer_name', nullable: true })
+  @Column({ name: 'customer_name', type: 'varchar', nullable: true })
   customerName: string | null;
 
-  @Column({ name: 'customer_mobile', nullable: true })
+  @Column({ name: 'customer_mobile', type: 'varchar', nullable: true })
   customerMobile: string | null;
 
   @Column({ name: 'customer_address', nullable: true, type: 'text' })

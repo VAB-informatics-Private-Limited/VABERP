@@ -210,7 +210,7 @@ export function QuotationTable({ data, loading, pagination }: QuotationTableProp
                   key: 'pdf',
                   icon: <FilePdfOutlined />,
                   label: 'Download PDF',
-                  onClick: (info) => { info.domEvent?.stopPropagation(); router.push(`/quotations/${record.id}?print=true`); },
+                  onClick: (info) => { info.domEvent?.stopPropagation(); window.open(`/print/quotation/${record.id}?pdf=1`, '_blank'); },
                 },
                 ...(record.status === 'draft' && hasPermission('sales', 'quotations', 'edit') ? [{
                   key: 'send',

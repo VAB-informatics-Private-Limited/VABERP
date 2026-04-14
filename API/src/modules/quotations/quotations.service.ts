@@ -263,13 +263,19 @@ export class QuotationsService {
 
     const snapshot = this.buildSnapshot(quotation, currentItems);
 
-    const versionEntity = new QuotationVersion();
-    versionEntity.quotationId = id;
-    versionEntity.versionNumber = quotation.currentVersion;
-    versionEntity.snapshot = snapshot;
-    if (userId !== undefined) versionEntity.changedBy = userId;
-    if (changeNotes !== undefined) versionEntity.changeNotes = changeNotes;
-    await this.versionRepository.save(versionEntity);
+    await this.versionRepository
+      .createQueryBuilder()
+      .insert()
+      .into(QuotationVersion)
+      .values({
+        quotationId: id,
+        versionNumber: quotation.currentVersion,
+        snapshot: snapshot as any,
+        changedBy: userId ?? undefined,
+        changeNotes: changeNotes ?? undefined,
+      })
+      .orIgnore()
+      .execute();
     // ──────────────────────────────────────────────────────────────────────
 
     // ── 2. Recalculate totals and rebuild items if provided ────────────────

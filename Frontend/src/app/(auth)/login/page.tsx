@@ -14,13 +14,14 @@ const { Title, Text } = Typography;
 export default function LoginPage() {
   const router = useRouter();
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const _hasHydrated = useAuthStore((state) => state._hasHydrated);
   const [activeTab, setActiveTab] = useState('employee');
 
   useEffect(() => {
-    if (isAuthenticated) {
+    if (_hasHydrated && isAuthenticated) {
       router.replace('/dashboard');
     }
-  }, [isAuthenticated, router]);
+  }, [_hasHydrated, isAuthenticated, router]);
 
   const tabItems = [
     {
@@ -84,6 +85,15 @@ export default function LoginPage() {
             </Text>
           </div>
         )}
+
+        <div className="mt-3 pt-3 border-t border-gray-100 flex justify-center gap-6">
+          <Link href="/reseller/login" className="text-xs text-gray-400 hover:text-gray-600">
+            Reseller Login
+          </Link>
+          <Link href="/superadmin/login" className="text-xs text-gray-400 hover:text-gray-600">
+            Super Admin Login
+          </Link>
+        </div>
       </div>
     </div>
   );

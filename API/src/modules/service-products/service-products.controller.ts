@@ -13,9 +13,7 @@ import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { ServiceProductsService } from './service-products.service';
 import { CreateServiceProductDto } from './dto/create-service-product.dto';
 import { UpdateServiceProductDto } from './dto/update-service-product.dto';
-import { EnterpriseId } from '../../common/decorators/enterprise-id.decorator';
-import { CurrentUser } from '../../common/decorators/current-user.decorator';
-import { RequirePermission } from '../../common/decorators/require-permission.decorator';
+import { EnterpriseId, CurrentUser, RequirePermission } from '../../common/decorators';
 
 @ApiTags('Service Products')
 @ApiBearerAuth('JWT-auth')
@@ -47,6 +45,16 @@ export class ServiceProductsController {
   @RequirePermission('service_management', 'service_revenue', 'view')
   getRevenueSummary(@EnterpriseId() enterpriseId: number) {
     return this.serviceProductsService.getRevenueSummary(enterpriseId);
+  }
+
+  // Customer search accessible to any service_management employee (for product registration form)
+  @Get('customers')
+  @RequirePermission('service_management', 'service_products', 'view')
+  searchCustomers(
+    @EnterpriseId() enterpriseId: number,
+    @Query('search') search?: string,
+  ) {
+    return this.serviceProductsService.searchCustomers(enterpriseId, search);
   }
 
   @Get(':id')

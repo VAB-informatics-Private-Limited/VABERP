@@ -1,0 +1,170 @@
+'use client';
+
+import { useEffect, useRef, useState } from 'react';
+import { useParams } from 'next/navigation';
+import { useQuery } from '@tanstack/react-query';
+import { getProformaInvoiceById } from '@/lib/api/proforma-invoices';
+import { getPrintTemplateConfig } from '@/lib/api/print-templates';
+import { PrintMasterTemplate, TableColumn } from '@/components/print-engine/PrintMasterTemplate';
+import { fmt, fmtDate, amountInWords, downloadAsPDF } from '@/lib/print/utils';
+import { DEFAULT_PRINT_TEMPLATE } from '@/types/print-template';
+
+export default function ProformaInvoicePrintPage() {
+  const params = useParams();
+  const piId   = Number(params.id);
+
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['proforma-invoice-print', piId],
+    queryFn: () => getProformaInvoiceById(piId),
+    enabled: !!piId,
+  });
+
+  const { data: config, isLoading: isConfigLoading } = useQuery({
+    queryKey: ['print-template-config'],
+    queryFn: getPrintTemplateConfig,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const pi = data?.data;
+
+  const handleDownloadPDF = async () => {
+    if (!contentRef.current || isGeneratingPDF) return;
+    setIsGeneratingPDF(true);
+    try {
+      await downloadAsPDF(
+        contentRef.current,
+        `proforma-invoice-${pi?.pi_number || piId}.pdf`,
+      );
+    } catch {
+      window.print();
+    } finally {
+      setIsGeneratingPDF(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!pi || isConfigLoading) return;
+    const isPdf =
+      typeof window !== 'undefined' &&
+      new URLSearchParams(window.location.search).get('pdf') === '1';
+    const timer = setTimeout(async () => {
+      if (isPdf) {
+        await handleDownloadPDF();
+        window.close();
+      } else {
+        window.print();
+      }
+    }, 900);
+    return () => clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pi, isConfigLoading]);
+
+  if (isLoading || !pi) {
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', fontFamily: 'sans-serif', fontSize: 16, color: '#555' }}>
+        Preparing proforma invoice...
+      </div>
+    );
+  }
+
+  const items = pi.items || [];
+  const hasDis = Number(pi.discount_amount) > 0;
+  const hasShi = Number(pi.shipping_charges) > 0;
+
+  const columns: TableColumn[] = [
+    { key: 'item',    label: 'Item / Description', align: 'left'   },
+    { key: 'qty',     label: 'Qty',                align: 'center', width: 60  },
+    { key: 'rate',    label: 'Rate',               align: 'right',  width: 90  },
+    { key: 'tax_pct', label: 'Tax%',               align: 'center', width: 56  },
+    { key: 'tax_amt', label: 'Tax Amt',            align: 'right',  width: 80  },
+    { key: 'amount',  label: 'Amount',             align: 'right',  width: 96  },
+  ];
+
+  const summaryRows = [
+    { label: 'Sub Total', value: `₹${fmt(pi.sub_total)}` },
+    ...(hasDis ? [{ label: 'Discount', value: `− ₹${fmt(pi.discount_amount)}`, valueColor: '#16a34a' }] : []),
+    { label: 'Tax', value: `₹${fmt(pi.tax_amount)}` },
+    ...(hasShi ? [{ label: 'Shipping', value: `₹${fmt(pi.shipping_charges)}` }] : []),
+    { label: 'Grand Total', value: `₹${fmt(pi.grand_total)}`, separator: true, highlight: true, large: true },
+  ];
+
+  const summaryLeft = (
+    <>
+      {pi.terms_conditions && (
+        <>
+          <div className="pt-section-title">Terms &amp; Conditions</div>
+          <div className="pt-section-body">{pi.terms_conditions}</div>
+        </>
+      )}
+      {pi.notes && (
+        <>
+          <div className="pt-section-title">Additional Notes</div>
+          <div className="pt-section-body">{pi.notes}</div>
+        </>
+      )}
+      {!pi.terms_conditions && !pi.notes && (
+        <>
+          <div className="pt-section-body" style={{ fontSize: 10, color: '#888', fontStyle: 'italic', marginTop: 8 }}>
+            * This is a Proforma Invoice. Not a tax invoice. No GST/IRN generated.
+          </div>
+        </>
+      )}
+    </>
+  );
+
+  return (
+    <div style={{ fontFamily: 'Arial, sans-serif', background: '#f0f0f0' }}>
+
+      <PrintMasterTemplate
+        ref={contentRef}
+        config={config}
+        documentTitle="Proforma Invoice"
+        metaLines={[
+          { label: 'PI#',  value: pi.pi_number, bold: true },
+          { label: 'Date', value: fmtDate(pi.pi_date) },
+        ]}
+        fromParty={{
+          sectionLabel: 'Invoice by',
+          name:    config?.company_name ?? '',
+          address: config?.address ?? undefined,
+          phone:   config?.show_phone ? (config?.phone ?? undefined) : undefined,
+          email:   config?.show_email ? (config?.email ?? undefined) : undefined,
+          gstin:   config?.show_gst   ? (config?.gst_number ?? undefined) : undefined,
+          cin:     config?.cin_number ?? undefined,
+        }}
+        toParty={{
+          sectionLabel: 'Invoice to',
+          name:    pi.customer_name ?? '—',
+          address: pi.billing_address ?? undefined,
+          phone:   pi.mobile ?? undefined,
+          email:   pi.email ?? undefined,
+        }}
+        tableColumns={columns}
+        tableRows={items}
+        renderCell={(row, key) => {
+          if (key === 'item')    return <><div style={{ fontWeight: 600 }}>{row.item_name}</div>{row.hsn_code && <div style={{ fontSize: 10, color: '#888' }}>HSN: {row.hsn_code}</div>}</>;
+          if (key === 'qty')     return row.quantity;
+          if (key === 'rate')    return `₹${fmt(row.unit_price)}`;
+          if (key === 'tax_pct') return `${row.tax_percent || 0}%`;
+          if (key === 'tax_amt') return `₹${fmt(row.tax_amount)}`;
+          if (key === 'amount')  return <strong>₹{fmt(row.line_total)}</strong>;
+          return null;
+        }}
+        summaryRows={summaryRows}
+        amountInWords={amountInWords(pi.grand_total)}
+        summaryLeft={summaryLeft}
+      />
+
+      {isGeneratingPDF && (
+        <div className="print:hidden" style={{ padding: '24px 0', display: 'flex', justifyContent: 'center' }}>
+          <div style={{ fontSize: 14, color: '#555', padding: '10px 28px', background: '#f5f5f5', borderRadius: 6 }}>
+            Generating PDF, please wait...
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

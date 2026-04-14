@@ -13,9 +13,12 @@ interface ProtectedRouteProps {
 
 export function ProtectedRoute({ children }: ProtectedRouteProps) {
   const router = useRouter();
-  const { isAuthenticated, user, userType, setPermissions } = useAuthStore();
+  const { isAuthenticated, user, userType, setPermissions, _hasHydrated } = useAuthStore();
 
   useEffect(() => {
+    // Don't redirect until the store has rehydrated from localStorage
+    if (!_hasHydrated) return;
+
     if (!isAuthenticated || !user) {
       router.replace('/login');
       return;
@@ -33,7 +36,16 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
       });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAuthenticated, user]);
+  }, [_hasHydrated, isAuthenticated, user]);
+
+  // Show spinner while waiting for localStorage rehydration
+  if (!_hasHydrated) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Spin size="large" />
+      </div>
+    );
+  }
 
   if (!isAuthenticated || !user) {
     return (

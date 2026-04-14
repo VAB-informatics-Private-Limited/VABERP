@@ -25,6 +25,47 @@ function mapProductType(pt: any): ProductType {
   };
 }
 
+function mapServiceEvent(ev: any) {
+  return {
+    id: ev.id,
+    enterprise_id: ev.enterpriseId ?? ev.enterprise_id,
+    service_product_id: ev.serviceProductId ?? ev.service_product_id,
+    rule_id: ev.ruleId ?? ev.rule_id ?? null,
+    due_date: ev.dueDate ?? ev.due_date,
+    event_type: ev.eventType ?? ev.event_type,
+    title: ev.title,
+    description: ev.description ?? null,
+    price: ev.price != null ? parseFloat(ev.price) : null,
+    status: ev.status ?? 'pending',
+    reminder_count: ev.reminderCount ?? ev.reminder_count ?? 0,
+    last_reminder_at: ev.lastReminderAt ?? ev.last_reminder_at ?? null,
+    created_date: ev.createdDate ?? ev.created_date,
+    modified_date: ev.modifiedDate ?? ev.modified_date,
+  };
+}
+
+function mapServiceBooking(b: any) {
+  return {
+    id: b.id,
+    enterprise_id: b.enterpriseId ?? b.enterprise_id,
+    service_product_id: b.serviceProductId ?? b.service_product_id,
+    service_event_id: b.serviceEventId ?? b.service_event_id ?? null,
+    scheduled_date: b.scheduledDate ?? b.scheduled_date,
+    scheduled_slot: b.scheduledSlot ?? b.scheduled_slot ?? null,
+    status: b.status ?? 'pending',
+    technician_id: b.technicianId ?? b.technician_id ?? null,
+    service_charge: b.serviceCharge ?? b.service_charge ?? 0,
+    payment_status: b.paymentStatus ?? b.payment_status ?? 'unpaid',
+    payment_method: b.paymentMethod ?? b.payment_method ?? null,
+    notes: b.notes ?? null,
+    completed_at: b.completedAt ?? b.completed_at ?? null,
+    completion_notes: b.completionNotes ?? b.completion_notes ?? null,
+    created_by: b.createdBy ?? b.created_by ?? null,
+    created_date: b.createdDate ?? b.created_date,
+    modified_date: b.modifiedDate ?? b.modified_date,
+  };
+}
+
 function mapServiceProduct(sp: any): ServiceProduct {
   return {
     id: sp.id,
@@ -45,8 +86,8 @@ function mapServiceProduct(sp: any): ServiceProduct {
     notes: sp.notes ?? null,
     created_by: sp.createdBy ?? sp.created_by ?? null,
     product_type: sp.productType ? mapProductType(sp.productType) : null,
-    service_events: sp.serviceEvents ?? sp.service_events,
-    service_bookings: sp.serviceBookings ?? sp.service_bookings,
+    service_events: (sp.serviceEvents ?? sp.service_events ?? []).map(mapServiceEvent),
+    service_bookings: (sp.serviceBookings ?? sp.service_bookings ?? []).map(mapServiceBooking),
     created_date: sp.createdDate ?? sp.created_date,
     modified_date: sp.modifiedDate ?? sp.modified_date,
   };

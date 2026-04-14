@@ -10,6 +10,7 @@ import {
 import { Enterprise } from '../../enterprises/entities/enterprise.entity';
 import { ServiceProduct } from '../../service-products/entities/service-product.entity';
 import { ServiceRule } from '../../product-types/entities/service-rule.entity';
+import { Employee } from '../../employees/entities/employee.entity';
 
 @Entity('service_events')
 export class ServiceEvent {
@@ -60,6 +61,13 @@ export class ServiceEvent {
 
   @Column({ name: 'last_reminder_at', type: 'timestamptz', nullable: true })
   lastReminderAt: Date | null;
+
+  @Column({ name: 'assigned_to', type: 'int', nullable: true })
+  assignedTo: number | null;
+
+  @ManyToOne(() => Employee, { nullable: true, eager: false })
+  @JoinColumn({ name: 'assigned_to' })
+  assignedEmployee: Employee;
 
   @CreateDateColumn({ name: 'created_date' })
   createdDate: Date;

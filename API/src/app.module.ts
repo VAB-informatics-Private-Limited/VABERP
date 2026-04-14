@@ -48,6 +48,17 @@ import { ProductTypesModule } from './modules/product-types/product-types.module
 import { ServiceProductsModule } from './modules/service-products/service-products.module';
 import { ServiceEventsModule } from './modules/service-events/service-events.module';
 import { ServiceBookingsModule } from './modules/service-bookings/service-bookings.module';
+import { MachinesModule } from './modules/machines/machines.module';
+import { MaintenanceVendorsModule } from './modules/maintenance-vendors/maintenance-vendors.module';
+import { MaintenanceBomModule } from './modules/maintenance-bom/maintenance-bom.module';
+import { MaintenanceRemindersModule } from './modules/maintenance-reminders/maintenance-reminders.module';
+import { MaintenanceWorkOrdersModule } from './modules/maintenance-work-orders/maintenance-work-orders.module';
+import { MaintenanceDowntimeModule } from './modules/maintenance-downtime/maintenance-downtime.module';
+import { OrganizerModule } from './modules/organizer/organizer.module';
+import { WasteInventoryModule } from './modules/waste-inventory/waste-inventory.module';
+import { WasteDisposalModule } from './modules/waste-disposal/waste-disposal.module';
+import { WastePartiesModule } from './modules/waste-parties/waste-parties.module';
+import { WasteAnalyticsModule } from './modules/waste-analytics/waste-analytics.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import databaseConfig from './config/database.config';
 import jwtConfig from './config/jwt.config';
@@ -132,6 +143,17 @@ import jwtConfig from './config/jwt.config';
     ServiceProductsModule,
     ServiceEventsModule,
     ServiceBookingsModule,
+    MachinesModule,
+    MaintenanceVendorsModule,
+    MaintenanceBomModule,
+    MaintenanceRemindersModule,
+    MaintenanceWorkOrdersModule,
+    MaintenanceDowntimeModule,
+    OrganizerModule,
+    WasteInventoryModule,
+    WasteDisposalModule,
+    WastePartiesModule,
+    WasteAnalyticsModule,
     ScheduleModule.forRoot(),
   ],
   providers: [

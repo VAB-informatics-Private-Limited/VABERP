@@ -80,12 +80,18 @@ export class InvoicesService {
       .orderBy('invoice.createdDate', 'DESC')
       .getManyAndCount();
 
-    // Recompute balanceDue from grandTotal - totalPaid to handle stale stored values
-    const normalized = data.map((inv) => ({
-      ...inv,
-      totalPaid: Number(inv.totalPaid),
-      balanceDue: Number(inv.grandTotal) - Number(inv.totalPaid),
-    }));
+    // Recompute balanceDue and pendingAmount from payments to handle stale stored values
+    const normalized = data.map((inv) => {
+      const payments = (inv as any).payments || [];
+      const completedPaid = payments.filter((p: any) => p.status === 'completed').reduce((sum: number, p: any) => sum + Number(p.amount), 0);
+      const pendingAmount = payments.filter((p: any) => p.status === 'pending').reduce((sum: number, p: any) => sum + Number(p.amount), 0);
+      return {
+        ...inv,
+        totalPaid: completedPaid,
+        pendingAmount,
+        balanceDue: Number(inv.grandTotal) - completedPaid - pendingAmount,
+      };
+    });
 
     return {
       message: 'Invoices fetched successfully',

@@ -41,7 +41,7 @@ export class ServiceBooking {
   @Column({ name: 'scheduled_date', type: 'date' })
   scheduledDate: Date;
 
-  @Column({ name: 'scheduled_slot', nullable: true })
+  @Column({ name: 'scheduled_slot', type: 'varchar', nullable: true })
   scheduledSlot: string | null; // e.g. '10:00-12:00'
 
   @Column({ default: 'pending' })
@@ -60,7 +60,7 @@ export class ServiceBooking {
   @Column({ name: 'payment_status', default: 'unpaid' })
   paymentStatus: string; // 'unpaid' | 'paid' | 'waived'
 
-  @Column({ name: 'payment_method', nullable: true })
+  @Column({ name: 'payment_method', type: 'varchar', nullable: true })
   paymentMethod: string | null;
 
   @Column({ nullable: true, type: 'text' })

@@ -1,7 +1,8 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, ILike } from 'typeorm';
 import { ServiceProduct } from './entities/service-product.entity';
+import { Customer } from '../customers/entities/customer.entity';
 import { ServiceEventsService } from '../service-events/service-events.service';
 import { CreateServiceProductDto } from './dto/create-service-product.dto';
 import { UpdateServiceProductDto } from './dto/update-service-product.dto';
@@ -12,9 +13,33 @@ export class ServiceProductsService {
   constructor(
     @InjectRepository(ServiceProduct)
     private repo: Repository<ServiceProduct>,
+    @InjectRepository(Customer)
+    private customerRepo: Repository<Customer>,
     private serviceEventsService: ServiceEventsService,
     private productTypesService: ProductTypesService,
   ) {}
+
+  async searchCustomers(enterpriseId: number, search?: string) {
+    const where: any = { enterpriseId, status: 'active' };
+    if (search) {
+      return this.customerRepo.find({
+        where: [
+          { enterpriseId, customerName: ILike(`%${search}%`) },
+          { enterpriseId, mobile: ILike(`%${search}%`) },
+          { enterpriseId, businessName: ILike(`%${search}%`) },
+        ],
+        select: ['id', 'customerName', 'mobile', 'address', 'city', 'state'],
+        take: 50,
+        order: { customerName: 'ASC' },
+      });
+    }
+    return this.customerRepo.find({
+      where,
+      select: ['id', 'customerName', 'mobile', 'address', 'city', 'state'],
+      take: 200,
+      order: { customerName: 'ASC' },
+    });
+  }
 
   async findAll(
     enterpriseId: number,

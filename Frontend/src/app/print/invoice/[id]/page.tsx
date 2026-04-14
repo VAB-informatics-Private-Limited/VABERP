@@ -1,23 +1,19 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { getInvoiceById } from '@/lib/api/invoices';
-import { PrintLayout } from '@/components/print-engine/PrintLayout';
-import dayjs from 'dayjs';
-
-const fmt = (v: number) =>
-  v.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
-const fmtDate = (d?: string | null) => {
-  if (!d) return '—';
-  return dayjs(d).format('DD-MM-YYYY');
-};
+import { getPrintTemplateConfig } from '@/lib/api/print-templates';
+import { PrintMasterTemplate, TableColumn } from '@/components/print-engine/PrintMasterTemplate';
+import { fmt, fmtDate, amountInWords, downloadAsPDF } from '@/lib/print/utils';
 
 export default function InvoicePrintPage() {
-  const params = useParams();
+  const params    = useParams();
   const invoiceId = Number(params.id);
+
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
 
   const { data: invoiceData, isLoading } = useQuery({
     queryKey: ['invoice-print', invoiceId],
@@ -25,152 +21,157 @@ export default function InvoicePrintPage() {
     enabled: !!invoiceId,
   });
 
+  const { data: config, isLoading: isConfigLoading } = useQuery({
+    queryKey: ['print-template-config'],
+    queryFn: getPrintTemplateConfig,
+    staleTime: 5 * 60 * 1000,
+  });
+
   const invoice = invoiceData?.data;
 
-  useEffect(() => {
-    if (!invoice) return;
-    const timer = setTimeout(() => {
+  const handleDownloadPDF = async () => {
+    if (!contentRef.current || isGeneratingPDF) return;
+    setIsGeneratingPDF(true);
+    try {
+      await downloadAsPDF(
+        contentRef.current,
+        `invoice-${invoice?.invoice_number || invoiceId}.pdf`,
+      );
+    } catch {
       window.print();
-    }, 600);
+    } finally {
+      setIsGeneratingPDF(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!invoice || isConfigLoading) return;
+    const isPdf =
+      typeof window !== 'undefined' &&
+      new URLSearchParams(window.location.search).get('pdf') === '1';
+    const timer = setTimeout(async () => {
+      if (isPdf) {
+        await handleDownloadPDF();
+        window.close();
+      } else {
+        window.print();
+      }
+    }, 900);
     return () => clearTimeout(timer);
-  }, [invoice]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [invoice, isConfigLoading]);
 
   if (isLoading || !invoice) {
     return (
       <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', fontFamily: 'sans-serif', fontSize: 16, color: '#555' }}>
-        Preparing invoice for print...
+        Preparing invoice...
       </div>
     );
   }
 
-  const balanceDue = Number(invoice.balance_due);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const items: any[] = invoice.items || [];
+  const balanceDue   = Number(invoice.balance_due ?? 0);
+  const isPaid       = balanceDue <= 0;
 
-  return (
-    <PrintLayout>
-    <div style={{ fontFamily: 'Arial, sans-serif', fontSize: 12, color: '#111', maxWidth: 800, margin: '0 auto' }}>
-      {/* Invoice Title Row */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24, paddingBottom: 16, borderBottom: '2px solid #222' }}>
-        <div style={{ fontSize: 11, color: '#888' }}>Tax Invoice</div>
-        <div style={{ textAlign: 'right' }}>
-          <div style={{ fontSize: 28, fontWeight: 700, color: '#333', marginBottom: 4 }}>INVOICE</div>
-          <div style={{ fontSize: 14, fontWeight: 600 }}>{invoice.invoice_number}</div>
-          <div style={{ fontSize: 11, color: '#666', marginTop: 4 }}>Date: {fmtDate(invoice.invoice_date)}</div>
-          {invoice.due_date && (
-            <div style={{ fontSize: 11, color: '#666' }}>Due: {fmtDate(invoice.due_date)}</div>
-          )}
-        </div>
-      </div>
+  const columns: TableColumn[] = [
+    { key: 'item',    label: 'Item / Description', align: 'left'   },
+    { key: 'qty',     label: 'Qty',                align: 'center', width: 60  },
+    { key: 'rate',    label: 'Rate',               align: 'right',  width: 90  },
+    { key: 'tax_pct', label: 'Tax%',               align: 'center', width: 56  },
+    { key: 'tax_amt', label: 'Tax Amt',            align: 'right',  width: 80  },
+    { key: 'amount',  label: 'Amount',             align: 'right',  width: 96  },
+  ];
 
-      {/* Bill To */}
-      <div style={{ marginBottom: 24 }}>
-        <div style={{ fontSize: 10, fontWeight: 600, color: '#888', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>Bill To</div>
-        <div style={{ fontSize: 15, fontWeight: 700 }}>{invoice.customer_name}</div>
-        {invoice.billing_address && (
-          <div style={{ fontSize: 11, color: '#555', marginTop: 4, whiteSpace: 'pre-line' }}>{invoice.billing_address}</div>
-        )}
-      </div>
+  const hasDis = Number(invoice.discount_amount) > 0;
+  const hasShi = Number(invoice.shipping_charges) > 0;
 
-      {/* Line Items */}
-      <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 16, fontSize: 11 }}>
-        <thead>
-          <tr style={{ backgroundColor: '#222', color: '#fff' }}>
-            <th style={{ border: '1px solid #444', padding: '6px 8px', textAlign: 'left', width: 28 }}>#</th>
-            <th style={{ border: '1px solid #444', padding: '6px 8px', textAlign: 'left' }}>Description</th>
-            <th style={{ border: '1px solid #444', padding: '6px 8px', textAlign: 'center', width: 50 }}>Qty</th>
-            <th style={{ border: '1px solid #444', padding: '6px 8px', textAlign: 'right', width: 90 }}>Unit Price</th>
-            <th style={{ border: '1px solid #444', padding: '6px 8px', textAlign: 'center', width: 50 }}>Tax%</th>
-            <th style={{ border: '1px solid #444', padding: '6px 8px', textAlign: 'right', width: 90 }}>Tax Amt</th>
-            <th style={{ border: '1px solid #444', padding: '6px 8px', textAlign: 'right', width: 90 }}>Amount</th>
-          </tr>
-        </thead>
-        <tbody>
-          {(invoice.items || []).map((item: any, i: number) => (
-            <tr key={item.id ?? i} style={{ backgroundColor: i % 2 === 0 ? '#fff' : '#f9f9f9' }}>
-              <td style={{ border: '1px solid #ddd', padding: '5px 8px', textAlign: 'center' }}>{i + 1}</td>
-              <td style={{ border: '1px solid #ddd', padding: '5px 8px' }}>
-                <div style={{ fontWeight: 600 }}>{item.item_name}</div>
-                {item.description && <div style={{ color: '#777', fontSize: 10 }}>{item.description}</div>}
-                {item.hsn_code && <div style={{ color: '#aaa', fontSize: 10 }}>HSN: {item.hsn_code}</div>}
-              </td>
-              <td style={{ border: '1px solid #ddd', padding: '5px 8px', textAlign: 'center' }}>{item.quantity} {item.unit_of_measure || ''}</td>
-              <td style={{ border: '1px solid #ddd', padding: '5px 8px', textAlign: 'right' }}>₹{fmt(Number(item.unit_price))}</td>
-              <td style={{ border: '1px solid #ddd', padding: '5px 8px', textAlign: 'center' }}>{item.tax_percent || 0}%</td>
-              <td style={{ border: '1px solid #ddd', padding: '5px 8px', textAlign: 'right' }}>₹{fmt(Number(item.tax_amount || 0))}</td>
-              <td style={{ border: '1px solid #ddd', padding: '5px 8px', textAlign: 'right', fontWeight: 600 }}>₹{fmt(Number(item.line_total || 0))}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+  const summaryRows = [
+    { label: 'Sub Total',    value: `₹${fmt(invoice.sub_total)}` },
+    ...(hasDis ? [{ label: 'Discount', value: `− ₹${fmt(invoice.discount_amount)}`, valueColor: '#16a34a' }] : []),
+    { label: 'Tax',          value: `₹${fmt(invoice.tax_amount)}` },
+    ...(hasShi ? [{ label: 'Shipping', value: `₹${fmt(invoice.shipping_charges)}` }] : []),
+    { label: 'Grand Total',  value: `₹${fmt(invoice.grand_total)}`, separator: true, highlight: true, large: true },
+    { label: 'Amount Paid',  value: `₹${fmt(invoice.total_paid)}`, valueColor: '#16a34a' },
+    {
+      label: isPaid ? '✓ Fully Paid' : 'Balance Due',
+      value: isPaid ? '₹0.00' : `₹${fmt(balanceDue)}`,
+      valueColor: isPaid ? '#16a34a' : '#dc2626',
+      large: true,
+    },
+  ];
 
-      {/* Totals */}
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 24 }}>
-        <table style={{ borderCollapse: 'collapse', minWidth: 260, fontSize: 11 }}>
-          <tbody>
-            <tr>
-              <td style={{ padding: '4px 16px', textAlign: 'right', color: '#666', border: '1px solid #e0e0e0' }}>Sub Total</td>
-              <td style={{ padding: '4px 16px', textAlign: 'right', fontWeight: 600, border: '1px solid #e0e0e0', width: 120 }}>₹{fmt(Number(invoice.sub_total))}</td>
-            </tr>
-            {Number(invoice.discount_amount) > 0 && (
-              <tr>
-                <td style={{ padding: '4px 16px', textAlign: 'right', color: '#666', border: '1px solid #e0e0e0' }}>Discount</td>
-                <td style={{ padding: '4px 16px', textAlign: 'right', color: '#c00', border: '1px solid #e0e0e0' }}>−₹{fmt(Number(invoice.discount_amount))}</td>
-              </tr>
-            )}
-            <tr>
-              <td style={{ padding: '4px 16px', textAlign: 'right', color: '#666', border: '1px solid #e0e0e0' }}>Tax</td>
-              <td style={{ padding: '4px 16px', textAlign: 'right', border: '1px solid #e0e0e0' }}>₹{fmt(Number(invoice.tax_amount))}</td>
-            </tr>
-            {Number(invoice.shipping_charges) > 0 && (
-              <tr>
-                <td style={{ padding: '4px 16px', textAlign: 'right', color: '#666', border: '1px solid #e0e0e0' }}>Shipping</td>
-                <td style={{ padding: '4px 16px', textAlign: 'right', border: '1px solid #e0e0e0' }}>₹{fmt(Number(invoice.shipping_charges))}</td>
-              </tr>
-            )}
-            <tr style={{ backgroundColor: '#222', color: '#fff' }}>
-              <td style={{ padding: '8px 16px', textAlign: 'right', fontWeight: 700, border: '1px solid #444' }}>Grand Total</td>
-              <td style={{ padding: '8px 16px', textAlign: 'right', fontWeight: 700, border: '1px solid #444' }}>₹{fmt(Number(invoice.grand_total))}</td>
-            </tr>
-            <tr>
-              <td style={{ padding: '4px 16px', textAlign: 'right', color: '#666', border: '1px solid #e0e0e0' }}>Amount Paid</td>
-              <td style={{ padding: '4px 16px', textAlign: 'right', color: '#187', fontWeight: 600, border: '1px solid #e0e0e0' }}>₹{fmt(Number(invoice.total_paid))}</td>
-            </tr>
-            <tr style={{ backgroundColor: balanceDue > 0 ? '#fff0f0' : '#f0fff4' }}>
-              <td style={{ padding: '8px 16px', textAlign: 'right', fontWeight: 700, border: `1px solid ${balanceDue > 0 ? '#fcc' : '#9d9'}`, color: balanceDue > 0 ? '#c00' : '#060' }}>Balance Due</td>
-              <td style={{ padding: '8px 16px', textAlign: 'right', fontWeight: 700, border: `1px solid ${balanceDue > 0 ? '#fcc' : '#9d9'}`, color: balanceDue > 0 ? '#c00' : '#060' }}>
-                {balanceDue <= 0 ? '✓ PAID' : `₹${fmt(balanceDue)}`}
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      {/* Terms */}
+  const summaryLeft = (
+    <>
       {invoice.terms_conditions && (
-        <div style={{ marginTop: 16, paddingTop: 12, borderTop: '1px solid #ddd', fontSize: 10, color: '#555' }}>
-          <div style={{ fontWeight: 600, marginBottom: 4 }}>Terms &amp; Conditions</div>
-          <div style={{ whiteSpace: 'pre-line' }}>{invoice.terms_conditions}</div>
-        </div>
+        <>
+          <div className="pt-section-title">Terms &amp; Conditions</div>
+          <div className="pt-section-body">{invoice.terms_conditions}</div>
+        </>
       )}
       {invoice.notes && (
-        <div style={{ marginTop: 12, fontSize: 10, color: '#555' }}>
-          <span style={{ fontWeight: 600 }}>Notes: </span>{invoice.notes}
+        <>
+          <div className="pt-section-title">Additional Notes</div>
+          <div className="pt-section-body">{invoice.notes}</div>
+        </>
+      )}
+      {!invoice.terms_conditions && !invoice.notes && (
+        <div className="pt-no-terms">No terms or notes.</div>
+      )}
+    </>
+  );
+
+  return (
+    <div style={{ fontFamily: 'Arial, sans-serif', background: '#f0f0f0' }}>
+
+      <PrintMasterTemplate
+        ref={contentRef}
+        config={config}
+        documentTitle="Invoice"
+        metaLines={[
+          { label: 'Invoice#', value: invoice.invoice_number, bold: true },
+          { label: 'Date',     value: fmtDate(invoice.invoice_date) },
+          ...(invoice.due_date
+            ? [{ label: 'Due Date', value: fmtDate(invoice.due_date), danger: !isPaid }]
+            : []),
+        ]}
+        fromParty={{
+          sectionLabel: 'Invoice by',
+          name:    config?.company_name ?? '',
+          address: config?.address ?? undefined,
+          phone:   config?.show_phone ? (config?.phone ?? undefined) : undefined,
+          email:   config?.show_email ? (config?.email ?? undefined) : undefined,
+          gstin:   config?.show_gst   ? (config?.gst_number ?? undefined) : undefined,
+          cin:     config?.cin_number ?? undefined,
+        }}
+        toParty={{
+          sectionLabel: 'Invoice to',
+          name:    invoice.customer_name ?? '—',
+          address: invoice.billing_address ?? undefined,
+        }}
+        tableColumns={columns}
+        tableRows={items}
+        renderCell={(row, key) => {
+          if (key === 'item')    return <><div style={{ fontWeight: 600 }}>{row.item_name}</div>{row.description && <div style={{ fontSize: 10, color: '#888' }}>{row.description}</div>}{row.hsn_code && <div style={{ fontSize: 10, color: '#888' }}>HSN: {row.hsn_code}</div>}</>;
+          if (key === 'qty')     return `${row.quantity}${row.unit_of_measure ? ' ' + row.unit_of_measure : ''}`;
+          if (key === 'rate')    return `₹${fmt(row.unit_price)}`;
+          if (key === 'tax_pct') return `${row.tax_percent || 0}%`;
+          if (key === 'tax_amt') return `₹${fmt(row.tax_amount)}`;
+          if (key === 'amount')  return <strong>₹{fmt(row.line_total)}</strong>;
+          return null;
+        }}
+        summaryRows={summaryRows}
+        amountInWords={amountInWords(invoice.grand_total)}
+        summaryLeft={summaryLeft}
+      />
+
+      {isGeneratingPDF && (
+        <div className="print:hidden" style={{ padding: '24px 0', display: 'flex', justifyContent: 'center' }}>
+          <div style={{ fontSize: 14, color: '#555', padding: '10px 28px', background: '#f5f5f5', borderRadius: 6 }}>
+            Generating PDF, please wait...
+          </div>
         </div>
       )}
-
-      <div style={{ marginTop: 32, paddingTop: 16, borderTop: '1px solid #ddd', textAlign: 'center', fontSize: 10, color: '#aaa' }}>
-        Thank you for your business
-      </div>
-
-      {/* Print button — hidden when printing */}
-      <div className="print:hidden" style={{ marginTop: 24, textAlign: 'center' }}>
-        <button
-          onClick={() => window.print()}
-          style={{ padding: '8px 24px', background: '#1677ff', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 14 }}
-        >
-          Print / Download
-        </button>
-      </div>
     </div>
-    </PrintLayout>
   );
 }

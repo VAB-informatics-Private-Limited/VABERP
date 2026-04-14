@@ -22,12 +22,10 @@ import { useState } from 'react';
 import { getEnquiryById, getFollowupHistory, addFollowup, getEnquiryQuotations } from '@/lib/api/enquiries';
 import { addQuotation } from '@/lib/api/quotations';
 import { useAuthStore } from '@/stores/authStore';
-import { getPrintTemplateConfig } from '@/lib/api/print-templates';
-import { PrintHeader } from '@/components/print-engine/PrintHeader';
-import { DEFAULT_PRINT_TEMPLATE } from '@/types/print-template';
 import { FollowupTimeline } from '@/components/enquiries/FollowupTimeline';
 import { FollowupForm } from '@/components/enquiries/FollowupForm';
 import { QuotationBuilder } from '@/components/quotations/QuotationBuilder';
+import { OrganizerContextWidget } from '@/components/organizer/OrganizerContextWidget';
 import { INTEREST_STATUS_OPTIONS, FollowupFormData } from '@/types/enquiry';
 import { QuotationFormData } from '@/types/quotation';
 
@@ -44,12 +42,6 @@ export default function ViewEnquiryPage() {
 
   const [followupModalOpen, setFollowupModalOpen] = useState(false);
   const [quotationDrawerOpen, setQuotationDrawerOpen] = useState(false);
-
-  const { data: printConfig } = useQuery({
-    queryKey: ['print-template-config'],
-    queryFn: getPrintTemplateConfig,
-    staleTime: 5 * 60 * 1000,
-  });
 
   const { data: enquiryData, isLoading: enquiryLoading } = useQuery({
     queryKey: ['enquiry', enquiryId],
@@ -123,9 +115,7 @@ export default function ViewEnquiryPage() {
     return statusOption?.label || status;
   };
 
-  const handlePrint = () => {
-    window.print();
-  };
+  const handlePrint = () => window.open(`/print/enquiry/${enquiryId}`, '_blank');
 
   if (enquiryLoading) {
     return (
@@ -194,110 +184,6 @@ export default function ViewEnquiryPage() {
             Edit
           </Button>
         </Space>
-      </div>
-
-      {/* ===== PRINT-ONLY LAYOUT — compact single page ===== */}
-      <div className="hidden print:block" style={{ fontFamily: 'Arial, sans-serif', fontSize: 12, color: '#111' }}>
-        <PrintHeader config={printConfig ?? DEFAULT_PRINT_TEMPLATE} />
-
-        {/* Title row */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, paddingBottom: 8, borderBottom: '2px solid #222' }}>
-          <div>
-            <div style={{ fontSize: 18, fontWeight: 700 }}>ENQUIRY DETAILS</div>
-            <div style={{ fontSize: 13, color: '#555', marginTop: 2 }}>{enquiry.customer_name}{enquiry.business_name ? ` — ${enquiry.business_name}` : ''}</div>
-          </div>
-          <div style={{ textAlign: 'right' }}>
-            <span style={{ display: 'inline-block', padding: '3px 10px', borderRadius: 4, fontSize: 11, fontWeight: 700, background: '#e6f4ff', color: '#0958d9', border: '1px solid #91caff' }}>
-              {getStatusLabel(enquiry.interest_status)}
-            </span>
-            <div style={{ fontSize: 10, color: '#888', marginTop: 4 }}>Created: {enquiry.created_date}</div>
-          </div>
-        </div>
-
-        {/* Two-column info grid */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 14 }}>
-          {/* Customer Info */}
-          <div>
-            <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, color: '#1677ff', marginBottom: 6, borderBottom: '1px solid #e0e0e0', paddingBottom: 3 }}>Customer Information</div>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
-              <tbody>
-                {[
-                  ['Name', enquiry.customer_name],
-                  ['Business', enquiry.business_name || '-'],
-                  ['Mobile', enquiry.customer_mobile || '-'],
-                  ['Email', enquiry.customer_email || '-'],
-                  ['GST', enquiry.gst_number || '-'],
-                  ['Address', [enquiry.address, enquiry.city, enquiry.state, enquiry.pincode].filter(Boolean).join(', ') || '-'],
-                ].map(([label, value]) => (
-                  <tr key={label}>
-                    <td style={{ padding: '3px 6px 3px 0', color: '#666', width: '35%', verticalAlign: 'top' }}>{label}</td>
-                    <td style={{ padding: '3px 0', fontWeight: 500 }}>{value}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Enquiry Info */}
-          <div>
-            <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, color: '#1677ff', marginBottom: 6, borderBottom: '1px solid #e0e0e0', paddingBottom: 3 }}>Enquiry Details</div>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
-              <tbody>
-                {[
-                  ['Status', getStatusLabel(enquiry.interest_status)],
-                  ['Source', enquiry.source || '-'],
-                  ['Product Interest', enquiry.product_interest || '-'],
-                  ['Next Follow-up', enquiry.next_followup_date || '-'],
-                  ['Last Modified', enquiry.modified_date || '-'],
-                ].map(([label, value]) => (
-                  <tr key={label}>
-                    <td style={{ padding: '3px 6px 3px 0', color: '#666', width: '40%', verticalAlign: 'top' }}>{label}</td>
-                    <td style={{ padding: '3px 0', fontWeight: 500 }}>{value}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {/* Remarks */}
-        {enquiry.remarks && (
-          <div style={{ marginBottom: 14, padding: '8px 10px', background: '#f9f9f9', borderRadius: 4, border: '1px solid #e0e0e0' }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: '#555', marginBottom: 3 }}>Remarks</div>
-            <div style={{ fontSize: 11, whiteSpace: 'pre-line' }}>{enquiry.remarks}</div>
-          </div>
-        )}
-
-        {/* Follow-up History */}
-        {(followupsData?.data || []).length > 0 && (
-          <div>
-            <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, color: '#1677ff', marginBottom: 6, borderBottom: '1px solid #e0e0e0', paddingBottom: 3 }}>Follow-up History</div>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
-              <thead>
-                <tr style={{ background: '#f3f4f6' }}>
-                  <th style={{ padding: '4px 8px', textAlign: 'left', fontWeight: 600, border: '1px solid #e0e0e0', width: '15%' }}>Date</th>
-                  <th style={{ padding: '4px 8px', textAlign: 'left', fontWeight: 600, border: '1px solid #e0e0e0', width: '15%' }}>Type</th>
-                  <th style={{ padding: '4px 8px', textAlign: 'left', fontWeight: 600, border: '1px solid #e0e0e0' }}>Notes</th>
-                  <th style={{ padding: '4px 8px', textAlign: 'left', fontWeight: 600, border: '1px solid #e0e0e0', width: '18%' }}>Next Follow-up</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(followupsData?.data || []).map((f: any, i: number) => (
-                  <tr key={f.id ?? i} style={{ background: i % 2 === 0 ? '#fff' : '#fafafa' }}>
-                    <td style={{ padding: '3px 8px', border: '1px solid #e0e0e0' }}>{f.followup_date || f.date || '-'}</td>
-                    <td style={{ padding: '3px 8px', border: '1px solid #e0e0e0' }}>{f.followup_type || f.type || '-'}</td>
-                    <td style={{ padding: '3px 8px', border: '1px solid #e0e0e0' }}>{f.notes || f.note || '-'}</td>
-                    <td style={{ padding: '3px 8px', border: '1px solid #e0e0e0' }}>{f.next_followup_date || '-'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        <div style={{ marginTop: 20, paddingTop: 10, borderTop: '1px solid #ddd', textAlign: 'center', fontSize: 10, color: '#aaa' }}>
-          Printed on {new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
-        </div>
       </div>
 
       {/* Top Summary Bar — screen only */}
@@ -588,6 +474,13 @@ export default function ViewEnquiryPage() {
               })
             )}
           </Card>
+          <div className="mt-4 print:hidden">
+            <OrganizerContextWidget
+              entityType="enquiry"
+              entityId={enquiryId}
+              entityLabel={enquiry.customer_name}
+            />
+          </div>
         </Col>
       </Row>
 

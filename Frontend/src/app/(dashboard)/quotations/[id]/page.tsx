@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { Typography, Card, Descriptions, Tag, Button, Space, Table, Divider, Spin, Row, Col, message, Modal, Alert, Steps, DatePicker, Input } from 'antd';
 import { ArrowLeftOutlined, EditOutlined, FilePdfOutlined, SendOutlined, PrinterOutlined, MailOutlined, DownloadOutlined, CheckCircleOutlined, LockOutlined, FileTextOutlined, ShoppingCartOutlined, CloseCircleOutlined, HistoryOutlined, CalendarOutlined } from '@ant-design/icons';
 import { useRouter, useParams } from 'next/navigation';
@@ -9,7 +9,6 @@ import { getQuotationById, updateQuotationStatus, acceptQuotation, updateQuotati
 import dayjs from 'dayjs';
 import { useAuthStore, usePermissions } from '@/stores/authStore';
 import { QUOTATION_STATUS_OPTIONS, QuotationItem } from '@/types/quotation';
-import { printPage } from '@/lib/utils/printPdf';
 import { SendEmailModal } from '@/components/common/SendEmailModal';
 import QuotationVersionHistory from '@/components/quotations/QuotationVersionHistory';
 import type { ColumnsType } from 'antd/es/table';
@@ -160,14 +159,12 @@ export default function ViewQuotationPage() {
     },
   ];
 
-  const printRef = useRef<HTMLDivElement>(null);
-
   const handlePrint = () => {
-    printPage();
+    window.open(`/print/quotation/${quotationId}`, '_blank');
   };
 
   const handleDownloadPDF = () => {
-    window.open(`/print/quotation/${quotationId}`, '_blank');
+    window.open(`/print/quotation/${quotationId}?pdf=1`, '_blank');
   };
 
   const [emailModalOpen, setEmailModalOpen] = useState(false);
@@ -239,7 +236,7 @@ export default function ViewQuotationPage() {
                 icon={<EditOutlined />}
                 onClick={() => router.push(`/quotations/${quotationId}/edit`)}
               >
-                {quotation.current_version > 1 ? 'Revise' : 'Edit'}
+                Edit
               </Button>
             </>
           )}
@@ -381,7 +378,7 @@ export default function ViewQuotationPage() {
         />
       )}
 
-      <div ref={printRef} className="printable-area">
+      <div className="printable-area">
       <Card className="card-shadow mb-4 print:shadow-none print:border">
         <div className="print:mb-8">
           <Row justify="space-between" align="top">

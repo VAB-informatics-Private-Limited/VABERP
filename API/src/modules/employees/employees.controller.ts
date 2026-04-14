@@ -125,6 +125,16 @@ export class EmployeesController {
     return this.employeesService.findSalesEmployees(enterpriseId);
   }
 
+  @Get('by-permission')
+  @ApiOperation({ summary: 'Get employees who have access to a given permission module' })
+  @RequirePermission('service_management', 'service_events', 'view')
+  async findByPermission(
+    @EnterpriseId() enterpriseId: number,
+    @Query('module') module: string,
+  ) {
+    return this.employeesService.findByPermissionModule(enterpriseId, module || 'service_management');
+  }
+
   @Get()
   @ApiOperation({ summary: 'Get all employees' })
   @RequirePermission('employees', 'all_employees', 'view')

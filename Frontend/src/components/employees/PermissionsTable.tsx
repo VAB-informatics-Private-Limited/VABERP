@@ -17,6 +17,10 @@ import {
   EditOutlined,
   DeleteOutlined,
   CheckCircleOutlined,
+  CustomerServiceOutlined,
+  CalendarOutlined,
+  TeamOutlined,
+  BranchesOutlined,
 } from '@ant-design/icons';
 import React from 'react';
 import { MenuPermissions } from '@/types/auth';
@@ -140,6 +144,75 @@ const MODULES = [
       { key: 'unit_masters', label: 'Unit Masters', actions: ['view', 'create', 'edit', 'delete'] as ActionKey[] },
       { key: 'sources', label: 'Sources', actions: ['view', 'create', 'edit', 'delete'] as ActionKey[] },
       { key: 'email_templates', label: 'Email Templates', actions: ['view', 'create', 'edit', 'delete'] as ActionKey[] },
+    ],
+  },
+  {
+    key: 'service_management',
+    label: 'After-Sales Service',
+    icon: <CustomerServiceOutlined />,
+    color: '#0891b2',
+    submodules: [
+      { key: 'product_types', label: 'Product Types', actions: ['view', 'create', 'edit', 'delete'] as ActionKey[] },
+      { key: 'service_products', label: 'Registered Products', actions: ['view', 'create', 'edit', 'delete'] as ActionKey[] },
+      { key: 'service_events', label: 'Lifecycle Events', actions: ['view', 'create', 'edit', 'delete'] as ActionKey[] },
+      { key: 'service_bookings', label: 'Service Bookings', actions: ['view', 'create', 'edit', 'delete'] as ActionKey[] },
+      { key: 'service_revenue', label: 'Service Revenue', actions: ['view'] as ActionKey[] },
+    ],
+  },
+  {
+    key: 'machinery_management',
+    label: 'Machinery Maintenance',
+    icon: <ToolOutlined />,
+    color: '#7c3aed',
+    submodules: [
+      { key: 'machines', label: 'Machines', actions: ['view', 'create', 'edit', 'delete'] as ActionKey[] },
+      { key: 'work_orders', label: 'Work Orders', actions: ['view', 'create', 'edit', 'delete'] as ActionKey[] },
+      { key: 'reminder_rules', label: 'Reminders', actions: ['view', 'create', 'edit', 'delete'] as ActionKey[] },
+      { key: 'vendors', label: 'Vendors & AMC', actions: ['view', 'create', 'edit', 'delete'] as ActionKey[] },
+      { key: 'bom_templates', label: 'BOM Templates', actions: ['view', 'create', 'edit', 'delete'] as ActionKey[] },
+      { key: 'downtime', label: 'Downtime Logs', actions: ['view', 'create', 'edit', 'delete'] as ActionKey[] },
+    ],
+  },
+  {
+    key: 'waste_management',
+    label: 'Waste Management',
+    icon: <DeleteOutlined />,
+    color: '#16a34a',
+    submodules: [
+      { key: 'waste_inventory', label: 'Waste Inventory', actions: ['view', 'create', 'edit', 'delete'] as ActionKey[] },
+      { key: 'waste_disposal', label: 'Wastage Disposal', actions: ['view', 'create', 'edit', 'delete'] as ActionKey[] },
+      { key: 'waste_parties', label: 'Vendors & Customers', actions: ['view', 'create', 'edit', 'delete'] as ActionKey[] },
+      { key: 'waste_analytics', label: 'Analytics', actions: ['view'] as ActionKey[] },
+    ],
+  },
+  {
+    key: 'organizer',
+    label: 'Organizer',
+    icon: <CalendarOutlined />,
+    color: '#7c3aed',
+    submodules: [
+      { key: 'items', label: 'Items (Tasks / Reminders / Follow-ups)', actions: ['view', 'create', 'edit', 'delete'] as ActionKey[] },
+      { key: 'assignments', label: 'Assignments', actions: ['view', 'create'] as ActionKey[] },
+    ],
+  },
+  {
+    key: 'crm',
+    label: 'CRM & Follow-ups',
+    icon: <TeamOutlined />,
+    color: '#0891b2',
+    submodules: [
+      { key: 'follow_ups', label: 'Follow-ups', actions: ['view', 'create', 'edit', 'delete'] as ActionKey[] },
+      { key: 'customers', label: 'Customers', actions: ['view', 'create', 'edit', 'delete'] as ActionKey[] },
+    ],
+  },
+  {
+    key: 'tasks',
+    label: 'Tasks',
+    icon: <BranchesOutlined />,
+    color: '#ea580c',
+    submodules: [
+      { key: 'all_tasks', label: 'All Tasks', actions: ['view', 'create', 'edit', 'delete'] as ActionKey[] },
+      { key: 'assignments', label: 'Task Assignments', actions: ['view', 'create'] as ActionKey[] },
     ],
   },
 ] as const;

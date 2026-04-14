@@ -19,6 +19,9 @@ import {
   BellOutlined,
   SendOutlined,
   CustomerServiceOutlined,
+  WarningFilled,
+  DeleteOutlined,
+  CalendarOutlined,
 } from '@ant-design/icons';
 import { useRouter, usePathname } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
@@ -28,6 +31,7 @@ import { getPermissions } from '@/lib/api/auth';
 import { normalizePermissions } from '@/lib/api/employees';
 import { getMaterialRequestList } from '@/lib/api/material-requests';
 import { getNotificationCounts } from '@/lib/api/notifications';
+import { getServiceEventsPendingCount } from '@/lib/api/service-events';
 import { MenuPermissions } from '@/types/auth';
 import type { MenuProps } from 'antd';
 
@@ -100,6 +104,13 @@ export function Sidebar({ collapsed, inDrawer, onMenuClick }: SidebarProps) {
     queryKey: ['sidebar-notification-counts'],
     queryFn: getNotificationCounts,
     refetchInterval: 30000,
+  });
+
+  const { data: servicePending } = useQuery({
+    queryKey: ['sidebar-service-pending'],
+    queryFn: getServiceEventsPendingCount,
+    refetchInterval: 60000,
+    enabled: canView('service_management', 'service_events'),
   });
 
   // Map backend module keys → sidebar menu keys
@@ -220,10 +231,43 @@ export function Sidebar({ collapsed, inDrawer, onMenuClick }: SidebarProps) {
   ].filter(Boolean);
 
   // ── AFTER-SALES ──────────────────────────────────────────────────────────
+  const serviceEventsBadgeCount = (servicePending?.total ?? 0) + (servicePending?.booked ?? 0);
   const afterSalesChildren = [
     canView('service_management', 'service_products') && { key: '/service-products', label: 'Registered Products' },
-    canView('service_management', 'service_events')   && { key: '/service-events',   label: 'Lifecycle Events' },
+    canView('service_management', 'service_events') && {
+      key: '/service-events',
+      label: (
+        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          Lifecycle Events
+          {serviceEventsBadgeCount > 0 && (
+            <Badge
+              count={serviceEventsBadgeCount}
+              size="small"
+              color={(servicePending?.overdue ?? 0) > 0 ? '#ff4d4f' : '#fa8c16'}
+              style={{ boxShadow: 'none', fontSize: 10 }}
+            />
+          )}
+        </span>
+      ),
+    },
     canView('service_management', 'service_bookings') && { key: '/service-bookings', label: 'Service Bookings' },
+    canView('service_management', 'service_revenue')  && { key: '/service-revenue',  label: 'Service Revenue' },
+  ].filter(Boolean);
+
+  // ── MACHINERY MAINTENANCE ─────────────────────────────────────────────────
+  const machineryChildren = [
+    canView('machinery_management', 'machines')       && { key: '/machinery',                 label: 'Machines' },
+    canView('machinery_management', 'work_orders')    && { key: '/maintenance-work-orders',   label: 'Work Orders' },
+    canView('machinery_management', 'reminder_rules') && { key: '/maintenance-reminders',     label: 'Reminders' },
+    canView('machinery_management', 'vendors')        && { key: '/maintenance-vendors',       label: 'Vendors & AMC' },
+  ].filter(Boolean);
+
+  // ── WASTE MANAGEMENT ──────────────────────────────────────────────────────
+  const wasteManagementChildren = [
+    canView('waste_management', 'waste_inventory') && { key: '/waste-inventory', label: 'Waste Inventory' },
+    canView('waste_management', 'waste_disposal')  && { key: '/waste-disposal',  label: 'Wastage Disposal' },
+    canView('waste_management', 'waste_parties')   && { key: '/waste-parties',   label: 'Vendors & Customers' },
+    canView('waste_management', 'waste_analytics') && { key: '/waste-analytics', label: 'Analytics' },
   ].filter(Boolean);
 
   // ── 9. REPORTS ───────────────────────────────────────────────────────────
@@ -295,9 +339,53 @@ export function Sidebar({ collapsed, inDrawer, onMenuClick }: SidebarProps) {
     },
     afterSalesChildren.length > 0 && {
       key: 'after-sales-menu',
-      icon: <CustomerServiceOutlined />,
-      label: 'After-Sales',
+      icon: (
+        <span style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
+          <CustomerServiceOutlined />
+          {(servicePending?.overdue ?? 0) > 0 && (
+            <WarningFilled
+              style={{
+                position: 'absolute',
+                top: -6,
+                right: -6,
+                fontSize: 10,
+                color: '#faad14',
+              }}
+            />
+          )}
+        </span>
+      ),
+      label: (
+        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          After-Sales
+          {(servicePending?.overdue ?? 0) > 0 && (
+            <Badge
+              count={servicePending!.overdue}
+              size="small"
+              color="#ff4d4f"
+              style={{ boxShadow: 'none', fontSize: 10 }}
+            />
+          )}
+        </span>
+      ),
       children: afterSalesChildren,
+    },
+    machineryChildren.length > 0 && {
+      key: 'machinery-menu',
+      icon: <ToolOutlined />,
+      label: 'Machinery',
+      children: machineryChildren,
+    },
+    wasteManagementChildren.length > 0 && {
+      key: 'waste-management',
+      icon: <DeleteOutlined />,
+      label: 'Waste Management',
+      children: wasteManagementChildren,
+    },
+    (userType === 'enterprise' || canView('organizer', 'items')) && {
+      key: '/organizer',
+      icon: <CalendarOutlined />,
+      label: 'Organizer',
     },
     reportsChildren.length > 0 && {
       key: 'reports-menu',
