@@ -52,6 +52,7 @@ export class PurchaseOrdersService {
     page = 1,
     limit = 20,
     status?: string,
+    dataStartDate?: Date | null,
     ownDataOnly = false,
     currentUserId?: number,
     managerUserId?: number,
@@ -63,6 +64,10 @@ export class PurchaseOrdersService {
       .where('po.enterpriseId = :enterpriseId', { enterpriseId });
 
     if (status) query.andWhere('po.status = :status', { status });
+
+    if (dataStartDate) {
+      query.andWhere('po.createdDate >= :dataStartDate', { dataStartDate });
+    }
 
     if (ownDataOnly && currentUserId) {
       // Employee sees only POs they created

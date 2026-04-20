@@ -29,9 +29,9 @@ export async function verifyEnterpriseEmail(email: string): Promise<ApiResponse<
   return response.data;
 }
 
-// Enterprise Login - Step 2: Verify OTP
-export async function verifyOtp(email: string, otp: string): Promise<ApiResponse> {
-  const response = await apiClient.post<ApiResponse>('/auth/enterprise/verify-otp', { email, otp });
+// Enterprise Login - Step 2: Verify OTP & Login
+export async function verifyOtp(email: string, otp: string): Promise<LoginResponse<Enterprise>> {
+  const response = await apiClient.post<LoginResponse<Enterprise>>('/auth/enterprise/verify-otp', { email, otp });
   return response.data;
 }
 

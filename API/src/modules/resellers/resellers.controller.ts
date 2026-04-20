@@ -249,4 +249,16 @@ export class ResellersController {
   ) {
     return this.service.assignPlanToReseller(id, planId);
   }
+
+  @UseGuards(SuperAdminGuard)
+  @Get('super-admin/resellers/:id/tenants')
+  getResellerTenants(@Param('id', ParseIntPipe) id: number) {
+    return this.service.getMyTenants(id);
+  }
+
+  @UseGuards(SuperAdminGuard)
+  @Get('super-admin/resellers/:id/earnings')
+  getResellerEarnings(@Param('id', ParseIntPipe) id: number) {
+    return this.service.getMyCommissions(id);
+  }
 }

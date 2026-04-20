@@ -41,21 +41,23 @@ export function KpiCard({
     <div
       style={{
         background: '#ffffff',
-        border: '1px solid #f1f5f9',
-        borderRadius: '16px',
+        border: '1px solid #e2e8f0',
+        borderRadius: '14px',
         padding: '20px 24px',
-        boxShadow: '0 1px 3px 0 rgba(0,0,0,0.04), 0 4px 12px -2px rgba(0,0,0,0.06)',
-        transition: 'box-shadow 0.2s ease, transform 0.2s ease',
+        boxShadow: '0 1px 2px 0 rgba(0,0,0,0.03), 0 2px 8px -2px rgba(0,0,0,0.04)',
+        transition: 'box-shadow 0.25s ease, transform 0.25s ease, border-color 0.25s ease',
         cursor: 'default',
         position: 'relative',
       }}
       onMouseEnter={(e) => {
-        (e.currentTarget as HTMLDivElement).style.boxShadow = '0 8px 24px 0 rgba(0,0,0,0.10), 0 16px 40px -8px rgba(0,0,0,0.12)';
-        (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-2px)';
+        (e.currentTarget as HTMLDivElement).style.boxShadow = '0 4px 16px 0 rgba(0,0,0,0.06), 0 8px 24px -8px rgba(0,0,0,0.08)';
+        (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-1px)';
+        (e.currentTarget as HTMLDivElement).style.borderColor = '#cbd5e1';
       }}
       onMouseLeave={(e) => {
-        (e.currentTarget as HTMLDivElement).style.boxShadow = '0 1px 3px 0 rgba(0,0,0,0.04), 0 4px 12px -2px rgba(0,0,0,0.06)';
+        (e.currentTarget as HTMLDivElement).style.boxShadow = '0 1px 2px 0 rgba(0,0,0,0.03), 0 2px 8px -2px rgba(0,0,0,0.04)';
         (e.currentTarget as HTMLDivElement).style.transform = 'translateY(0)';
+        (e.currentTarget as HTMLDivElement).style.borderColor = '#e2e8f0';
       }}
     >
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>

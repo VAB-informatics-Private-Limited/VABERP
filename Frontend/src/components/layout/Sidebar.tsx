@@ -33,6 +33,7 @@ import { getMaterialRequestList } from '@/lib/api/material-requests';
 import { getNotificationCounts } from '@/lib/api/notifications';
 import { getServiceEventsPendingCount } from '@/lib/api/service-events';
 import { MenuPermissions } from '@/types/auth';
+import { useBrandingStore } from '@/stores/brandingStore';
 import type { MenuProps } from 'antd';
 
 const { Sider } = Layout;
@@ -409,6 +410,7 @@ export function Sidebar({ collapsed, inDrawer, onMenuClick }: SidebarProps) {
       label: 'Settings',
       children: [
         { key: '/settings', label: 'General Settings' },
+        { key: '/settings/branding', label: 'Branding' },
         canView('service_management', 'product_types') && { key: '/settings/product-types', label: 'Product Types' },
       ].filter(Boolean),
     },
@@ -427,17 +429,21 @@ export function Sidebar({ collapsed, inDrawer, onMenuClick }: SidebarProps) {
     .filter((item) => item.children?.some((child) => pathname.startsWith(child.key)))
     .map((item) => item.key) || [];
 
+  const brandingData = useBrandingStore((s) => s.branding);
+  const brandLogo = brandingData?.logo_url || '/logo-icon.png';
+  const brandLogoSmall = brandingData?.logo_small_url || brandingData?.logo_url || '/logo-icon.png';
+  const brandName = brandingData?.app_name || 'VAB Informatics';
+
   const menuContent = (
     <>
       <div className="h-16 flex items-center border-b border-slate-200 px-4">
         {collapsed ? (
-          <img src="/logo-icon.png" alt="VAB Informatics" className="w-8 h-8 object-contain mx-auto" />
+          <img src={brandLogoSmall} alt={brandName} className="w-8 h-8 object-contain mx-auto" />
         ) : (
           <div className="flex items-center gap-2.5">
-            <img src="/logo-icon.png" alt="VAB Informatics" className="w-8 h-8 object-contain flex-shrink-0" />
+            <img src={brandLogo} alt={brandName} className="w-8 h-8 object-contain flex-shrink-0" />
             <div className="flex flex-col leading-tight">
-              <span className="font-bold text-gray-800 text-sm tracking-tight">VAB Informatics</span>
-              <span className="text-gray-400 text-[9px] tracking-widest uppercase">Private Limited</span>
+              <span className="font-bold text-gray-800 text-sm tracking-tight">{brandName}</span>
             </div>
           </div>
         )}

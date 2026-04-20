@@ -43,7 +43,11 @@ export class EnquiriesService {
       .createQueryBuilder('enquiry')
       .leftJoinAndSelect('enquiry.customer', 'customer')
       .leftJoinAndSelect('enquiry.assignedEmployee', 'assignedEmployee')
-      .where('enquiry.enterpriseId = :enterpriseId', { enterpriseId });
+      .where('enquiry.enterpriseId = :enterpriseId', { enterpriseId })
+      .andWhere('enquiry.convertedCustomerId IS NULL')
+      .andWhere('LOWER(REPLACE(enquiry.interestStatus, \' \', \'_\')) NOT IN (:...closedStatuses)', {
+        closedStatuses: ['converted', 'sale_closed'],
+      });
 
     if (search) {
       query.andWhere(
@@ -322,8 +326,8 @@ export class EnquiriesService {
       .andWhere('enquiry.nextFollowupDate >= :today', { today })
       .andWhere('enquiry.nextFollowupDate < :tomorrow', { tomorrow })
       .andWhere('enquiry.convertedCustomerId IS NULL')
-      .andWhere('enquiry.interestStatus NOT IN (:...closedStatuses)', {
-        closedStatuses: ['Not Interested', 'not_interested', 'Sale Closed', 'sale_closed', 'Converted', 'converted'],
+      .andWhere('LOWER(REPLACE(enquiry.interestStatus, \' \', \'_\')) NOT IN (:...closedStatuses)', {
+        closedStatuses: ['not_interested', 'sale_closed', 'converted'],
       });
 
     if (assignedTo) {
@@ -349,8 +353,8 @@ export class EnquiriesService {
       .where('enquiry.enterpriseId = :enterpriseId', { enterpriseId })
       .andWhere('enquiry.nextFollowupDate IS NOT NULL')
       .andWhere('enquiry.convertedCustomerId IS NULL')
-      .andWhere('enquiry.interestStatus NOT IN (:...closedStatuses)', {
-        closedStatuses: ['Not Interested', 'not_interested', 'Sale Closed', 'sale_closed', 'Converted', 'converted'],
+      .andWhere('LOWER(REPLACE(enquiry.interestStatus, \' \', \'_\')) NOT IN (:...closedStatuses)', {
+        closedStatuses: ['not_interested', 'sale_closed', 'converted'],
       });
 
     if (assignedTo) {
@@ -379,8 +383,8 @@ export class EnquiriesService {
       .where('enquiry.enterpriseId = :enterpriseId', { enterpriseId })
       .andWhere('enquiry.nextFollowupDate < :today', { today })
       .andWhere('enquiry.convertedCustomerId IS NULL')
-      .andWhere('enquiry.interestStatus NOT IN (:...closedStatuses)', {
-        closedStatuses: ['Not Interested', 'not_interested', 'Sale Closed', 'sale_closed', 'Converted', 'converted'],
+      .andWhere('LOWER(REPLACE(enquiry.interestStatus, \' \', \'_\')) NOT IN (:...closedStatuses)', {
+        closedStatuses: ['not_interested', 'sale_closed', 'converted'],
       });
 
     if (assignedTo) {
@@ -408,7 +412,7 @@ export class EnquiriesService {
       .leftJoinAndSelect('enquiry.assignedEmployee', 'assignedEmployee')
       .where('enquiry.enterpriseId = :enterpriseId', { enterpriseId })
       .andWhere('enquiry.interestStatus IN (:...prospectStatuses)', {
-        prospectStatuses: ['Prospect', 'Quotation Sent'],
+        prospectStatuses: ['hot', 'warm', 'Prospect', 'Quotation Sent'],
       })
       .skip((pageNum - 1) * limitNum)
       .take(limitNum)

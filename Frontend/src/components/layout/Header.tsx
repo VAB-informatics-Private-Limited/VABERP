@@ -270,8 +270,12 @@ export function Header({ collapsed, onToggle }: HeaderProps) {
 
   return (
     <AntHeader
-      className="!bg-white !px-4 flex items-center justify-between"
-      style={{ borderBottom: '1px solid #e2e8f0', boxShadow: '0 1px 0 0 #e2e8f0' }}
+      className="!px-4 flex items-center justify-between"
+      style={{
+        background: '#ffffff',
+        borderBottom: '1px solid #e2e8f0',
+        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.04)',
+      }}
     >
       <Button
         type="text"
@@ -327,7 +331,7 @@ export function Header({ collapsed, onToggle }: HeaderProps) {
           >
             <div style={{
               width: 34, height: 34, borderRadius: 10,
-              background: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
+              background: 'linear-gradient(135deg, #1e40af 0%, #7c3aed 50%, #c026d3 100%)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               color: '#fff', fontWeight: 700, fontSize: 13,
               letterSpacing: '0.02em', flexShrink: 0,

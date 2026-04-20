@@ -162,9 +162,23 @@ export function QuotationBuilder({ initialData, initialEnquiryData, onSubmit, lo
 
   const totals = calculateTotals();
 
+  const showRequiredModal = (labels: string[]) => {
+    Modal.error({
+      title: 'Please fill in the required fields',
+      content: (
+        <ul className="mt-2 list-disc pl-4">
+          {labels.map((label) => (
+            <li key={label} className="text-red-600 font-medium">{label}</li>
+          ))}
+        </ul>
+      ),
+      okText: 'OK',
+    });
+  };
+
   const handleFinish = (values: QuotationFormData & { quotation_date?: dayjs.Dayjs; valid_until?: dayjs.Dayjs; expected_delivery?: dayjs.Dayjs }) => {
     if (items.length === 0) {
-      message.error('Please add at least one item');
+      showRequiredModal(['Products (add at least one item)']);
       return;
     }
 
@@ -215,17 +229,10 @@ export function QuotationBuilder({ initialData, initialEnquiryData, onSubmit, lo
 
   const handleFinishFailed = ({ errorFields }: { errorFields: { name: (string | number)[]; errors: string[] }[] }) => {
     const missing = errorFields.map((f) => FIELD_LABELS[String(f.name[0])] || String(f.name[0]));
-    Modal.error({
-      title: 'Please fill in the required fields',
-      content: (
-        <ul className="mt-2 list-disc pl-4">
-          {missing.map((label) => (
-            <li key={label} className="text-red-600 font-medium">{label}</li>
-          ))}
-        </ul>
-      ),
-      okText: 'OK',
-    });
+    if (items.length === 0) {
+      missing.push('Products (add at least one item)');
+    }
+    showRequiredModal(missing);
   };
 
   const handleMobileBlur = async (e: React.FocusEvent<HTMLInputElement>) => {
@@ -519,7 +526,10 @@ export function QuotationBuilder({ initialData, initialEnquiryData, onSubmit, lo
             </Form.Item>
           </Card>
 
-          <Card title="Items" className="card-shadow mb-4">
+          <Card
+            title={<span>Items <span className="text-red-500">*</span></span>}
+            className="card-shadow mb-4"
+          >
             <div className="flex gap-2 mb-4">
               <Select
                 placeholder="Select product to add"

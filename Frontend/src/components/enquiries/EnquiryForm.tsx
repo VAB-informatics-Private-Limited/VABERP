@@ -1,6 +1,6 @@
 'use client';
 
-import { Form, Input, Select, DatePicker, Button, Card, Row, Col, AutoComplete } from 'antd';
+import { Form, Input, Select, DatePicker, Button, Card, Row, Col } from 'antd';
 import { ArrowLeftOutlined } from '@ant-design/icons';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
@@ -8,7 +8,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { EnquiryFormData, INTEREST_STATUS_OPTIONS, Enquiry } from '@/types/enquiry';
 import { getSources } from '@/lib/api/sources';
 import { checkEnquiryMobile } from '@/lib/api/enquiries';
-import { getCountries, getStates, getCities, Country, State, City } from '@/lib/api/locations';
+import { getCountries, getStates, Country, State } from '@/lib/api/locations';
 import dayjs from 'dayjs';
 
 interface EnquiryFormProps {
@@ -28,7 +28,6 @@ export function EnquiryForm({ initialData, onSubmit, loading, submitText, isEdit
 
   const [mobileWarning, setMobileWarning] = useState<string | null>(null);
   const [selectedCountryId, setSelectedCountryId] = useState<number | null>(null);
-  const [selectedStateId, setSelectedStateId] = useState<number | null>(null);
 
   const { data: sourcesData } = useQuery({
     queryKey: ['sources'],
@@ -64,26 +63,6 @@ export function EnquiryForm({ initialData, onSubmit, loading, submitText, isEdit
     staleTime: LOCATION_STALE_TIME,
   });
 
-  // Derive state ID from states data for edit mode
-  const editStateId = useMemo(() => {
-    if (!isEdit || !initialData?.state || states.length === 0) return null;
-    return states.find((s) => s.name === initialData.state)?.id ?? null;
-  }, [isEdit, initialData, states]);
-
-  const effectiveStateId = selectedStateId ?? editStateId;
-
-  const { data: cities = [] } = useQuery<City[]>({
-    queryKey: ['cities', effectiveStateId],
-    queryFn: () => getCities(effectiveStateId!),
-    enabled: !!effectiveStateId,
-    staleTime: LOCATION_STALE_TIME,
-  });
-
-  const cityOptions = useMemo(
-    () => cities.map((c) => ({ value: c.name, label: c.name })),
-    [cities],
-  );
-
   // Set India as default country field value once countries load (new form only)
   useEffect(() => {
     if (!isEdit && indiaId && !form.getFieldValue('country')) {
@@ -95,14 +74,7 @@ export function EnquiryForm({ initialData, onSubmit, loading, submitText, isEdit
   const handleCountryChange = (value: string) => {
     const country = countries.find((c) => c.name === value);
     setSelectedCountryId(country?.id ?? null);
-    setSelectedStateId(null);
-    form.setFieldsValue({ state: undefined, city: undefined });
-  };
-
-  const handleStateChange = (value: string) => {
-    const state = states.find((s) => s.name === value);
-    setSelectedStateId(state?.id ?? null);
-    form.setFieldValue('city', undefined);
+    form.setFieldsValue({ state: undefined });
   };
 
   const handleMobileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -150,6 +122,12 @@ export function EnquiryForm({ initialData, onSubmit, loading, submitText, isEdit
         layout="vertical"
         onFinish={handleFinish}
         initialValues={initialValues}
+        onKeyDown={(e) => {
+          const target = e.target as HTMLElement;
+          if (e.key === 'Enter' && target.tagName !== 'TEXTAREA') {
+            e.preventDefault();
+          }
+        }}
       >
         <div className="mb-4">
           <Button
@@ -208,14 +186,30 @@ export function EnquiryForm({ initialData, onSubmit, loading, submitText, isEdit
             <Form.Item
               name="gst_number"
               label="GST Number"
+              validateTrigger={['onBlur', 'onSubmit']}
               rules={[
                 {
-                  pattern: /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/,
-                  message: 'Enter a valid GST number (e.g. 27AAPFU0939F1ZV)',
+                  validator: (_, value) => {
+                    if (!value) return Promise.resolve();
+                    const gstPattern = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
+                    return gstPattern.test(value)
+                      ? Promise.resolve()
+                      : Promise.reject(new Error('Enter a valid GST number (e.g. 27AAPFU0939F1ZV)'));
+                  },
                 },
               ]}
             >
-              <Input placeholder="Enter GST number" maxLength={15} style={{ textTransform: 'uppercase' }} />
+              <Input
+                placeholder="Enter GST number"
+                maxLength={15}
+                style={{ textTransform: 'uppercase' }}
+                onChange={(e) => {
+                  const upper = e.target.value.toUpperCase();
+                  if (upper !== e.target.value) {
+                    form.setFieldValue('gst_number', upper);
+                  }
+                }}
+              />
             </Form.Item>
           </Col>
         </Row>
@@ -288,7 +282,6 @@ export function EnquiryForm({ initialData, onSubmit, loading, submitText, isEdit
                 placeholder={effectiveCountryId ? 'Select state' : 'Select country first'}
                 allowClear
                 disabled={!effectiveCountryId}
-                onChange={handleStateChange}
                 filterOption={(input, option) =>
                   (option?.label as string)?.toLowerCase().includes(input.toLowerCase())
                 }
@@ -301,14 +294,7 @@ export function EnquiryForm({ initialData, onSubmit, loading, submitText, isEdit
         <Row gutter={16}>
           <Col xs={24} md={12}>
             <Form.Item name="city" label="City">
-              <AutoComplete
-                placeholder={selectedStateId ? 'Enter or select city' : 'Enter city'}
-                allowClear
-                options={cityOptions}
-                filterOption={(input, option) =>
-                  (option?.value as string)?.toLowerCase().includes(input.toLowerCase())
-                }
-              />
+              <Input placeholder="Enter city" allowClear />
             </Form.Item>
           </Col>
           <Col xs={24} md={12}>

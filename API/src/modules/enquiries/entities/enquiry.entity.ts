@@ -73,8 +73,8 @@ export class Enquiry {
   @Column({ nullable: true })
   source: string; // 'Website', 'Referral', 'Walk-in', 'Phone', 'Email', etc.
 
-  @Column({ name: 'interest_status', default: 'Enquiry' })
-  interestStatus: string; // 'Enquiry', 'Follow Up', 'New Call', 'Not Interested', 'Prospect', 'Quotation Sent', 'Sale Closed'
+  @Column({ name: 'interest_status', default: 'warm' })
+  interestStatus: string; // 'hot', 'warm', 'cold' (initial); 'follow_up', 'not_interested', 'sale_closed', 'converted' (set by workflow)
 
   @Column({ nullable: true, type: 'text' })
   requirements: string;

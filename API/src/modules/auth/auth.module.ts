@@ -11,6 +11,7 @@ import { Enterprise } from '../enterprises/entities/enterprise.entity';
 import { MenuPermission } from '../employees/entities/menu-permission.entity';
 import { SuperAdmin } from '../super-admin/entities/super-admin.entity';
 import { Reseller } from '../resellers/entities/reseller.entity';
+import { EnterpriseBranding } from '../enterprise-branding/entities/enterprise-branding.entity';
 
 @Module({
   imports: [
@@ -25,7 +26,7 @@ import { Reseller } from '../resellers/entities/reseller.entity';
         },
       }),
     }),
-    TypeOrmModule.forFeature([Employee, Enterprise, MenuPermission, SuperAdmin, Reseller]),
+    TypeOrmModule.forFeature([Employee, Enterprise, EnterpriseBranding, MenuPermission, SuperAdmin, Reseller]),
   ],
   controllers: [AuthController],
   providers: [AuthService, JwtStrategy],

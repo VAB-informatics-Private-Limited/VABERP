@@ -396,3 +396,13 @@ export async function deleteResellerPlan(id: number) {
   const res = await superAdminClient.delete(`/super-admin/reseller-plans/${id}`);
   return res.data;
 }
+
+export async function getResellerTenants(resellerId: number) {
+  const res = await superAdminClient.get(`/super-admin/resellers/${resellerId}/tenants`);
+  return res.data;
+}
+
+export async function getResellerEarnings(resellerId: number) {
+  const res = await superAdminClient.get(`/super-admin/resellers/${resellerId}/earnings`);
+  return res.data;
+}

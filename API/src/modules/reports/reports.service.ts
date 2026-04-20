@@ -70,10 +70,12 @@ export class ReportsService {
       }),
       // Total enquiries
       this.enquiryRepository.count({ where: { enterpriseId } }),
-      // Total prospects
-      this.enquiryRepository.count({
-        where: { enterpriseId, interestStatus: 'Prospect' },
-      }),
+      // Total prospects (hot + warm leads)
+      this.enquiryRepository
+        .createQueryBuilder('enquiry')
+        .where('enquiry.enterpriseId = :enterpriseId', { enterpriseId })
+        .andWhere('enquiry.interestStatus IN (:...statuses)', { statuses: ['hot', 'warm', 'Prospect', 'Quotation Sent'] })
+        .getCount(),
       // Total customers
       this.customerRepository.count({ where: { enterpriseId } }),
       // Total quotations
@@ -295,7 +297,7 @@ export class ReportsService {
       .leftJoinAndSelect('enquiry.assignedEmployee', 'employee')
       .where('enquiry.enterpriseId = :enterpriseId', { enterpriseId })
       .andWhere('enquiry.interestStatus IN (:...statuses)', {
-        statuses: ['Prospect', 'Quotation Sent'],
+        statuses: ['hot', 'warm', 'Prospect', 'Quotation Sent'],
       })
       .orderBy('enquiry.expectedValue', 'DESC')
       .getMany();
@@ -437,13 +439,13 @@ export class ReportsService {
 
         const closedSales = await query
           .clone()
-          .andWhere('enquiry.interestStatus = :status', { status: 'Sale Closed' })
+          .andWhere('enquiry.interestStatus IN (:...statuses)', { statuses: ['sale_closed', 'Sale Closed'] })
           .getCount();
 
         const prospects = await query
           .clone()
           .andWhere('enquiry.interestStatus IN (:...statuses)', {
-            statuses: ['Prospect', 'Quotation Sent'],
+            statuses: ['hot', 'warm', 'Prospect', 'Quotation Sent'],
           })
           .getCount();
 

@@ -1,11 +1,9 @@
 export type InterestStatus =
-  | 'enquiry'
-  | 'follow_up'
-  | 'new_call'
+  | 'hot'
+  | 'warm'
+  | 'cold'
   | 'not_interested'
-  | 'owner_not_available'
-  | 'prospect'
-  | 'quotation_sent'
+  | 'follow_up'
   | 'sale_closed'
   | 'converted';
 
@@ -117,12 +115,7 @@ export const LEAD_SOURCE_OPTIONS: { value: string; label: string }[] = [
 ];
 
 export const INTEREST_STATUS_OPTIONS: { value: InterestStatus; label: string; color: string }[] = [
-  { value: 'enquiry', label: 'Enquiry', color: 'blue' },
-  { value: 'follow_up', label: 'Follow Up', color: 'cyan' },
-  { value: 'new_call', label: 'New Call', color: 'purple' },
-  { value: 'not_interested', label: 'Not Interested', color: 'red' },
-  { value: 'owner_not_available', label: 'Owner Not Available', color: 'orange' },
-  { value: 'prospect', label: 'Prospect', color: 'gold' },
-  { value: 'quotation_sent', label: 'Quotation Sent', color: 'lime' },
-  { value: 'sale_closed', label: 'Sale Closed', color: 'green' },
+  { value: 'hot', label: 'Hot', color: 'red' },
+  { value: 'warm', label: 'Warm', color: 'orange' },
+  { value: 'cold', label: 'Cold', color: 'blue' },
 ];

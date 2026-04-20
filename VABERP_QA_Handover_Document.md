@@ -1,14 +1,14 @@
 # VABERP — QA Handover Document & Test Cases
 **Version:** 1.0  
 **Date:** 2026-04-07  
-**Prepared by:** Senior QA Lead  
+**Prepared by:** Veeranki.Girish  
 **Platform:** VAB Enterprise ERP — Manufacturing Operations Platform  
 
 ---
 
 ---
 
-# PART 1: QA HANDOVER DOCUMENT
+# PART 1: Developer Handover Docummnt
 
 ---
 
@@ -18,7 +18,7 @@
 |---|---|
 | Product Name | VABERP — VAB Enterprise ERP |
 | Platform | Web-based (Next.js 14 Frontend · NestJS Backend · PostgreSQL) |
-| App URL | http://64.235.43.187:2262 |
+| App URL | https://vaberp.com |
 | API URL | http://64.235.43.187:2261 |
 | Purpose | End-to-end manufacturing operations management |
 | Primary Users | Admin, Manager, Employee |

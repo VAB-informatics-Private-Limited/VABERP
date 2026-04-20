@@ -803,47 +803,51 @@ export default function PurchaseOrderDetailPage() {
               View Quotation
             </Button>
           )}
-          {po.sent_to_manufacturing ? (
+          {po.status !== 'cancelled' && (
+            po.sent_to_manufacturing ? (
+              <Button
+                type="primary"
+                icon={<ToolOutlined />}
+                onClick={() => router.push(`/manufacturing/po/${poId}`)}
+                style={{ background: '#1677ff', borderColor: '#1677ff' }}
+              >
+                In Manufacturing
+              </Button>
+            ) : (
+              <Button
+                icon={<ToolOutlined />}
+                loading={manufacturingMutation.isPending}
+                onClick={() =>
+                  Modal.confirm({
+                    title: 'Transfer to Manufacturing?',
+                    content: `This will transfer the purchase order with ${po.items?.length || 0} item(s) to the manufacturing team for review and inventory approval.`,
+                    okText: 'Transfer',
+                    onOk: () => manufacturingMutation.mutateAsync(),
+                  })
+                }
+                className="border-blue-400 text-blue-600"
+              >
+                Transfer to Manufacturing
+              </Button>
+            )
+          )}
+          {!['cancelled', 'delivered', 'dispatched'].includes(po.status) && (
             <Button
-              type="primary"
-              icon={<ToolOutlined />}
-              onClick={() => router.push(`/manufacturing/po/${poId}`)}
-              style={{ background: '#1677ff', borderColor: '#1677ff' }}
+              icon={po.status === 'on_hold' ? <PlayCircleOutlined /> : <PauseCircleOutlined />}
+              loading={holdMutation.isPending}
+              onClick={() => {
+                if (po.status === 'on_hold') {
+                  holdMutation.mutate(undefined);
+                } else {
+                  setHoldReason('');
+                  setHoldModalOpen(true);
+                }
+              }}
+              className={po.status === 'on_hold' ? 'border-green-500 text-green-600' : 'border-yellow-500 text-yellow-600'}
             >
-              In Manufacturing
-            </Button>
-          ) : (
-            <Button
-              icon={<ToolOutlined />}
-              loading={manufacturingMutation.isPending}
-              onClick={() =>
-                Modal.confirm({
-                  title: 'Transfer to Manufacturing?',
-                  content: `This will transfer the purchase order with ${po.items?.length || 0} item(s) to the manufacturing team for review and inventory approval.`,
-                  okText: 'Transfer',
-                  onOk: () => manufacturingMutation.mutateAsync(),
-                })
-              }
-              className="border-blue-400 text-blue-600"
-            >
-              Transfer to Manufacturing
+              {po.status === 'on_hold' ? 'Resume Order' : 'Hold Order'}
             </Button>
           )}
-          <Button
-            icon={po.status === 'on_hold' ? <PlayCircleOutlined /> : <PauseCircleOutlined />}
-            loading={holdMutation.isPending}
-            onClick={() => {
-              if (po.status === 'on_hold') {
-                holdMutation.mutate(undefined);
-              } else {
-                setHoldReason('');
-                setHoldModalOpen(true);
-              }
-            }}
-            className={po.status === 'on_hold' ? 'border-green-500 text-green-600' : 'border-yellow-500 text-yellow-600'}
-          >
-            {po.status === 'on_hold' ? 'Resume Order' : 'Hold Order'}
-          </Button>
           {!['cancelled', 'delivered', 'dispatched'].includes(po.status) && (
             <Button
               danger

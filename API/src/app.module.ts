@@ -59,6 +59,7 @@ import { WasteInventoryModule } from './modules/waste-inventory/waste-inventory.
 import { WasteDisposalModule } from './modules/waste-disposal/waste-disposal.module';
 import { WastePartiesModule } from './modules/waste-parties/waste-parties.module';
 import { WasteAnalyticsModule } from './modules/waste-analytics/waste-analytics.module';
+import { EnterpriseBrandingModule } from './modules/enterprise-branding/enterprise-branding.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import databaseConfig from './config/database.config';
 import jwtConfig from './config/jwt.config';
@@ -154,6 +155,7 @@ import jwtConfig from './config/jwt.config';
     WasteDisposalModule,
     WastePartiesModule,
     WasteAnalyticsModule,
+    EnterpriseBrandingModule,
     ScheduleModule.forRoot(),
   ],
   providers: [

@@ -3,7 +3,7 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiQuery } from '@nestjs/swagger';
 import { PurchaseOrdersService } from './purchase-orders.service';
-import { EnterpriseId, CurrentUser, RequirePermission, OwnDataOnly, CurrentUserId } from '../../common/decorators';
+import { EnterpriseId, CurrentUser, RequirePermission, OwnDataOnly, CurrentUserId, DataStartDate } from '../../common/decorators';
 import { CreatePurchaseOrderDto } from './dto/create-purchase-order.dto';
 
 @ApiTags('Purchase Orders')
@@ -20,6 +20,7 @@ export class PurchaseOrdersController {
   @RequirePermission('orders', 'purchase_orders', 'view')
   async findAll(
     @EnterpriseId() enterpriseId: number,
+    @DataStartDate() dataStartDate: Date | null,
     @CurrentUser() user: any,
     @OwnDataOnly() ownDataOnly: boolean,
     @CurrentUserId() currentUserId: number,
@@ -28,9 +29,8 @@ export class PurchaseOrdersController {
     @Query('status') status?: string,
   ) {
     const isManager = user?.isReportingHead === true && user?.type === 'employee';
-    const effectiveOwnDataOnly = ownDataOnly || (user?.type === 'employee' && !user?.isReportingHead);
     const effectiveManagerUserId = isManager ? currentUserId : undefined;
-    return this.service.findAll(enterpriseId, page, limit, status, effectiveOwnDataOnly, currentUserId, effectiveManagerUserId);
+    return this.service.findAll(enterpriseId, page, limit, status, dataStartDate, ownDataOnly, currentUserId, effectiveManagerUserId);
   }
 
   @Get(':id')

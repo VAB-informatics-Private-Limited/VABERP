@@ -48,6 +48,9 @@ export class Enterprise {
   @Column({ nullable: true })
   website: string;
 
+  @Column({ unique: true, nullable: true })
+  slug: string;
+
   @Column({ default: 'active' })
   status: string;
 

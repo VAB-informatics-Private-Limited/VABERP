@@ -10,6 +10,7 @@ import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { Employee } from '../employees/entities/employee.entity';
 import { Enterprise } from '../enterprises/entities/enterprise.entity';
+import { EnterpriseBranding } from '../enterprise-branding/entities/enterprise-branding.entity';
 import { MenuPermission } from '../employees/entities/menu-permission.entity';
 import {
   EmployeeLoginDto,
@@ -30,6 +31,8 @@ export class AuthService {
     private employeeRepository: Repository<Employee>,
     @InjectRepository(Enterprise)
     private enterpriseRepository: Repository<Enterprise>,
+    @InjectRepository(EnterpriseBranding)
+    private brandingRepository: Repository<EnterpriseBranding>,
     @InjectRepository(MenuPermission)
     private permissionRepository: Repository<MenuPermission>,
     private jwtService: JwtService,
@@ -120,11 +123,30 @@ export class AuthService {
       throw new UnauthorizedException('Your enterprise account is blocked');
     }
 
+    // Generate 6-digit OTP and save
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    await this.enterpriseRepository.update(enterprise.id, { emailOtp: otp });
+
+    // Send OTP via email
+    if (this.emailService.isConfigured()) {
+      await this.emailService.sendEmail({
+        to: dto.email,
+        subject: 'Your Login OTP',
+        body: `Your OTP for login is: <b>${otp}</b>\n\nThis OTP is valid for a single use. Do not share it with anyone.\n\nRegards,\n${enterprise.businessName}`,
+      });
+    }
+
+    const branding = await this.brandingRepository.findOne({
+      where: { enterpriseId: enterprise.id },
+    });
+
     return {
-      message: 'Email verified successfully',
+      message: 'OTP sent to your email',
       data: {
         email: dto.email,
         businessName: enterprise.businessName,
+        slug: enterprise.slug,
+        branding: branding || null,
       },
     };
   }
@@ -138,6 +160,10 @@ export class AuthService {
       throw new UnauthorizedException('Enterprise not found');
     }
 
+    if (!enterprise.emailOtp) {
+      throw new BadRequestException('No OTP was requested. Please verify your email first.');
+    }
+
     if (enterprise.emailOtp !== dto.otp) {
       throw new BadRequestException('Invalid OTP');
     }
@@ -148,11 +174,40 @@ export class AuthService {
       emailVerified: true,
     });
 
+    // Activate pending enterprises on successful OTP login
+    if (enterprise.status === 'pending') {
+      await this.enterpriseRepository.update(enterprise.id, { status: 'active' });
+      enterprise.status = 'active';
+    }
+
+    const payload = {
+      sub: enterprise.id,
+      email: enterprise.email,
+      type: 'enterprise' as const,
+      enterpriseId: enterprise.id,
+      name: enterprise.businessName,
+    };
+
     return {
-      message: 'OTP verified successfully',
+      message: 'Login successful',
       data: {
-        email: dto.email,
-        verified: true,
+        user: {
+          id: enterprise.id,
+          businessName: enterprise.businessName,
+          email: enterprise.email,
+          mobile: enterprise.mobile,
+          city: enterprise.city,
+          state: enterprise.state,
+          status: enterprise.status,
+          expiryDate: enterprise.expiryDate,
+          planId: enterprise.planId,
+          subscriptionStartDate: enterprise.subscriptionStartDate,
+          subscriptionStatus: this.computeEnterpriseSubscriptionStatus(enterprise),
+          isLocked: enterprise.isLocked ?? false,
+        },
+        permissions: buildFullAccessPermissions(),
+        token: this.jwtService.sign(payload),
+        type: 'enterprise',
       },
     };
   }

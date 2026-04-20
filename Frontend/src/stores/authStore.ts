@@ -56,6 +56,10 @@ export const useAuthStore = create<AuthState>()(
           permissions: null,
           token: null,
         });
+        // Clear branding on logout (lazy import to avoid circular deps)
+        import('@/stores/brandingStore').then(({ useBrandingStore }) => {
+          useBrandingStore.getState().clearBranding();
+        });
       },
 
       setPermissions: (permissions) => {

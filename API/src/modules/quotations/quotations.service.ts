@@ -73,7 +73,7 @@ export class QuotationsService {
     }
 
     if (dataStartDate) {
-      query.andWhere('quotation.quotationDate >= :dataStartDate', { dataStartDate });
+      query.andWhere('quotation.createdDate >= :dataStartDate', { dataStartDate });
     }
     if (ownDataOnly && currentUserId) {
       query.andWhere('quotation.createdBy = :currentUserId', { currentUserId });
