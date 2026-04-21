@@ -28,7 +28,7 @@ import type { RcFile } from 'antd/es/upload/interface';
 
 const { Title, Text } = Typography;
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://64.235.43.187:2261';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:2261';
 
 // ─── Sample document data for preview ────────────────────────────────────────
 const SAMPLE_ITEMS = [
