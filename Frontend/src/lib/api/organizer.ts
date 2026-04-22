@@ -146,6 +146,7 @@ export interface OrganizerFilters {
   entityId?: number;
   dueBefore?: string;
   dueAfter?: string;
+  search?: string;
   page?: number;
   limit?: number;
 }

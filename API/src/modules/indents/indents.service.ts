@@ -104,7 +104,7 @@ export class IndentsService {
       entityId: savedIndent.id,
       action: 'create',
       description: `Indent ${indentNumber} created from inventory`,
-    }).catch(() => {});
+    }).catch((err) => console.error('[audit/bg failed]', err?.message || err));
 
     return created;
   }
@@ -165,7 +165,7 @@ export class IndentsService {
       entityId: savedIndent.id,
       action: 'create',
       description: `Indent ${indentNumber} created from material request #${mrId}`,
-    }).catch(() => {});
+    }).catch((err) => console.error('[audit/bg failed]', err?.message || err));
 
     return created;
   }
@@ -432,7 +432,7 @@ export class IndentsService {
       action: 'update',
       description: `Indent item #${itemId} updated`,
       newValues: updateData,
-    }).catch(() => {});
+    }).catch((err) => console.error('[audit/bg failed]', err?.message || err));
 
     return this.findOne(indentId, enterpriseId);
   }
@@ -458,7 +458,7 @@ export class IndentsService {
       entityId: indentId,
       action: 'delete',
       description: `Indent item #${itemId} removed`,
-    }).catch(() => {});
+    }).catch((err) => console.error('[audit/bg failed]', err?.message || err));
 
     return this.findOne(indentId, enterpriseId);
   }
@@ -477,7 +477,7 @@ export class IndentsService {
       action: 'status_change',
       description: `Indent ${indent.indentNumber} cancelled`,
       newValues: { status: 'cancelled' },
-    }).catch(() => {});
+    }).catch((err) => console.error('[audit/bg failed]', err?.message || err));
 
     return this.findOne(id, enterpriseId);
   }
@@ -549,7 +549,7 @@ export class IndentsService {
       action: 'receive',
       description: `Goods received for indent: ${receivedItems.map((i) => `${i.itemName} x${i.quantity}`).join(', ')}`,
       newValues: { receivedItems },
-    }).catch(() => {});
+    }).catch((err) => console.error('[audit/bg failed]', err?.message || err));
 
     return {
       ...result,
@@ -644,7 +644,7 @@ export class IndentsService {
       action: 'release',
       description: `Indent released to inventory: ${updatedMrItems.join(', ')}`,
       newValues: { releasedItems: updatedMrItems },
-    }).catch(() => {});
+    }).catch((err) => console.error('[audit/bg failed]', err?.message || err));
 
     return {
       ...result,
@@ -724,7 +724,7 @@ export class IndentsService {
       action: 'release',
       description: `Indent released — GRN ${grnNumber} created with ${grnItems.length} item(s)`,
       newValues: { grnId: grn.id, grnNumber, releasedItems: grnItems },
-    }).catch(() => {});
+    }).catch((err) => console.error('[audit/bg failed]', err?.message || err));
 
     return {
       ...result,
@@ -810,7 +810,7 @@ export class IndentsService {
       action: 'create',
       description: `Replacement indent ${indentNumber} created for parent indent #${parentIndentId}`,
       newValues: { parentIndentId, rejectionReason },
-    }).catch(() => {});
+    }).catch((err) => console.error('[audit/bg failed]', err?.message || err));
 
     return created;
   }
@@ -908,7 +908,7 @@ export class IndentsService {
       action: 'status_change',
       description: `${itemsToReset.length} item(s) reset for re-ordering`,
       newValues: { reorderedCount: itemsToReset.length },
-    }).catch(() => {});
+    }).catch((err) => console.error('[audit/bg failed]', err?.message || err));
 
     return {
       ...result,

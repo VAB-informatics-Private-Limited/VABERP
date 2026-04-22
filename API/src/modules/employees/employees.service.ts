@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
@@ -467,7 +467,7 @@ export class EmployeesService {
       entityId: savedEmployee.id,
       action: 'create',
       description: `Created employee ${savedEmployee.firstName ?? ''} ${savedEmployee.lastName ?? ''} (${savedEmployee.email})`.trim(),
-    }).catch(() => {});
+    }).catch((err) => console.error('[audit/bg failed]', err?.message || err));
 
     return {
       message: 'Employee created successfully',
@@ -533,7 +533,7 @@ export class EmployeesService {
       entityId: id,
       action: 'update',
       description: `Updated employee ${employee.firstName ?? ''} ${employee.lastName ?? ''} (${employee.email})`.trim(),
-    }).catch(() => {});
+    }).catch((err) => console.error('[audit/bg failed]', err?.message || err));
 
     return this.findOne(id, enterpriseId);
   }
@@ -545,6 +545,24 @@ export class EmployeesService {
 
     if (!employee) {
       throw new NotFoundException('Employee not found');
+    }
+
+    // Prevent self-deletion
+    if (user?.id === id && user?.type === 'employee') {
+      throw new BadRequestException('You cannot delete your own employee account.');
+    }
+
+    // Block delete if this employee is a reporting manager for other active employees
+    const manager = this.employeeRepository.manager;
+    const [reports] = await manager.query(
+      `SELECT COUNT(*)::int AS cnt FROM employees
+       WHERE reporting_to = $1 AND enterprise_id = $2 AND status = 'active'`,
+      [id, enterpriseId],
+    );
+    if (reports && Number(reports.cnt) > 0) {
+      throw new BadRequestException(
+        `Cannot delete ${employee.firstName} ${employee.lastName || ''}. They are the reporting manager for ${reports.cnt} active employee(s). Please reassign those employees' reporting manager first.`,
+      );
     }
 
     await this.permissionRepository.delete({ employeeId: id });
@@ -559,7 +577,7 @@ export class EmployeesService {
       entityId: id,
       action: 'delete',
       description: `Deleted employee ${employee.firstName ?? ''} ${employee.lastName ?? ''} (${employee.email})`.trim(),
-    }).catch(() => {});
+    }).catch((err) => console.error('[audit/bg failed]', err?.message || err));
 
     return {
       message: 'Employee deleted successfully',

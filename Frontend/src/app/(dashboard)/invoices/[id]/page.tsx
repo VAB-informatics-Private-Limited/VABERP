@@ -491,9 +491,9 @@ export default function InvoiceDetailPage() {
         title={`All Invoices — ${invoice.customer_name}`}
         className="card-shadow mt-4 print:hidden"
         extra={
-          customerBalanceData?.data && (
-            <span className={`text-sm font-semibold ${customerBalanceData.data.totalBalance > 0 ? 'text-red-500' : 'text-green-600'}`}>
-              Outstanding: ₹{fmt(customerBalanceData.data.totalBalance)}
+          customerBalanceData?.data?.totalBalance !== undefined && (
+            <span className={`text-sm font-semibold ${Number(customerBalanceData.data.totalBalance) > 0 ? 'text-red-500' : 'text-green-600'}`}>
+              Outstanding: ₹{fmt(Number(customerBalanceData.data.totalBalance) || 0)}
             </span>
           )
         }

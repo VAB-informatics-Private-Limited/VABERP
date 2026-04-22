@@ -91,7 +91,7 @@ export class ServiceBookingsService {
         year: 'numeric',
       });
       const msg = `Hi ${full.serviceProduct.customerName || 'Customer'}, your service has been booked for ${dateStr}${dto.scheduledSlot ? ' (' + dto.scheduledSlot + ')' : ''}. We will confirm shortly.`;
-      this.smsService.sendSms(full.serviceProduct.customerMobile, msg).catch(() => {});
+      this.smsService.sendSms(full.serviceProduct.customerMobile, msg).catch((err) => console.error('[audit/bg failed]', err?.message || err));
     }
 
     return this.findOne(saved.id, enterpriseId);

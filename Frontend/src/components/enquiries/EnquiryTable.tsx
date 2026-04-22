@@ -33,8 +33,9 @@ export function EnquiryTable({ data, loading, pagination }: EnquiryTableProps) {
       message.success('Enquiry deleted successfully');
       queryClient.invalidateQueries({ queryKey: ['enquiries'] });
     },
-    onError: () => {
-      message.error('Failed to delete enquiry');
+    onError: (err: any) => {
+      const msg = err?.response?.data?.message || err?.message || 'Failed to delete enquiry';
+      message.error({ content: msg, duration: 6 });
     },
   });
 

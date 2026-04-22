@@ -186,7 +186,7 @@ export class ProformaInvoicesService {
       action: 'create',
       description: `Created proforma invoice ${piNumber} for "${createDto.customerName}"`,
       newValues: { piNumber, grandTotal },
-    }).catch(() => {});
+    }).catch((err) => console.error('[audit/bg failed]', err?.message || err));
 
     return this.findOne(savedPi.id, enterpriseId);
   }
@@ -216,7 +216,7 @@ export class ProformaInvoicesService {
       action: 'update',
       description: `Proforma invoice ${pi.piNumber} status updated to ${status}`,
       newValues: { status },
-    }).catch(() => {});
+    }).catch((err) => console.error('[audit/bg failed]', err?.message || err));
 
     return this.findOne(id, enterpriseId);
   }
@@ -309,7 +309,7 @@ export class ProformaInvoicesService {
       action: 'convert',
       description: `Proforma invoice ${pi.piNumber} converted to Sales Order ${savedSo.orderNumber}`,
       newValues: { status: 'converted', salesOrderId: savedSo.id, orderNumber: savedSo.orderNumber },
-    }).catch(() => {});
+    }).catch((err) => console.error('[audit/bg failed]', err?.message || err));
 
     return this.findOne(piId, enterpriseId);
   }

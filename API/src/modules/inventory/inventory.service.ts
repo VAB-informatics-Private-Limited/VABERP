@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, In } from 'typeorm';
+import { Repository, In, DataSource } from 'typeorm';
 import { Inventory } from './entities/inventory.entity';
 import { InventoryLedger } from './entities/inventory-ledger.entity';
 import { Product } from '../products/entities/product.entity';
@@ -24,6 +24,7 @@ export class InventoryService {
     private enterpriseRepository: Repository<Enterprise>,
     @InjectRepository(MaterialRequestItem)
     private mrItemRepository: Repository<MaterialRequestItem>,
+    private dataSource: DataSource,
   ) {}
 
   async findAll(
@@ -133,38 +134,32 @@ export class InventoryService {
       throw new NotFoundException('Product not found');
     }
 
-    // Check if inventory already exists for this product — update it instead of rejecting
-    const existing = await this.inventoryRepository.findOne({
-      where: { productId: createDto.productId, enterpriseId },
+    // Wrap read-modify-write in a transaction so two concurrent create calls for the same product
+    // cannot both reach the "insert" branch and create duplicate rows.
+    return this.dataSource.transaction(async (manager) => {
+      const existing = await manager.findOne(Inventory, {
+        where: { productId: createDto.productId, enterpriseId },
+        lock: { mode: 'pessimistic_write' },
+      });
+
+      if (existing) {
+        if (createDto.currentStock !== undefined) existing.currentStock = createDto.currentStock;
+        if (createDto.minStockLevel !== undefined) existing.minStockLevel = createDto.minStockLevel;
+        if (createDto.maxStockLevel !== undefined) existing.maxStockLevel = createDto.maxStockLevel;
+        if (createDto.warehouseLocation !== undefined) existing.warehouseLocation = createDto.warehouseLocation;
+        existing.availableStock = Number(existing.currentStock || 0) - Number(existing.reservedStock || 0);
+        const saved = await manager.save(Inventory, existing);
+        return { message: 'Inventory updated successfully', data: saved };
+      }
+
+      const inventory = manager.create(Inventory, {
+        ...createDto,
+        enterpriseId,
+        availableStock: Number(createDto.currentStock || 0) - Number(createDto.reservedStock || 0),
+      });
+      const saved = await manager.save(Inventory, inventory);
+      return { message: 'Inventory created successfully', data: saved };
     });
-
-    if (existing) {
-      // Update the existing inventory record
-      if (createDto.currentStock !== undefined) existing.currentStock = createDto.currentStock;
-      if (createDto.minStockLevel !== undefined) existing.minStockLevel = createDto.minStockLevel;
-      if (createDto.maxStockLevel !== undefined) existing.maxStockLevel = createDto.maxStockLevel;
-      if (createDto.warehouseLocation !== undefined) existing.warehouseLocation = createDto.warehouseLocation;
-      existing.availableStock = existing.currentStock - (existing.reservedStock || 0);
-
-      const saved = await this.inventoryRepository.save(existing);
-      return {
-        message: 'Inventory updated successfully',
-        data: saved,
-      };
-    }
-
-    const inventory = this.inventoryRepository.create({
-      ...createDto,
-      enterpriseId,
-      availableStock: (createDto.currentStock || 0) - (createDto.reservedStock || 0),
-    });
-
-    const saved = await this.inventoryRepository.save(inventory);
-
-    return {
-      message: 'Inventory created successfully',
-      data: saved,
-    };
   }
 
   async update(id: number, enterpriseId: number, updateDto: Partial<CreateInventoryDto>) {

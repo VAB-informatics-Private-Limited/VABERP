@@ -1,6 +1,6 @@
 'use client';
 
-import { Form, Input, Select, DatePicker, Button, Card, Row, Col } from 'antd';
+import { Form, Input, Select, AutoComplete, DatePicker, Button, Card, Row, Col } from 'antd';
 import { ArrowLeftOutlined } from '@ant-design/icons';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
@@ -8,7 +8,10 @@ import { useState, useEffect, useMemo } from 'react';
 import { EnquiryFormData, INTEREST_STATUS_OPTIONS, Enquiry } from '@/types/enquiry';
 import { getSources } from '@/lib/api/sources';
 import { checkEnquiryMobile } from '@/lib/api/enquiries';
-import { getCountries, getStates, Country, State } from '@/lib/api/locations';
+import {
+  getCountries, getStates, getCities, getPincodes, createPincode,
+  Country, State, City, Pincode,
+} from '@/lib/api/locations';
 import dayjs from 'dayjs';
 
 interface EnquiryFormProps {
@@ -28,6 +31,8 @@ export function EnquiryForm({ initialData, onSubmit, loading, submitText, isEdit
 
   const [mobileWarning, setMobileWarning] = useState<string | null>(null);
   const [selectedCountryId, setSelectedCountryId] = useState<number | null>(null);
+  const [selectedStateId, setSelectedStateId] = useState<number | null>(null);
+  const [selectedCityId, setSelectedCityId] = useState<number | null>(null);
 
   const { data: sourcesData } = useQuery({
     queryKey: ['sources'],
@@ -63,6 +68,38 @@ export function EnquiryForm({ initialData, onSubmit, loading, submitText, isEdit
     staleTime: LOCATION_STALE_TIME,
   });
 
+  // In edit mode, resolve stateId from stored state name once states load
+  useEffect(() => {
+    if (isEdit && initialData?.state && states.length > 0 && selectedStateId === null) {
+      const match = states.find((s) => s.name === initialData.state);
+      if (match) setSelectedStateId(match.id);
+    }
+  }, [isEdit, initialData, states, selectedStateId]);
+
+  // Cities cascade: fetch when a state is selected
+  const { data: cities = [] } = useQuery<City[]>({
+    queryKey: ['cities', selectedStateId],
+    queryFn: () => getCities(selectedStateId!),
+    enabled: !!selectedStateId,
+    staleTime: LOCATION_STALE_TIME,
+  });
+
+  // In edit mode, resolve cityId once cities load
+  useEffect(() => {
+    if (isEdit && initialData?.city && cities.length > 0 && selectedCityId === null) {
+      const match = cities.find((c) => c.name === initialData.city);
+      if (match) setSelectedCityId(match.id);
+    }
+  }, [isEdit, initialData, cities, selectedCityId]);
+
+  // Pincodes cascade: fetch when a city is selected
+  const { data: pincodes = [] } = useQuery<Pincode[]>({
+    queryKey: ['pincodes', selectedCityId],
+    queryFn: () => getPincodes(selectedCityId!),
+    enabled: !!selectedCityId,
+    staleTime: LOCATION_STALE_TIME,
+  });
+
   // Set India as default country field value once countries load (new form only)
   useEffect(() => {
     if (!isEdit && indiaId && !form.getFieldValue('country')) {
@@ -74,7 +111,31 @@ export function EnquiryForm({ initialData, onSubmit, loading, submitText, isEdit
   const handleCountryChange = (value: string) => {
     const country = countries.find((c) => c.name === value);
     setSelectedCountryId(country?.id ?? null);
-    form.setFieldsValue({ state: undefined });
+    setSelectedStateId(null);
+    setSelectedCityId(null);
+    form.setFieldsValue({ state: undefined, city: undefined, pincode: undefined });
+  };
+
+  const handleStateChange = (value: string) => {
+    const state = states.find((s) => s.name === value);
+    setSelectedStateId(state?.id ?? null);
+    setSelectedCityId(null);
+    form.setFieldsValue({ city: undefined, pincode: undefined });
+  };
+
+  const handleCityChange = (value: string) => {
+    const city = cities.find((c) => c.name === value);
+    setSelectedCityId(city?.id ?? null);
+    form.setFieldsValue({ pincode: undefined });
+  };
+
+  // Silently persist a pincode the user types that isn't already in the master
+  const handlePincodeBlur = () => {
+    const code = form.getFieldValue('pincode');
+    if (!selectedCityId || !code) return;
+    if (!/^[0-9]{6}$/.test(code)) return;
+    if (pincodes.some((p) => p.code === code)) return;
+    createPincode(selectedCityId, code).catch(() => {});
   };
 
   const handleMobileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -282,6 +343,7 @@ export function EnquiryForm({ initialData, onSubmit, loading, submitText, isEdit
                 placeholder={effectiveCountryId ? 'Select state' : 'Select country first'}
                 allowClear
                 disabled={!effectiveCountryId}
+                onChange={handleStateChange}
                 filterOption={(input, option) =>
                   (option?.label as string)?.toLowerCase().includes(input.toLowerCase())
                 }
@@ -294,12 +356,36 @@ export function EnquiryForm({ initialData, onSubmit, loading, submitText, isEdit
         <Row gutter={16}>
           <Col xs={24} md={12}>
             <Form.Item name="city" label="City">
-              <Input placeholder="Enter city" allowClear />
+              <Select
+                showSearch
+                placeholder={selectedStateId ? 'Select city' : 'Select state first'}
+                allowClear
+                disabled={!selectedStateId}
+                onChange={handleCityChange}
+                filterOption={(input, option) =>
+                  (option?.label as string)?.toLowerCase().includes(input.toLowerCase())
+                }
+                options={cities.map((c) => ({ value: c.name, label: c.name }))}
+                notFoundContent={selectedStateId ? 'No cities available for this state' : null}
+              />
             </Form.Item>
           </Col>
           <Col xs={24} md={12}>
             <Form.Item name="pincode" label="Pincode">
-              <Input placeholder="Enter pincode" maxLength={6} />
+              <AutoComplete
+                placeholder={
+                  selectedCityId
+                    ? (pincodes.length ? 'Select or type pincode' : 'Type 6-digit pincode')
+                    : 'Select city first'
+                }
+                allowClear
+                disabled={!selectedCityId}
+                onBlur={handlePincodeBlur}
+                filterOption={(input, option) =>
+                  ((option?.value as string) ?? '').includes(input)
+                }
+                options={pincodes.map((p) => ({ value: p.code, label: p.code }))}
+              />
             </Form.Item>
           </Col>
         </Row>

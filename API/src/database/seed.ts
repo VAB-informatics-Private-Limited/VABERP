@@ -33,10 +33,17 @@ async function seed() {
       console.log(`Enterprise "admin@vab.com" already exists and is active.`);
     }
   } else {
-    const hashedPassword = await bcrypt.hash('admin123', 10);
+    const seedPassword = process.env.SEED_ADMIN_PASSWORD;
+    if (!seedPassword) {
+      console.error('Refusing to create seed enterprise: SEED_ADMIN_PASSWORD env var is not set.');
+      await dataSource.destroy();
+      process.exit(1);
+    }
+    const seedEmail = process.env.SEED_ADMIN_EMAIL || 'admin@vab.com';
+    const hashedPassword = await bcrypt.hash(seedPassword, 10);
     await enterpriseRepo.save({
       business_name: 'VAB Enterprise',
-      email: 'admin@vab.com',
+      email: seedEmail,
       mobile: '9999999999',
       password: hashedPassword,
       city: 'Default',
@@ -45,7 +52,7 @@ async function seed() {
       email_verified: true,
       mobile_verified: true,
     });
-    console.log(`Enterprise "admin@vab.com" created with password "admin123".`);
+    console.log(`Enterprise "${seedEmail}" created (password from SEED_ADMIN_PASSWORD env).`);
   }
 
   await dataSource.destroy();

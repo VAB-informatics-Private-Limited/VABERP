@@ -204,6 +204,37 @@ export default function VendorsPage() {
 
   const handleSubmit = async () => {
     const values = await form.validateFields();
+
+    // Before creating a NEW vendor with a mobile number, check if it is already in use.
+    if (!editingSupplier && values.phone) {
+      try {
+        const all = await getSupplierList({ page: 1, pageSize: 500 });
+        const match = (all?.data || []).find(
+          (s) => (s.phone || '').replace(/\D/g, '') === String(values.phone).replace(/\D/g, ''),
+        );
+        if (match) {
+          Modal.confirm({
+            title: 'Mobile number already exists',
+            content: (
+              <div>
+                This mobile number <strong>{values.phone}</strong> is already registered with vendor{' '}
+                <strong>{match.supplier_name}</strong> ({match.supplier_code}).
+                <br />
+                Do you still want to create a new vendor with the same number?
+              </div>
+            ),
+            okText: 'Create Anyway',
+            okButtonProps: { danger: true },
+            cancelText: 'Cancel',
+            onOk: () => createMutation.mutate(values),
+          });
+          return;
+        }
+      } catch {
+        // If the duplicate check fails for any reason, fall through to create.
+      }
+    }
+
     if (editingSupplier) {
       updateMutation.mutate({ id: editingSupplier.id, values });
     } else {
@@ -368,8 +399,15 @@ export default function VendorsPage() {
             <Form.Item name="contactPerson" label="Contact Person">
               <Input placeholder="Full name" />
             </Form.Item>
-            <Form.Item name="phone" label="Phone">
-              <Input placeholder="+91 98765 43210" />
+            <Form.Item
+              name="phone"
+              label="Phone"
+              rules={[
+                { required: true, message: 'Mobile number is required' },
+                { pattern: /^\d{10}$/, message: 'Mobile number must be exactly 10 digits' },
+              ]}
+            >
+              <Input placeholder="10-digit mobile" maxLength={10} />
             </Form.Item>
           </div>
 

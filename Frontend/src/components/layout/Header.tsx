@@ -65,8 +65,16 @@ export function Header({ collapsed, onToggle }: HeaderProps) {
     return name.slice(0, 2).toUpperCase();
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    // Tell server to clear the httpOnly access_token cookie
+    try {
+      const apiClient = (await import('@/lib/api/client')).default;
+      await apiClient.post('/auth/logout').catch(() => {});
+    } catch {
+      /* continue even if logout endpoint fails */
+    }
     logout();
+    queryClient.clear();
     router.push('/login');
   };
 

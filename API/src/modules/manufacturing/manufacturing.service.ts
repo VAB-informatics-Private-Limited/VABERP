@@ -21,6 +21,7 @@ import { CreateJobCardDto, UpdateStageDto, CreateProcessTemplateDto, CreateBomDt
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import { EmailService } from '../email/email.service';
 import { ServiceProductsService } from '../service-products/service-products.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 // Allowed status transitions — strict enforcement
 // Stock verification is handled by Inventory module, not Manufacturing
@@ -81,7 +82,29 @@ export class ManufacturingService {
     private emailService: EmailService,
     private dataSource: DataSource,
     private serviceProductsService: ServiceProductsService,
+    private notificationsService: NotificationsService,
   ) {}
+
+  // ========== Notifications ==========
+
+  private notifyJobCard(
+    enterpriseId: number,
+    jobCardId: number,
+    jobNumber: string,
+    title: string,
+    message: string,
+    type: string,
+  ) {
+    return this.notificationsService.create({
+      enterpriseId,
+      title,
+      message,
+      type,
+      module: 'manufacturing',
+      subModule: 'job-cards',
+      link: `/manufacturing/${jobCardId}`,
+    }).catch((err) => console.error('[audit/bg failed]', err?.message || err));
+  }
 
   // ========== Job Cards ==========
 
@@ -283,6 +306,15 @@ export class ManufacturingService {
 
     // Auto-create stage progress from active stage masters
     await this.initializeStagesForJobCard(savedJobCard);
+
+    this.notifyJobCard(
+      enterpriseId,
+      savedJobCard.id,
+      savedJobCard.jobNumber,
+      'New Job Card Created',
+      `Job card ${savedJobCard.jobNumber} has been created and is pending production.`,
+      'job_card_created',
+    );
 
     return this.findOne(savedJobCard.id, enterpriseId);
   }
@@ -566,6 +598,23 @@ export class ManufacturingService {
       newValues: { status },
     });
 
+    // Notifications on key transitions
+    if (status === 'in_process' && oldStatus !== 'in_process') {
+      this.notifyJobCard(
+        enterpriseId, id, jobCard.jobNumber,
+        'Job Card Started',
+        `Job card ${jobCard.jobNumber} has moved to production.`,
+        'job_card_in_process',
+      );
+    } else if (status === 'completed_production') {
+      this.notifyJobCard(
+        enterpriseId, id, jobCard.jobNumber,
+        'Production Completed',
+        `Job card ${jobCard.jobNumber} has finished production. Awaiting approval for dispatch.`,
+        'job_card_completed_production',
+      );
+    }
+
     return this.findOne(id, enterpriseId);
   }
 
@@ -678,6 +727,15 @@ export class ManufacturingService {
         oldValues: { status: oldStatus, quantityCompleted: jobCard.quantityCompleted },
         newValues: { status: updateData.status, quantityCompleted: totalCompleted },
       });
+
+      if (updateData.status === 'ready_for_approval') {
+        this.notifyJobCard(
+          enterpriseId, jobId, jobCard.jobNumber,
+          'Ready for Approval',
+          `Job card ${jobCard.jobNumber} has reached 100% and is ready for dispatch approval.`,
+          'job_card_ready_for_approval',
+        );
+      }
     }
 
     return this.findOne(jobId, enterpriseId);
@@ -790,6 +848,23 @@ export class ManufacturingService {
 
     await this.jobCardRepository.update(jobId, updateData);
 
+    // Notifications for dispatch transitions
+    if (action === 'approve') {
+      this.notifyJobCard(
+        enterpriseId, jobId, jobCard.jobNumber,
+        'Approved for Dispatch',
+        `Job card ${jobCard.jobNumber} has been approved and is ready to dispatch.`,
+        'job_card_approved_for_dispatch',
+      );
+    } else if (action === 'dispatch') {
+      this.notifyJobCard(
+        enterpriseId, jobId, jobCard.jobNumber,
+        'Job Card Dispatched',
+        `Job card ${jobCard.jobNumber} has been dispatched.`,
+        'job_card_dispatched',
+      );
+    }
+
     // When a job card is dispatched, check if ALL parent job cards for this PO are now dispatched
     // If so, update the Sales Order status to 'dispatched'
     if (action === 'dispatch' && jobCard.purchaseOrderId) {
@@ -839,7 +914,7 @@ export class ManufacturingService {
         customerName: jobCard.customerName,
         productId: jobCard.productId,
         actualCompletion: updateData.actualCompletion,
-      }).catch(() => {});
+      }).catch((err) => console.error('[audit/bg failed]', err?.message || err));
     }
 
     return this.findOne(jobId, enterpriseId);
@@ -1040,6 +1115,13 @@ export class ManufacturingService {
 
       // Add finished goods to inventory
       await this.addFinishedGoodsInventory(jobCard, userId);
+
+      this.notifyJobCard(
+        enterpriseId, jobId, jobCard.jobNumber,
+        'Production Completed',
+        `Job card ${jobCard.jobNumber} has finished all stages and is ready for approval.`,
+        'job_card_completed_production',
+      );
     }
 
     // Audit log

@@ -82,7 +82,12 @@ export class WasteInventoryService {
     if (filters.status) q.andWhere('wi.status = :status', { status: filters.status });
     if (filters.categoryId) q.andWhere('wi.categoryId = :categoryId', { categoryId: filters.categoryId });
     if (filters.sourceId) q.andWhere('wi.sourceId = :sourceId', { sourceId: filters.sourceId });
-    if (filters.search) q.andWhere('(wi.batchNo ILIKE :s OR wi.storageLocation ILIKE :s)', { s: `%${filters.search}%` });
+    if (filters.search) {
+      q.andWhere(
+        '(wi.batchNo ILIKE :s OR wi.storageLocation ILIKE :s OR cat.name ILIKE :s OR src.name ILIKE :s)',
+        { s: `%${filters.search}%` },
+      );
+    }
     if (filters.classification) q.andWhere('cat.classification = :cls', { cls: filters.classification });
 
     const [data, total] = await q

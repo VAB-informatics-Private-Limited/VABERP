@@ -26,11 +26,22 @@ function transformKeys(obj: unknown): unknown {
 
 export const apiClient = axios.create({
   baseURL: '/api',
+  withCredentials: true, // send httpOnly access_token cookie with every request
   headers: {
     'Content-Type': 'application/json',
   },
   transformRequest: [
-    (data) => {
+    (data, headers) => {
+      // FormData (file uploads) must pass through untouched so axios can emit
+      // multipart/form-data with the correct boundary. Also clear any manually-set
+      // Content-Type (boundary-less) header that would break the server parser.
+      if (typeof FormData !== 'undefined' && data instanceof FormData) {
+        if (headers) {
+          delete (headers as any)['Content-Type'];
+          delete (headers as any)['content-type'];
+        }
+        return data;
+      }
       if (data) {
         return JSON.stringify(transformKeys(data));
       }

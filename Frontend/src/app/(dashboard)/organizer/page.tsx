@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Table, Button, Input, Select, Tag, Modal, Form, DatePicker,
   Space, Tooltip, Statistic, Row, Col, Card, Tabs, Result,
@@ -10,7 +10,7 @@ import {
   PlusOutlined, CheckOutlined, ClockCircleOutlined,
   EditOutlined, DeleteOutlined, CalendarOutlined,
   BellOutlined, SyncOutlined, TeamOutlined, LockOutlined,
-  TagsOutlined,
+  TagsOutlined, SearchOutlined, ClearOutlined,
 } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
@@ -79,10 +79,34 @@ export default function OrganizerPage() {
   const qc = useQueryClient();
   const [activeTab, setActiveTab] = useState('all');
   const [page, setPage] = useState(1);
+  const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string | undefined>();
   const [priorityFilter, setPriorityFilter] = useState<string | undefined>();
   const [dateRange, setDateRange] = useState<[dayjs.Dayjs, dayjs.Dayjs] | null>(null);
+
+  // Debounce searchInput -> search so typing auto-filters the list without
+  // firing a request on every keystroke.
+  const searchDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (searchDebounce.current) clearTimeout(searchDebounce.current);
+    searchDebounce.current = setTimeout(() => {
+      setSearch(searchInput);
+      setPage(1);
+    }, 350);
+    return () => {
+      if (searchDebounce.current) clearTimeout(searchDebounce.current);
+    };
+  }, [searchInput]);
+
+  const handleClearAll = () => {
+    setSearchInput('');
+    setSearch('');
+    setStatusFilter(undefined);
+    setPriorityFilter(undefined);
+    setDateRange(null);
+    setPage(1);
+  };
 
   // Modals
   const [itemModal, setItemModal] = useState(false);
@@ -104,6 +128,7 @@ export default function OrganizerPage() {
     ...(statusFilter && { status: statusFilter }),
     ...(priorityFilter && { priority: priorityFilter }),
     ...(dateRange && { dueAfter: dateRange[0].toISOString(), dueBefore: dateRange[1].toISOString() }),
+    ...(search && search.trim() && { search: search.trim() }),
     page,
     limit: 30,
   };
@@ -384,26 +409,46 @@ export default function OrganizerPage() {
       </Row>
 
       {/* Filters */}
-      <div className="flex gap-3 mb-4 flex-wrap">
-        <Search placeholder="Search title..." allowClear style={{ width: 260 }}
-          onSearch={(v) => { setSearch(v); setPage(1); }} />
-        <Select placeholder="Status" allowClear style={{ width: 140 }}
-          onChange={(v) => { setStatusFilter(v); setPage(1); }}>
+      <div className="flex gap-3 mb-4 flex-wrap items-center">
+        <Input
+          placeholder="Search title, description, notes..."
+          prefix={<SearchOutlined />}
+          allowClear
+          style={{ width: 280 }}
+          value={searchInput}
+          onChange={(e) => setSearchInput(e.target.value)}
+        />
+        <Select
+          placeholder="Status"
+          allowClear
+          style={{ width: 140 }}
+          value={statusFilter}
+          onChange={(v) => { setStatusFilter(v); setPage(1); }}
+        >
           <Option value="open">Open</Option>
           <Option value="in_progress">In Progress</Option>
           <Option value="done">Done</Option>
           <Option value="snoozed">Snoozed</Option>
           <Option value="cancelled">Cancelled</Option>
         </Select>
-        <Select placeholder="Priority" allowClear style={{ width: 130 }}
-          onChange={(v) => { setPriorityFilter(v); setPage(1); }}>
+        <Select
+          placeholder="Priority"
+          allowClear
+          style={{ width: 130 }}
+          value={priorityFilter}
+          onChange={(v) => { setPriorityFilter(v); setPage(1); }}
+        >
           <Option value="low">Low</Option>
           <Option value="medium">Medium</Option>
           <Option value="high">High</Option>
           <Option value="critical">Critical</Option>
         </Select>
-        <RangePicker placeholder={['Due From', 'Due To']}
-          onChange={(v) => { setDateRange(v as [dayjs.Dayjs, dayjs.Dayjs] | null); setPage(1); }} />
+        <RangePicker
+          placeholder={['Due From', 'Due To']}
+          value={dateRange as any}
+          onChange={(v) => { setDateRange(v as [dayjs.Dayjs, dayjs.Dayjs] | null); setPage(1); }}
+        />
+        <Button icon={<ClearOutlined />} onClick={handleClearAll}>Clear</Button>
       </div>
 
       {/* Tabs + Table */}

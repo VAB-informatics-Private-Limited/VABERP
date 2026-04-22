@@ -2,6 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import helmet from 'helmet';
+import * as cookieParser from 'cookie-parser';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
@@ -16,6 +17,9 @@ async function bootstrap() {
 
   // Security headers
   app.use(helmet());
+
+  // Cookie parser (required so JWT strategy can read access_token cookie)
+  app.use(cookieParser());
 
   // Serve uploaded files (logos, etc.) statically
   // Override CORP header so the frontend (different port) can load images cross-origin
@@ -84,8 +88,21 @@ async function bootstrap() {
     .addTag('Reports', 'Reports and analytics')
     .build();
 
-  const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('docs', app, document);
+  // Only expose Swagger docs outside production
+  if (process.env.NODE_ENV !== 'production') {
+    const document = SwaggerModule.createDocument(app, config);
+    SwaggerModule.setup('docs', app, document);
+  }
+
+  // Health-check endpoint (public)
+  const httpAdapter = app.getHttpAdapter();
+  httpAdapter.get('/api/health', (_req: any, res: any) => {
+    res.status(200).json({
+      status: 'ok',
+      uptime: process.uptime(),
+      timestamp: new Date().toISOString(),
+    });
+  });
 
   const port = process.env.PORT || 3001;
   await app.listen(port);

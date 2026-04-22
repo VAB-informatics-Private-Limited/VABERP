@@ -90,7 +90,7 @@ export default function ServiceEventsPage() {
     enabled: !!enterpriseId,
   });
 
-  const { data: pendingCount } = useQuery({
+  const { data: pendingCount, isLoading: pendingLoading } = useQuery({
     queryKey: ['service-events-pending-count'],
     queryFn: getServiceEventsPendingCount,
     enabled: !!enterpriseId,
@@ -280,6 +280,7 @@ export default function ServiceEventsPage() {
               valueStyle={{ color: '#ff4d4f' }}
               prefix={<ExclamationCircleOutlined />}
               suffix={<span className="text-xs text-gray-400 ml-1">past due</span>}
+              loading={pendingLoading}
             />
           </Card>
         </Col>
@@ -291,6 +292,7 @@ export default function ServiceEventsPage() {
               valueStyle={{ color: '#fa8c16' }}
               prefix={<ClockCircleOutlined />}
               suffix={<span className="text-xs text-gray-400 ml-1">pending</span>}
+              loading={pendingLoading}
             />
           </Card>
         </Col>
@@ -302,6 +304,7 @@ export default function ServiceEventsPage() {
               valueStyle={{ color: '#1677ff' }}
               prefix={<CalendarOutlined />}
               suffix={<span className="text-xs text-gray-400 ml-1">appointments</span>}
+              loading={pendingLoading}
             />
           </Card>
         </Col>
@@ -312,6 +315,7 @@ export default function ServiceEventsPage() {
               value={data?.totalRecords ?? 0}
               valueStyle={{ color: '#52c41a' }}
               prefix={<CheckCircleOutlined />}
+              loading={isLoading}
             />
           </Card>
         </Col>

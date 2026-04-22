@@ -148,7 +148,7 @@ export class EnquiriesService {
       action: 'create',
       description: `Created enquiry ${saved.enquiryNumber} for "${saved.customerName}"`,
       newValues: { enquiryNumber: saved.enquiryNumber, interestStatus: saved.interestStatus },
-    }).catch(() => {});
+    }).catch((err) => console.error('[audit/bg failed]', err?.message || err));
 
     return {
       message: 'Enquiry created successfully',
@@ -177,7 +177,7 @@ export class EnquiriesService {
       action: 'update',
       description: `Updated enquiry for "${enquiry.customerName}"`,
       newValues: updateDto as Record<string, any>,
-    }).catch(() => {});
+    }).catch((err) => console.error('[audit/bg failed]', err?.message || err));
 
     return this.findOne(id, enterpriseId);
   }
@@ -191,9 +191,42 @@ export class EnquiriesService {
       throw new NotFoundException('Enquiry not found');
     }
 
-    // Delete related followups
-    await this.followupRepository.delete({ enquiryId: id });
-    await this.enquiryRepository.delete(id);
+    // Block deletion if the enquiry has produced any downstream records
+    const linkedQuotations = await this.quotationRepository.find({
+      where: { enquiryId: id },
+      select: ['quotationNumber'],
+    });
+    if (linkedQuotations.length > 0) {
+      const nums = linkedQuotations.map((q) => q.quotationNumber).filter(Boolean).join(', ');
+      throw new BadRequestException(
+        `Cannot delete this enquiry. Quotation ${nums || '(linked)'} has already been created for it. Please delete the quotation first.`,
+      );
+    }
+
+    const linkedSalesOrder = await this.dataSource.query(
+      'SELECT sales_order_number FROM sales_orders WHERE enquiry_id = $1 LIMIT 1',
+      [id],
+    );
+    if (linkedSalesOrder.length > 0) {
+      throw new BadRequestException(
+        `Cannot delete this enquiry. Purchase Order ${linkedSalesOrder[0].sales_order_number || '(linked)'} has already been created for it. Please delete the purchase order first.`,
+      );
+    }
+
+    const linkedCustomer = await this.customerRepository.findOne({
+      where: { sourceEnquiryId: id },
+      select: ['customerName'],
+    });
+    if (linkedCustomer) {
+      throw new BadRequestException(
+        `Cannot delete this enquiry. It has been converted to customer "${linkedCustomer.customerName}". Please delete the customer first.`,
+      );
+    }
+
+    await this.dataSource.transaction(async (manager) => {
+      await manager.delete(Followup, { enquiryId: id });
+      await manager.delete(Enquiry, id);
+    });
 
     this.auditLogsService.log({
       enterpriseId,
@@ -204,7 +237,7 @@ export class EnquiriesService {
       entityId: id,
       action: 'delete',
       description: `Deleted enquiry ${enquiry.enquiryNumber} for "${enquiry.customerName}"`,
-    }).catch(() => {});
+    }).catch((err) => console.error('[audit/bg failed]', err?.message || err));
 
     return {
       message: 'Enquiry deleted successfully',
@@ -564,7 +597,7 @@ export class EnquiriesService {
         action: 'status_change',
         description: `Enquiry outcome updated to "${dto.outcomeStatus}"`,
         newValues: { outcomeStatus: dto.outcomeStatus },
-      }).catch(() => {});
+      }).catch((err) => console.error('[audit/bg failed]', err?.message || err));
 
       return {
         message:

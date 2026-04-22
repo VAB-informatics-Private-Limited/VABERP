@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, DataSource } from 'typeorm';
 import { Quotation } from './entities/quotation.entity';
 import { QuotationItem } from './entities/quotation-item.entity';
 import { QuotationVersion } from './entities/quotation-version.entity';
@@ -31,6 +31,7 @@ export class QuotationsService {
     private customerRepository: Repository<Customer>,
     private auditLogsService: AuditLogsService,
     private notificationsService: NotificationsService,
+    private dataSource: DataSource,
   ) {}
 
   async findAll(
@@ -167,14 +168,16 @@ export class QuotationsService {
 
     const { subTotal, taxAmount, items } = this.calculateTotals(createDto.items);
 
+    const safeDiscountValue = Number(createDto.discountValue) || 0;
+    const safeShipping = Number(createDto.shippingCharges) || 0;
     let discountAmount = 0;
-    if (createDto.discountType === 'percentage' && createDto.discountValue) {
-      discountAmount = (subTotal * createDto.discountValue) / 100;
-    } else if (createDto.discountType === 'amount' && createDto.discountValue) {
-      discountAmount = createDto.discountValue;
+    if (createDto.discountType === 'percentage' && safeDiscountValue > 0) {
+      discountAmount = (subTotal * safeDiscountValue) / 100;
+    } else if (createDto.discountType === 'amount' && safeDiscountValue > 0) {
+      discountAmount = safeDiscountValue;
     }
 
-    const grandTotal = subTotal - discountAmount + taxAmount + (createDto.shippingCharges || 0);
+    const grandTotal = subTotal - discountAmount + taxAmount + safeShipping;
 
     const quotation = this.quotationRepository.create({
       enterpriseId,
@@ -229,7 +232,7 @@ export class QuotationsService {
       action: 'create',
       description: `Created quotation ${savedQuotation.quotationNumber} for "${savedQuotation.customerName}"`,
       newValues: { status: savedQuotation.status, grandTotal: Number(savedQuotation.grandTotal) },
-    }).catch(() => {});
+    }).catch((err) => console.error('[audit/bg failed]', err?.message || err));
 
     return this.findOne(savedQuotation.id, enterpriseId);
   }
@@ -241,98 +244,104 @@ export class QuotationsService {
     userId?: number,
     changeNotes?: string,
   ) {
-    const quotation = await this.quotationRepository.findOne({
-      where: { id, enterpriseId },
-    });
+    // Entire read-modify-write is wrapped in a transaction with a row lock on the quotation.
+    // This prevents two concurrent updates from both deleting-and-inserting items (which would
+    // corrupt the item list) and ensures the version snapshot + bump is atomic.
+    const quotationNumber = await this.dataSource.transaction(async (manager) => {
+      const quotation = await manager.findOne(Quotation, {
+        where: { id, enterpriseId },
+        lock: { mode: 'pessimistic_write' },
+      });
 
-    if (!quotation) {
-      throw new NotFoundException('Quotation not found');
-    }
-
-    if (quotation.isLocked) {
-      throw new BadRequestException(
-        'This quotation has been accepted and converted to a Sales Order. It can no longer be edited.',
-      );
-    }
-
-    // ── 1. Snapshot the current state BEFORE applying any changes ──────────
-    const currentItems = await this.itemRepository.find({
-      where: { quotationId: id },
-      order: { sortOrder: 'ASC' },
-    });
-
-    const snapshot = this.buildSnapshot(quotation, currentItems);
-
-    await this.versionRepository
-      .createQueryBuilder()
-      .insert()
-      .into(QuotationVersion)
-      .values({
-        quotationId: id,
-        versionNumber: quotation.currentVersion,
-        snapshot: snapshot as any,
-        changedBy: userId ?? undefined,
-        changeNotes: changeNotes ?? undefined,
-      })
-      .orIgnore()
-      .execute();
-    // ──────────────────────────────────────────────────────────────────────
-
-    // ── 2. Recalculate totals and rebuild items if provided ────────────────
-    let updateData: any = { ...updateDto };
-    delete updateData.items;
-
-    if (updateDto.items) {
-      const { subTotal, taxAmount, items } = this.calculateTotals(updateDto.items);
-
-      let discountAmount = 0;
-      const discountType = updateDto.discountType ?? quotation.discountType;
-      const discountValue = updateDto.discountValue ?? quotation.discountValue;
-
-      if (discountType === 'percentage' && discountValue) {
-        discountAmount = (subTotal * Number(discountValue)) / 100;
-      } else if (discountType === 'amount' && discountValue) {
-        discountAmount = Number(discountValue);
+      if (!quotation) {
+        throw new NotFoundException('Quotation not found');
       }
 
-      const shippingCharges = updateDto.shippingCharges ?? quotation.shippingCharges;
-      const grandTotal = subTotal - discountAmount + taxAmount + Number(shippingCharges || 0);
+      if (quotation.isLocked) {
+        throw new BadRequestException(
+          'This quotation has been accepted and converted to a Sales Order. It can no longer be edited.',
+        );
+      }
 
-      updateData = { ...updateData, subTotal, taxAmount, discountAmount, grandTotal };
+      // ── 1. Snapshot current state for version history ──────────────────────
+      const currentItems = await manager.find(QuotationItem, {
+        where: { quotationId: id },
+        order: { sortOrder: 'ASC' },
+      });
 
-      await this.itemRepository.delete({ quotationId: id });
-      const itemEntities = items.map((item, index) =>
-        this.itemRepository.create({
-          ...item,
+      const snapshot = this.buildSnapshot(quotation, currentItems);
+
+      await manager
+        .createQueryBuilder()
+        .insert()
+        .into(QuotationVersion)
+        .values({
           quotationId: id,
-          sortOrder: item.sortOrder ?? index,
-        }),
-      );
-      await this.itemRepository.save(itemEntities);
-    }
+          versionNumber: quotation.currentVersion,
+          snapshot: snapshot as any,
+          changedBy: userId ?? undefined,
+          changeNotes: changeNotes ?? undefined,
+        })
+        .orIgnore()
+        .execute();
 
-    if (updateDto.quotationDate) {
-      updateData.quotationDate = new Date(updateDto.quotationDate);
-    }
-    if (updateDto.validUntil) {
-      updateData.validUntil = new Date(updateDto.validUntil);
-    }
-    if (updateDto.expectedDelivery !== undefined) {
-      updateData.expectedDelivery = updateDto.expectedDelivery ? new Date(updateDto.expectedDelivery) : null;
-    }
+      // ── 2. Recalculate totals and rebuild items if provided ────────────────
+      let updateData: any = { ...updateDto };
+      delete updateData.items;
 
-    // ── 3. Persist update + bump version number ────────────────────────────
-    // If the quotation was previously rejected, revising it resets to draft
-    if (quotation.status === 'rejected') {
-      updateData.status = 'draft';
-    }
+      if (updateDto.items) {
+        const { subTotal, taxAmount, items } = this.calculateTotals(updateDto.items);
 
-    await this.quotationRepository.update(id, {
-      ...updateData,
-      updatedBy: userId ?? null,
-      currentVersion: () => 'current_version + 1',
+        let discountAmount = 0;
+        const discountType = updateDto.discountType ?? quotation.discountType;
+        const discountValueRaw = updateDto.discountValue ?? quotation.discountValue;
+        const discountValue = Number(discountValueRaw) || 0;
+
+        if (discountType === 'percentage' && discountValue > 0) {
+          discountAmount = (subTotal * discountValue) / 100;
+        } else if (discountType === 'amount' && discountValue > 0) {
+          discountAmount = discountValue;
+        }
+
+        const shippingCharges = Number(updateDto.shippingCharges ?? quotation.shippingCharges) || 0;
+        const grandTotal = subTotal - discountAmount + taxAmount + shippingCharges;
+
+        updateData = { ...updateData, subTotal, taxAmount, discountAmount, grandTotal };
+
+        await manager.delete(QuotationItem, { quotationId: id });
+        const itemEntities = items.map((item, index) =>
+          manager.create(QuotationItem, {
+            ...item,
+            quotationId: id,
+            sortOrder: item.sortOrder ?? index,
+          }),
+        );
+        await manager.save(QuotationItem, itemEntities);
+      }
+
+      if (updateDto.quotationDate) {
+        updateData.quotationDate = new Date(updateDto.quotationDate);
+      }
+      if (updateDto.validUntil) {
+        updateData.validUntil = new Date(updateDto.validUntil);
+      }
+      if (updateDto.expectedDelivery !== undefined) {
+        updateData.expectedDelivery = updateDto.expectedDelivery ? new Date(updateDto.expectedDelivery) : null;
+      }
+
+      // ── 3. Persist update + bump version number ────────────────────────────
+      if (quotation.status === 'rejected') {
+        updateData.status = 'draft';
+      }
+
+      await manager.update(Quotation, id, {
+        ...updateData,
+        updatedBy: userId ?? null,
+        currentVersion: () => 'current_version + 1',
+      });
+
+      return quotation.quotationNumber;
     });
-    // ──────────────────────────────────────────────────────────────────────
 
     this.auditLogsService.log({
       enterpriseId,
@@ -340,8 +349,8 @@ export class QuotationsService {
       entityType: 'quotation',
       entityId: id,
       action: 'update',
-      description: `Updated quotation ${quotation.quotationNumber}`,
-    }).catch(() => {});
+      description: `Updated quotation ${quotationNumber}`,
+    }).catch((err) => console.error('[audit/bg failed]', err?.message || err));
 
     return this.findOne(id, enterpriseId);
   }
@@ -443,7 +452,7 @@ export class QuotationsService {
       action: 'convert',
       description: `Quotation ${quotation.quotationNumber} accepted and converted to Sales Order ${savedSo.orderNumber}`,
       newValues: { status: 'accepted', salesOrderId: savedSo.id, orderNumber: savedSo.orderNumber },
-    }).catch(() => {});
+    }).catch((err) => console.error('[audit/bg failed]', err?.message || err));
 
     this.notificationsService.create({
       enterpriseId,
@@ -528,7 +537,7 @@ export class QuotationsService {
       entityId: id,
       action: 'delete',
       description: `Deleted quotation ${quotation.quotationNumber}`,
-    }).catch(() => {});
+    }).catch((err) => console.error('[audit/bg failed]', err?.message || err));
 
     return {
       message: 'Quotation deleted successfully',
@@ -575,7 +584,7 @@ export class QuotationsService {
         action: 'status_change',
         description: `Quotation ${quotation.quotationNumber} rejected${rejectionReason ? ': ' + rejectionReason : ''}`,
         newValues: { status: 'rejected', rejectionReason },
-      }).catch(() => {});
+      }).catch((err) => console.error('[audit/bg failed]', err?.message || err));
 
       if (quotation.enquiryId) {
         await this.enquiryRepository.update(quotation.enquiryId, {
@@ -593,7 +602,7 @@ export class QuotationsService {
         action: 'status_change',
         description: `Quotation ${quotation.quotationNumber} status changed to "${status}"`,
         newValues: { status },
-      }).catch(() => {});
+      }).catch((err) => console.error('[audit/bg failed]', err?.message || err));
 
       if (status === 'accepted' && quotation.enquiryId) {
         await this.enquiryRepository.update(quotation.enquiryId, {

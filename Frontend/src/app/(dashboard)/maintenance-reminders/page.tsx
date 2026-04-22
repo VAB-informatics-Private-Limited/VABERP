@@ -36,7 +36,7 @@ export default function MaintenanceRemindersPage() {
   const [snoozeForm] = Form.useForm();
   const [triggerType, setTriggerType] = useState('time_based');
 
-  const { data: counts } = useQuery({ queryKey: ['reminders-due-count'], queryFn: getRemindersDueCount });
+  const { data: counts, isLoading: countsLoading } = useQuery({ queryKey: ['reminders-due-count'], queryFn: getRemindersDueCount });
   const { data: rules = [] } = useQuery({ queryKey: ['reminder-rules'], queryFn: () => getReminderRules() });
   const { data: reminders = [] } = useQuery({ queryKey: ['reminders'], queryFn: () => getReminders() });
   const { data: machinesData } = useQuery({ queryKey: ['machines-dropdown'], queryFn: () => getMachines({ limit: 200 }) });
@@ -139,10 +139,10 @@ export default function MaintenanceRemindersPage() {
 
       <Row gutter={16} className="mb-6">
         <Col xs={12} md={6}>
-          <Card><Statistic title="Pending Reminders" value={counts?.due ?? 0} prefix={<BellOutlined />} valueStyle={{ color: '#1677ff' }} /></Card>
+          <Card><Statistic title="Pending Reminders" value={counts?.due ?? 0} prefix={<BellOutlined />} valueStyle={{ color: '#1677ff' }} loading={countsLoading} /></Card>
         </Col>
         <Col xs={12} md={6}>
-          <Card><Statistic title="Overdue" value={counts?.overdue ?? 0} prefix={<WarningOutlined />} valueStyle={{ color: '#ff4d4f' }} /></Card>
+          <Card><Statistic title="Overdue" value={counts?.overdue ?? 0} prefix={<WarningOutlined />} valueStyle={{ color: '#ff4d4f' }} loading={countsLoading} /></Card>
         </Col>
         <Col xs={12} md={6}>
           <Card><Statistic title="Active Rules" value={rules.filter((r: ReminderRule) => r.status === 'active').length} valueStyle={{ color: '#52c41a' }} /></Card>

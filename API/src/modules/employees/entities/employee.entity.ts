@@ -46,7 +46,7 @@ export class Employee {
   @Column({ unique: true })
   email: string;
 
-  @Column()
+  @Column({ select: false })
   password: string;
 
   @Column({ name: 'phone_number', nullable: true })

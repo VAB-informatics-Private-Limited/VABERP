@@ -136,92 +136,162 @@ export function OverdueFollowupsModal({ overdueItems }: OverdueFollowupsModalPro
       <Modal
         open={open}
         onCancel={() => setOpen(false)}
-        width={520}
+        width={580}
         centered
         title={null}
         footer={null}
-        closable
+        closable={false}
         styles={{
           body: { padding: 0 },
-          content: { borderRadius: 14, overflow: 'hidden' },
+          content: {
+            borderRadius: 18,
+            overflow: 'hidden',
+            padding: 0,
+            background: '#fff',
+            boxShadow: '0 24px 60px rgba(15, 23, 42, 0.18)',
+          },
+          mask: { backdropFilter: 'blur(2px)', background: 'rgba(15, 23, 42, 0.45)' },
         }}
       >
         {/* Header */}
         <div style={{
-          background: '#ff4d4f',
-          padding: '16px 20px',
+          background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
+          padding: '20px 24px',
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          position: 'relative',
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <WarningFilled style={{ fontSize: 18, color: '#fff' }} />
-            <span style={{ fontSize: 15, fontWeight: 700, color: '#fff' }}>
-              Overdue Follow-ups
-            </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+            <div style={{
+              width: 40, height: 40, borderRadius: 12,
+              background: 'rgba(251, 191, 36, 0.15)',
+              border: '1px solid rgba(251, 191, 36, 0.3)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              <WarningFilled style={{ fontSize: 18, color: '#fbbf24' }} />
+            </div>
+            <div>
+              <div style={{ fontSize: 16, fontWeight: 700, color: '#fff', lineHeight: 1.2 }}>
+                Pending Follow-ups
+              </div>
+              <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 2 }}>
+                {activeItems.length} {activeItems.length === 1 ? 'customer needs' : 'customers need'} your attention
+              </div>
+            </div>
           </div>
-          <Tag style={{
-            background: 'rgba(255,255,255,0.2)', border: 'none',
-            color: '#fff', fontWeight: 700, borderRadius: 12, fontSize: 13,
-          }}>
-            {activeItems.length}
-          </Tag>
+          <div
+            onClick={() => setOpen(false)}
+            style={{
+              width: 30, height: 30, borderRadius: 8,
+              background: 'rgba(255,255,255,0.08)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              cursor: 'pointer', color: '#cbd5e1', fontSize: 16,
+              transition: 'background 0.15s',
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.16)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.08)'; }}
+          >
+            ×
+          </div>
         </div>
 
         {/* List */}
-        <div style={{ maxHeight: 480, overflowY: 'auto' }}>
-          {activeItems.map((item, idx) => {
+        <div style={{ maxHeight: 500, overflowY: 'auto', padding: '12px 16px', background: '#f8fafc' }}>
+          {activeItems.map((item) => {
             const days = getOverdueDays(item.next_followup_date);
-            return (
-              <div key={item.id}>
-                <div style={{ padding: '12px 20px', display: 'flex', alignItems: 'center', gap: 12 }}>
-                  {/* Left: Info */}
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                      <span style={{ fontWeight: 600, fontSize: 14, color: '#1a1a1a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {item.customer_name}
-                      </span>
-                      <Tag
-                        color={days > 7 ? 'red' : days > 3 ? 'volcano' : 'orange'}
-                        style={{ borderRadius: 10, fontSize: 11, lineHeight: '18px', padding: '0 8px', flexShrink: 0 }}
-                      >
-                        {days}d
-                      </Tag>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 12, color: '#888' }}>
-                      <a href={`tel:${item.customer_mobile}`} style={{ color: '#1677ff', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 3 }}>
-                        <PhoneOutlined style={{ fontSize: 11 }} />
-                        {item.customer_mobile}
-                      </a>
-                      {item.employee_name && (
-                        <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-                          <UserOutlined style={{ fontSize: 11 }} />
-                          {item.employee_name}
-                        </span>
-                      )}
-                    </div>
-                  </div>
+            const severity = days > 7
+              ? { color: '#dc2626', bg: '#fef2f2', border: '#fecaca', label: 'Critical' }
+              : days > 3
+              ? { color: '#ea580c', bg: '#fff7ed', border: '#fed7aa', label: 'High' }
+              : { color: '#ca8a04', bg: '#fefce8', border: '#fde68a', label: 'Due' };
+            const initial = (item.customer_name || '?').trim().charAt(0).toUpperCase();
 
-                  {/* Right: Actions */}
-                  <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-                    <Button
-                      size="small"
-                      type="primary"
-                      style={{ borderRadius: 6, fontSize: 12, height: 28 }}
-                      onClick={() => openAction(item)}
-                    >
-                      Action
-                    </Button>
-                    <Button
-                      size="small"
-                      style={{ borderRadius: 6, fontSize: 12, height: 28 }}
-                      onClick={() => router.push(`/enquiries/${item.enquiry_id}`)}
-                    >
-                      View
-                    </Button>
+            return (
+              <div
+                key={item.id}
+                style={{
+                  background: '#fff',
+                  borderRadius: 12,
+                  border: '1px solid #e2e8f0',
+                  borderLeft: `3px solid ${severity.color}`,
+                  padding: '14px 16px',
+                  marginBottom: 8,
+                  display: 'flex', alignItems: 'center', gap: 14,
+                  transition: 'all 0.15s',
+                  boxShadow: '0 1px 2px rgba(15, 23, 42, 0.04)',
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.boxShadow = '0 4px 12px rgba(15, 23, 42, 0.08)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.boxShadow = '0 1px 2px rgba(15, 23, 42, 0.04)'; }}
+              >
+                {/* Avatar */}
+                <div style={{
+                  width: 40, height: 40, borderRadius: 10,
+                  background: severity.bg,
+                  border: `1px solid ${severity.border}`,
+                  color: severity.color,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 16, fontWeight: 700, flexShrink: 0,
+                }}>
+                  {initial}
+                </div>
+
+                {/* Info */}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
+                    <span style={{
+                      fontWeight: 600, fontSize: 14, color: '#0f172a',
+                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    }}>
+                      {item.customer_name}
+                    </span>
+                    <span style={{
+                      background: severity.bg, color: severity.color,
+                      border: `1px solid ${severity.border}`,
+                      borderRadius: 999, fontSize: 10, fontWeight: 700,
+                      padding: '1px 8px', lineHeight: '16px', flexShrink: 0,
+                      textTransform: 'uppercase', letterSpacing: 0.3,
+                    }}>
+                      {days}d · {severity.label}
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 14, fontSize: 12, color: '#64748b' }}>
+                    <a href={`tel:${item.customer_mobile}`} style={{ color: '#2563eb', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <PhoneOutlined style={{ fontSize: 11 }} />
+                      {item.customer_mobile}
+                    </a>
+                    {item.employee_name && (
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <UserOutlined style={{ fontSize: 11 }} />
+                        {item.employee_name}
+                      </span>
+                    )}
                   </div>
                 </div>
-                {idx < activeItems.length - 1 && (
-                  <div style={{ borderBottom: '1px solid #f5f5f5', margin: '0 20px' }} />
-                )}
+
+                {/* Actions */}
+                <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                  <Button
+                    size="small"
+                    style={{
+                      borderRadius: 8, fontSize: 12, height: 30,
+                      border: '1px solid #e2e8f0', color: '#475569',
+                    }}
+                    onClick={() => router.push(`/enquiries/${item.enquiry_id}`)}
+                  >
+                    View
+                  </Button>
+                  <Button
+                    size="small"
+                    type="primary"
+                    style={{
+                      borderRadius: 8, fontSize: 12, height: 30,
+                      background: '#0f172a', borderColor: '#0f172a',
+                      boxShadow: 'none',
+                    }}
+                    onClick={() => openAction(item)}
+                  >
+                    Action
+                  </Button>
+                </div>
               </div>
             );
           })}
@@ -229,11 +299,22 @@ export function OverdueFollowupsModal({ overdueItems }: OverdueFollowupsModalPro
 
         {/* Footer */}
         <div style={{
-          padding: '10px 20px', borderTop: '1px solid #f0f0f0',
-          display: 'flex', justifyContent: 'flex-end',
+          padding: '12px 20px', borderTop: '1px solid #e2e8f0',
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          background: '#fff',
         }}>
-          <Button size="small" type="text" style={{ color: '#999' }} onClick={() => setOpen(false)}>
-            Dismiss
+          <span style={{ fontSize: 12, color: '#94a3b8' }}>
+            Take action or dismiss to continue
+          </span>
+          <Button
+            size="small"
+            onClick={() => setOpen(false)}
+            style={{
+              border: 'none', color: '#64748b', fontSize: 12, fontWeight: 500,
+              background: 'transparent',
+            }}
+          >
+            Dismiss all
           </Button>
         </div>
       </Modal>

@@ -90,7 +90,7 @@ export interface SalesOrder {
 export const SO_STATUS_OPTIONS = [
   { value: 'confirmed', label: 'Confirmed', color: 'blue' },
   { value: 'on_hold', label: 'On Hold', color: 'gold' },
-  { value: 'in_production', label: 'In Production', color: 'orange' },
+  { value: 'sent_to_manufacturing', label: 'In Production', color: 'orange' },
   { value: 'under_verification', label: 'Under Verification', color: 'volcano' },
   { value: 'ready', label: 'Ready', color: 'cyan' },
   { value: 'dispatched', label: 'Dispatched', color: 'purple' },

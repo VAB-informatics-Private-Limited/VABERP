@@ -887,25 +887,73 @@ export default function PurchaseOrderDetailPage() {
 
       {/* Dispatched banner */}
       {po.status === 'dispatched' && (
-        <Alert
+        <div
           className="mb-4"
-          type="success"
-          showIcon
-          icon={<CheckCircleOutlined />}
-          message="This purchase order has been fully DISPATCHED"
-          description={
-            <span>
-              All manufacturing job cards have been dispatched.{' '}
-              <Button
-                type="link"
-                className="p-0 h-auto font-medium"
-                onClick={() => router.push('/manufacture-status/dispatched')}
+          style={{
+            background: 'linear-gradient(135deg, #059669 0%, #047857 100%)',
+            borderRadius: 12,
+            padding: '18px 22px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 16,
+            boxShadow: '0 4px 14px rgba(5, 150, 105, 0.25)',
+            color: '#fff',
+          }}
+        >
+          <div
+            style={{
+              width: 44,
+              height: 44,
+              borderRadius: 12,
+              background: 'rgba(255,255,255,0.18)',
+              border: '1px solid rgba(255,255,255,0.3)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+            }}
+          >
+            <CheckCircleOutlined style={{ fontSize: 22, color: '#fff' }} />
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 16, fontWeight: 700, letterSpacing: 0.2 }}>
+                Fully Dispatched
+              </span>
+              <span
+                style={{
+                  background: 'rgba(255,255,255,0.2)',
+                  border: '1px solid rgba(255,255,255,0.3)',
+                  borderRadius: 999,
+                  padding: '2px 10px',
+                  fontSize: 11,
+                  fontWeight: 600,
+                  textTransform: 'uppercase',
+                  letterSpacing: 0.5,
+                }}
               >
-                View all dispatched orders
-              </Button>
-            </span>
-          }
-        />
+                Completed
+              </span>
+            </div>
+            <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.92)', marginTop: 4 }}>
+              All manufacturing job cards have been dispatched successfully.
+            </div>
+          </div>
+          <Button
+            size="middle"
+            onClick={() => router.push('/manufacture-status/dispatched')}
+            style={{
+              background: 'rgba(255,255,255,0.15)',
+              border: '1px solid rgba(255,255,255,0.35)',
+              color: '#fff',
+              fontWeight: 500,
+              borderRadius: 8,
+              flexShrink: 0,
+            }}
+          >
+            View Dispatched Orders
+          </Button>
+        </div>
       )}
 
       {/* On Hold banner */}
@@ -1322,22 +1370,36 @@ export default function PurchaseOrderDetailPage() {
               onClick: () => router.push(`/invoices/${record.id}`),
               style: { cursor: 'pointer' },
             })}
-            summary={() => (
-              <Table.Summary.Row className="bg-gray-50">
-                <Table.Summary.Cell index={0} colSpan={3}>
-                  <span className="font-semibold">Total</span>
-                </Table.Summary.Cell>
-                <Table.Summary.Cell index={3}>
-                  <span className="font-bold text-orange-500">{fmt(totalInvoiced)}</span>
-                </Table.Summary.Cell>
-                <Table.Summary.Cell index={4}>
-                  <span className={`font-bold ${remainingBalance > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                    {fmt(remainingBalance)}
-                  </span>
-                </Table.Summary.Cell>
-                <Table.Summary.Cell index={5} colSpan={2} />
-              </Table.Summary.Row>
-            )}
+            summary={() => {
+              const totalPending = linkedInvoices.reduce(
+                (s, i) => s + Number((i as any).pending_amount ?? 0),
+                0,
+              );
+              return (
+                <Table.Summary.Row className="bg-gray-50">
+                  <Table.Summary.Cell index={0} colSpan={3}>
+                    <span className="font-semibold">Total</span>
+                  </Table.Summary.Cell>
+                  <Table.Summary.Cell index={3}>
+                    <span className="font-bold text-gray-800">{fmt(totalInvoiced)}</span>
+                  </Table.Summary.Cell>
+                  <Table.Summary.Cell index={4}>
+                    <span className="font-bold text-green-600">{fmt(totalPaidOnInvoices)}</span>
+                  </Table.Summary.Cell>
+                  <Table.Summary.Cell index={5}>
+                    <span className={`font-bold ${totalPending > 0.005 ? 'text-orange-500' : 'text-gray-300'}`}>
+                      {totalPending > 0.005 ? fmt(totalPending) : '—'}
+                    </span>
+                  </Table.Summary.Cell>
+                  <Table.Summary.Cell index={6}>
+                    <span className={`font-bold ${totalBalanceDue > 0.005 ? 'text-red-500' : 'text-green-600'}`}>
+                      {fmt(totalBalanceDue)}
+                    </span>
+                  </Table.Summary.Cell>
+                  <Table.Summary.Cell index={7} colSpan={2} />
+                </Table.Summary.Row>
+              );
+            }}
           />
         )}
       </Card>
@@ -1820,18 +1882,36 @@ export default function PurchaseOrderDetailPage() {
                 </Select>
               </Form.Item>
               {perInvoicePaymentMethod === 'bank_transfer' && (
-                <Form.Item name="reference_number" label="Transaction ID" rules={[{ required: true, message: 'Enter transaction ID' }]}>
+                <Form.Item
+                  name="reference_number"
+                  label="Transaction ID"
+                  rules={[{ required: true, message: 'Enter transaction ID' }]}
+                >
                   <Input placeholder="Enter bank transaction ID" />
                 </Form.Item>
               )}
               {perInvoicePaymentMethod === 'cheque' && (
-                <Form.Item name="reference_number" label="Cheque Number" rules={[{ required: true, message: 'Enter cheque number' }]}>
-                  <Input placeholder="Enter cheque number" />
+                <Form.Item
+                  name="reference_number"
+                  label="Cheque Number"
+                  rules={[
+                    { required: true, message: 'Enter cheque number' },
+                    { pattern: /^\d{6}$/, message: 'Cheque number must be exactly 6 digits' },
+                  ]}
+                >
+                  <Input placeholder="6-digit cheque number" maxLength={6} />
                 </Form.Item>
               )}
               {perInvoicePaymentMethod === 'upi' && (
-                <Form.Item name="reference_number" label="UPI Transaction ID" rules={[{ required: true, message: 'Enter UPI transaction ID' }]}>
-                  <Input placeholder="Enter UPI transaction ID / UTR" />
+                <Form.Item
+                  name="reference_number"
+                  label="UTR / UPI Transaction ID"
+                  rules={[
+                    { required: true, message: 'Enter UTR / UPI transaction ID' },
+                    { pattern: /^[A-Za-z0-9]{12,22}$/, message: 'UTR must be 12-22 alphanumeric characters' },
+                  ]}
+                >
+                  <Input placeholder="UTR (12-22 chars)" maxLength={22} />
                 </Form.Item>
               )}
               <Form.Item name="notes" label="Notes (optional)">

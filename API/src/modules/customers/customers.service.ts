@@ -87,7 +87,7 @@ export class CustomersService {
       action: 'create',
       description: `Created customer "${savedCustomer.customerName}"`,
       newValues: { customerName: savedCustomer.customerName, mobile: savedCustomer.mobile },
-    }).catch(() => {});
+    }).catch((err) => console.error('[audit/bg failed]', err?.message || err));
 
     return {
       message: 'Customer created successfully',
@@ -138,7 +138,7 @@ export class CustomersService {
       action: 'update',
       description: `Updated customer "${customer.customerName}"`,
       newValues: sanitized,
-    }).catch(() => {});
+    }).catch((err) => console.error('[audit/bg failed]', err?.message || err));
 
     return this.findOne(id, enterpriseId);
   }
@@ -152,6 +152,36 @@ export class CustomersService {
       throw new NotFoundException('Customer not found');
     }
 
+    // Block delete if this customer has downstream business records
+    const manager = this.customerRepository.manager;
+    const [q] = await manager.query(
+      'SELECT quotation_number FROM quotations WHERE customer_id = $1 LIMIT 1',
+      [id],
+    );
+    if (q) {
+      throw new BadRequestException(
+        `Cannot delete customer "${customer.customerName}". Quotation ${q.quotation_number || '(linked)'} exists. Please delete the quotation first.`,
+      );
+    }
+    const [so] = await manager.query(
+      'SELECT sales_order_number FROM sales_orders WHERE customer_id = $1 LIMIT 1',
+      [id],
+    );
+    if (so) {
+      throw new BadRequestException(
+        `Cannot delete customer "${customer.customerName}". Purchase Order ${so.sales_order_number || '(linked)'} exists. Please delete the purchase order first.`,
+      );
+    }
+    const [inv] = await manager.query(
+      'SELECT invoice_number FROM invoices WHERE customer_id = $1 LIMIT 1',
+      [id],
+    );
+    if (inv) {
+      throw new BadRequestException(
+        `Cannot delete customer "${customer.customerName}". Invoice ${inv.invoice_number || '(linked)'} exists. Please delete the invoice first.`,
+      );
+    }
+
     await this.customerRepository.delete(id);
 
     this.auditLogsService.log({
@@ -163,7 +193,7 @@ export class CustomersService {
       entityId: id,
       action: 'delete',
       description: `Deleted customer "${customer.customerName}"`,
-    }).catch(() => {});
+    }).catch((err) => console.error('[audit/bg failed]', err?.message || err));
 
     return {
       message: 'Customer deleted successfully',

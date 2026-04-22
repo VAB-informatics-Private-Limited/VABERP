@@ -19,6 +19,9 @@ export class WasteDisposalService {
   ) {}
 
   async getTransactions(enterpriseId: number, page = 1, limit = 20, filters: any = {}) {
+    const safePage = Math.max(1, Math.floor(Number(page) || 1));
+    const safeLimit = Math.min(200, Math.max(1, Math.floor(Number(limit) || 20)));
+
     const q = this.txnRepo.createQueryBuilder('t')
       .leftJoinAndSelect('t.party', 'p')
       .leftJoinAndSelect('t.lines', 'l')
@@ -32,12 +35,13 @@ export class WasteDisposalService {
     if (filters.to) q.andWhere('t.scheduledDate <= :to', { to: filters.to });
 
     const [data, total] = await q
-      .skip((page - 1) * limit)
-      .take(limit)
+      .skip((safePage - 1) * safeLimit)
+      .take(safeLimit)
       .orderBy('t.createdDate', 'DESC')
       .getManyAndCount();
 
-    return { message: 'Transactions fetched', data, totalRecords: total, page };
+    const totalPages = Math.max(1, Math.ceil(total / safeLimit));
+    return { message: 'Transactions fetched', data, totalRecords: total, page: safePage, pageSize: safeLimit, totalPages };
   }
 
   async getTransaction(id: number, enterpriseId: number) {
@@ -164,7 +168,7 @@ export class WasteDisposalService {
         await manager.save(WasteDisposalLine, line);
 
         // Deduct from inventory
-        await this.deductInventory(line.inventoryId, line.quantityRequested, actualQty, id, userId, manager);
+        await this.deductInventory(line.inventoryId, enterpriseId, line.quantityRequested, actualQty, id, userId, manager);
 
         totalQty += actualQty;
         totalRevenue += lineRevenue;
@@ -195,7 +199,7 @@ export class WasteDisposalService {
 
       // Release all reservations
       for (const line of txn.lines) {
-        await this.releaseReservation(line.inventoryId, line.quantityRequested, id, userId, manager);
+        await this.releaseReservation(line.inventoryId, enterpriseId, line.quantityRequested, id, userId, manager);
       }
 
       txn.status = 'cancelled';
@@ -228,7 +232,7 @@ export class WasteDisposalService {
     return this.dataSource.transaction(async (manager) => {
       const line = await manager.findOne(WasteDisposalLine, { where: { id: lineId, transactionId } });
       if (!line) throw new NotFoundException('Line not found');
-      await this.releaseReservation(line.inventoryId, line.quantityRequested, transactionId, userId, manager);
+      await this.releaseReservation(line.inventoryId, enterpriseId, line.quantityRequested, transactionId, userId, manager);
       await manager.remove(WasteDisposalLine, line);
       await this.recalcTotals(transactionId, manager);
       return { message: 'Line removed' };
@@ -281,7 +285,7 @@ export class WasteDisposalService {
     }
 
     // Reserve
-    await this.reserveInventory(dto.inventoryId, parseFloat(dto.quantityRequested), transactionId, userId, manager);
+    await this.reserveInventory(dto.inventoryId, enterpriseId, parseFloat(dto.quantityRequested), transactionId, userId, manager);
 
     const line = manager.create(WasteDisposalLine, {
       transactionId,
@@ -295,7 +299,7 @@ export class WasteDisposalService {
     await manager.save(WasteDisposalLine, line);
   }
 
-  private async reserveInventory(inventoryId: number, qty: number, txnId: number, userId: number | undefined, manager: EntityManager) {
+  private async reserveInventory(inventoryId: number, enterpriseId: number, qty: number, txnId: number, userId: number | undefined, manager: EntityManager) {
     const result = await manager
       .createQueryBuilder()
       .update(WasteInventory)
@@ -304,14 +308,14 @@ export class WasteDisposalService {
         quantityReserved: () => `quantity_reserved + ${qty}`,
         status: () => `CASE WHEN (quantity_available - ${qty}) = 0 THEN 'reserved' ELSE status END`,
       })
-      .where('id = :id AND quantity_available >= :qty', { id: inventoryId, qty })
+      .where('id = :id AND enterprise_id = :enterpriseId AND quantity_available >= :qty', { id: inventoryId, enterpriseId, qty })
       .execute();
 
     if (!result.affected || result.affected === 0) {
       throw new UnprocessableEntityException('Insufficient available quantity — possible concurrent reservation');
     }
 
-    const inv = await manager.findOne(WasteInventory, { where: { id: inventoryId } });
+    const inv = await manager.findOne(WasteInventory, { where: { id: inventoryId, enterpriseId } });
     await manager.save(WasteInventoryLog, manager.create(WasteInventoryLog, {
       inventoryId,
       action: 'reserved',
@@ -323,7 +327,7 @@ export class WasteDisposalService {
     }));
   }
 
-  private async releaseReservation(inventoryId: number, qty: number, txnId: number, userId: number | undefined, manager: EntityManager) {
+  private async releaseReservation(inventoryId: number, enterpriseId: number, qty: number, txnId: number, userId: number | undefined, manager: EntityManager) {
     await manager
       .createQueryBuilder()
       .update(WasteInventory)
@@ -332,10 +336,10 @@ export class WasteDisposalService {
         quantityReserved: () => `GREATEST(quantity_reserved - ${qty}, 0)`,
         status: () => `CASE WHEN status = 'reserved' THEN 'available' ELSE status END`,
       })
-      .where('id = :id', { id: inventoryId })
+      .where('id = :id AND enterprise_id = :enterpriseId', { id: inventoryId, enterpriseId })
       .execute();
 
-    const inv = await manager.findOne(WasteInventory, { where: { id: inventoryId } });
+    const inv = await manager.findOne(WasteInventory, { where: { id: inventoryId, enterpriseId } });
     await manager.save(WasteInventoryLog, manager.create(WasteInventoryLog, {
       inventoryId,
       action: 'reservation_released',
@@ -347,7 +351,7 @@ export class WasteDisposalService {
     }));
   }
 
-  private async deductInventory(inventoryId: number, reservedQty: number, actualQty: number, txnId: number, userId: number | undefined, manager: EntityManager) {
+  private async deductInventory(inventoryId: number, enterpriseId: number, reservedQty: number, actualQty: number, txnId: number, userId: number | undefined, manager: EntityManager) {
     const returnQty = reservedQty - actualQty;
     await manager
       .createQueryBuilder()
@@ -360,10 +364,10 @@ export class WasteDisposalService {
           WHEN quantity_generated > 0 AND (quantity_available + ${returnQty}) < quantity_generated THEN 'partially_disposed'
           ELSE status END`,
       })
-      .where('id = :id', { id: inventoryId })
+      .where('id = :id AND enterprise_id = :enterpriseId', { id: inventoryId, enterpriseId })
       .execute();
 
-    const inv = await manager.findOne(WasteInventory, { where: { id: inventoryId } });
+    const inv = await manager.findOne(WasteInventory, { where: { id: inventoryId, enterpriseId } });
     await manager.save(WasteInventoryLog, manager.create(WasteInventoryLog, {
       inventoryId,
       action: 'disposed',

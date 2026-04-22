@@ -153,7 +153,7 @@ export class MaterialRequestsService {
       entityId: savedMr.id,
       userId,
       enterpriseId,
-    }).catch(() => {});
+    }).catch((err) => console.error('[audit/bg failed]', err?.message || err));
     this.notificationsService.create({
       enterpriseId,
       title: 'New Material Request',
@@ -344,7 +344,7 @@ export class MaterialRequestsService {
       entityId: id,
       userId,
       enterpriseId,
-    }).catch(() => {});
+    }).catch((err) => console.error('[audit/bg failed]', err?.message || err));
     this.notificationsService.create({
       enterpriseId,
       title: 'Material Request Approved',
@@ -465,7 +465,7 @@ export class MaterialRequestsService {
       entityId: id,
       userId,
       enterpriseId,
-    }).catch(() => {});
+    }).catch((err) => console.error('[audit/bg failed]', err?.message || err));
     return issueResult;
   }
 
@@ -765,7 +765,7 @@ export class MaterialRequestsService {
       entityId: id,
       userId: user?.id,
       enterpriseId,
-    }).catch(() => {});
+    }).catch((err) => console.error('[audit/bg failed]', err?.message || err));
     return receivedResult;
   }
 

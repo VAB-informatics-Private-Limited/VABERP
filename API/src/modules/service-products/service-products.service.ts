@@ -20,25 +20,40 @@ export class ServiceProductsService {
   ) {}
 
   async searchCustomers(enterpriseId: number, search?: string) {
-    const where: any = { enterpriseId, status: 'active' };
+    // Only customers with at least one dispatched job card are eligible for
+    // service-product registration. Match by job_cards.customer_id when set,
+    // falling back to case-insensitive customer_name equality for legacy rows
+    // where the FK was never populated.
+    const qb = this.customerRepo.createQueryBuilder('c')
+      .where('c.enterpriseId = :eid', { eid: enterpriseId })
+      .andWhere('c.status = :status', { status: 'active' })
+      .andWhere(
+        `EXISTS (
+          SELECT 1 FROM job_cards jc
+          WHERE jc.enterprise_id = :eid
+            AND jc.status = 'dispatched'
+            AND (
+              jc.customer_id = c.id
+              OR lower(trim(jc.customer_name)) = lower(trim(c.customer_name))
+            )
+        )`,
+      );
+
     if (search) {
-      return this.customerRepo.find({
-        where: [
-          { enterpriseId, customerName: ILike(`%${search}%`) },
-          { enterpriseId, mobile: ILike(`%${search}%`) },
-          { enterpriseId, businessName: ILike(`%${search}%`) },
-        ],
-        select: ['id', 'customerName', 'mobile', 'address', 'city', 'state'],
-        take: 50,
-        order: { customerName: 'ASC' },
-      });
+      qb.andWhere(
+        '(c.customerName ILIKE :search OR c.mobile ILIKE :search OR c.businessName ILIKE :search)',
+        { search: `%${search}%` },
+      );
     }
-    return this.customerRepo.find({
-      where,
-      select: ['id', 'customerName', 'mobile', 'address', 'city', 'state'],
-      take: 200,
-      order: { customerName: 'ASC' },
-    });
+
+    return qb
+      .select([
+        'c.id', 'c.customerName', 'c.mobile',
+        'c.address', 'c.city', 'c.state',
+      ])
+      .orderBy('c.customerName', 'ASC')
+      .take(search ? 50 : 200)
+      .getMany();
   }
 
   async findAll(

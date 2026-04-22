@@ -63,7 +63,7 @@ export class OrganizerService {
   }
 
   async findAll(enterpriseId: number, filters: any = {}, currentUserId?: number, permissions?: any) {
-    const { type, status, priority, assignedTo, entityType, entityId, dueBefore, dueAfter, page = 1, limit = 30 } = filters;
+    const { type, status, priority, assignedTo, entityType, entityId, dueBefore, dueAfter, search, page = 1, limit = 30 } = filters;
     const p = Math.max(1, Number(page));
     const l = Math.min(100, Math.max(1, Number(limit)));
 
@@ -83,6 +83,9 @@ export class OrganizerService {
     if (assignedTo) q = q.andWhere(':uid3 = ANY(i.assignedTo)', { uid3: Number(assignedTo) });
     if (dueBefore) q = q.andWhere('i.dueDate <= :dueBefore', { dueBefore });
     if (dueAfter) q = q.andWhere('i.dueDate >= :dueAfter', { dueAfter });
+    if (search && String(search).trim()) {
+      q = q.andWhere('(i.title ILIKE :search OR i.description ILIKE :search OR i.notes ILIKE :search)', { search: `%${String(search).trim()}%` });
+    }
 
     if (entityType && entityId) {
       q = q.andWhere((sub) => {

@@ -201,7 +201,10 @@ export default function WasteDisposalPage() {
             </Col>
             <Col span={12}>
               <Form.Item name="scheduled_date" label="Scheduled Date" rules={[{ required: true }]}>
-                <DatePicker style={{ width: '100%' }} />
+                <DatePicker
+                  style={{ width: '100%' }}
+                  disabledDate={(current) => current && current < dayjs().startOf('day')}
+                />
               </Form.Item>
             </Col>
             <Col span={12}><Form.Item name="vehicle_number" label="Vehicle Number"><Input /></Form.Item></Col>

@@ -9,7 +9,7 @@ import { existsSync, mkdirSync } from 'fs';
 import { ApiTags, ApiBearerAuth, ApiConsumes } from '@nestjs/swagger';
 import { EnterpriseBrandingService } from './enterprise-branding.service';
 import { UpsertBrandingDto } from './dto/upsert-branding.dto';
-import { EnterpriseId, CurrentUser } from '../../common/decorators';
+import { EnterpriseId, CurrentUser, RequirePermission } from '../../common/decorators';
 import { Public } from '../../common/decorators/public.decorator';
 
 const UPLOAD_DIR = 'branding';
@@ -58,6 +58,7 @@ export class EnterpriseBrandingController {
   }
 
   @ApiBearerAuth('JWT-auth')
+  @RequirePermission('employees', 'permissions', 'edit')
   @Put()
   upsert(
     @Body() dto: UpsertBrandingDto,
@@ -68,6 +69,7 @@ export class EnterpriseBrandingController {
   }
 
   @ApiBearerAuth('JWT-auth')
+  @RequirePermission('employees', 'permissions', 'edit')
   @Post('logo')
   @ApiConsumes('multipart/form-data')
   @UseInterceptors(FileInterceptor('logo', {
@@ -85,6 +87,7 @@ export class EnterpriseBrandingController {
   }
 
   @ApiBearerAuth('JWT-auth')
+  @RequirePermission('employees', 'permissions', 'edit')
   @Post('logo-small')
   @ApiConsumes('multipart/form-data')
   @UseInterceptors(FileInterceptor('logo', {
@@ -102,6 +105,7 @@ export class EnterpriseBrandingController {
   }
 
   @ApiBearerAuth('JWT-auth')
+  @RequirePermission('employees', 'permissions', 'edit')
   @Post('favicon')
   @ApiConsumes('multipart/form-data')
   @UseInterceptors(FileInterceptor('favicon', {
@@ -119,6 +123,7 @@ export class EnterpriseBrandingController {
   }
 
   @ApiBearerAuth('JWT-auth')
+  @RequirePermission('employees', 'permissions', 'edit')
   @Post('login-bg')
   @ApiConsumes('multipart/form-data')
   @UseInterceptors(FileInterceptor('image', {
@@ -148,6 +153,7 @@ export class EnterpriseBrandingController {
   }
 
   @ApiBearerAuth('JWT-auth')
+  @RequirePermission('employees', 'permissions', 'edit')
   @Post('rollback/:version')
   rollback(
     @Param('version', ParseIntPipe) version: number,

@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, DataSource } from 'typeorm';
 import { Invoice } from './entities/invoice.entity';
 import { InvoiceItem } from './entities/invoice-item.entity';
 import { Payment } from './entities/payment.entity';
@@ -23,6 +23,7 @@ export class InvoicesService {
     @InjectRepository(QuotationItem)
     private quotationItemRepository: Repository<QuotationItem>,
     private auditLogsService: AuditLogsService,
+    private dataSource: DataSource,
   ) {}
 
   async findAll(
@@ -148,14 +149,16 @@ export class InvoicesService {
 
     const { subTotal, taxAmount, items } = this.calculateTotals(createDto.items);
 
+    const safeDiscountValue = Number(createDto.discountValue) || 0;
+    const safeShipping = Number(createDto.shippingCharges) || 0;
     let discountAmount = 0;
-    if (createDto.discountType === 'percentage' && createDto.discountValue) {
-      discountAmount = (subTotal * createDto.discountValue) / 100;
-    } else if (createDto.discountType === 'amount' && createDto.discountValue) {
-      discountAmount = createDto.discountValue;
+    if (createDto.discountType === 'percentage' && safeDiscountValue > 0) {
+      discountAmount = (subTotal * safeDiscountValue) / 100;
+    } else if (createDto.discountType === 'amount' && safeDiscountValue > 0) {
+      discountAmount = safeDiscountValue;
     }
 
-    const grandTotal = subTotal - discountAmount + taxAmount + (createDto.shippingCharges || 0);
+    const grandTotal = subTotal - discountAmount + taxAmount + safeShipping;
 
     const invoice = this.invoiceRepository.create({
       enterpriseId,
@@ -202,7 +205,7 @@ export class InvoicesService {
       action: 'create',
       description: `Created invoice ${invoiceNumber}${createDto.customerName ? ' for "' + createDto.customerName + '"' : ''}`,
       newValues: { invoiceNumber, grandTotal },
-    }).catch(() => {});
+    }).catch((err) => console.error('[audit/bg failed]', err?.message || err));
 
     return this.findOne(savedInvoice.id, enterpriseId);
   }
@@ -316,7 +319,7 @@ export class InvoicesService {
       entityId: id,
       action: 'update',
       description: `Updated invoice`,
-    }).catch(() => {});
+    }).catch((err) => console.error('[audit/bg failed]', err?.message || err));
 
     return this.findOne(id, enterpriseId);
   }
@@ -344,7 +347,7 @@ export class InvoicesService {
       entityId: id,
       action: 'delete',
       description: `Deleted invoice ${invoice.invoiceNumber}`,
-    }).catch(() => {});
+    }).catch((err) => console.error('[audit/bg failed]', err?.message || err));
 
     return {
       message: 'Invoice deleted successfully',
@@ -353,81 +356,84 @@ export class InvoicesService {
   }
 
   async recordPayment(invoiceId: number, enterpriseId: number, dto: RecordPaymentDto, userId?: number) {
-    const invoice = await this.invoiceRepository.findOne({
-      where: { id: invoiceId, enterpriseId },
-    });
-
-    if (!invoice) {
-      throw new NotFoundException('Invoice not found');
-    }
-
-    if (invoice.status === 'cancelled') {
-      throw new BadRequestException('Cannot record payment for a cancelled invoice');
-    }
-
-    // Recompute from actual payments: completed = verified, pending = under processing
-    const existingPayments = await this.paymentRepository.find({ where: { invoiceId } });
-    const completedPaid = existingPayments.filter(p => p.status === 'completed').reduce((sum, p) => sum + Number(p.amount), 0);
-    const pendingAmount = existingPayments.filter(p => p.status === 'pending').reduce((sum, p) => sum + Number(p.amount), 0);
-    const effectiveBalanceDue = Number(invoice.grandTotal) - completedPaid - pendingAmount;
-
-    if (effectiveBalanceDue <= 0) {
-      throw new BadRequestException('Invoice is already fully paid or has pending payments covering the full amount');
-    }
-
     if (dto.amount <= 0) {
       throw new BadRequestException('Payment amount must be greater than zero');
     }
 
-    if (dto.amount > effectiveBalanceDue + 0.01) {
-      throw new BadRequestException(`Payment amount (${dto.amount}) cannot exceed remaining balance (${effectiveBalanceDue.toFixed(2)})`);
-    }
+    // Wrap read → compute → insert → update in a transaction with row lock so
+    // concurrent recordPayment calls for the same invoice cannot both over-pay.
+    return this.dataSource.transaction(async (manager) => {
+      const invoice = await manager.findOne(Invoice, {
+        where: { id: invoiceId, enterpriseId },
+        lock: { mode: 'pessimistic_write' },
+      });
 
-    // Generate payment number
-    const paymentCount = await this.paymentRepository.count({ where: { enterpriseId } });
-    const paymentNumber = `PAY-${String(paymentCount + 1).padStart(6, '0')}`;
+      if (!invoice) {
+        throw new NotFoundException('Invoice not found');
+      }
 
-    // Save payment as 'pending' — under processing until verified
-    const payment = this.paymentRepository.create({
-      enterpriseId,
-      invoiceId,
-      paymentNumber,
-      paymentDate: dto.paymentDate ? new Date(dto.paymentDate) : new Date(),
-      amount: dto.amount,
-      paymentMethod: dto.paymentMethod,
-      referenceNumber: dto.referenceNumber,
-      notes: dto.notes,
-      paymentProof: dto.paymentProof,
-      receivedBy: userId,
-      status: 'pending',
+      if (invoice.status === 'cancelled') {
+        throw new BadRequestException('Cannot record payment for a cancelled invoice');
+      }
+
+      const existingPayments = await manager.find(Payment, { where: { invoiceId } });
+      const completedPaid = existingPayments.filter(p => p.status === 'completed').reduce((sum, p) => sum + Number(p.amount), 0);
+      const pendingAmount = existingPayments.filter(p => p.status === 'pending').reduce((sum, p) => sum + Number(p.amount), 0);
+      const effectiveBalanceDue = Number(invoice.grandTotal) - completedPaid - pendingAmount;
+
+      if (effectiveBalanceDue <= 0) {
+        throw new BadRequestException('Invoice is already fully paid or has pending payments covering the full amount');
+      }
+
+      if (dto.amount > effectiveBalanceDue + 0.01) {
+        throw new BadRequestException(`Payment amount (${dto.amount}) cannot exceed remaining balance (${effectiveBalanceDue.toFixed(2)})`);
+      }
+
+      const paymentCount = await manager.count(Payment, { where: { enterpriseId } });
+      const paymentNumber = `PAY-${String(paymentCount + 1).padStart(6, '0')}`;
+
+      const payment = manager.create(Payment, {
+        enterpriseId,
+        invoiceId,
+        paymentNumber,
+        paymentDate: dto.paymentDate ? new Date(dto.paymentDate) : new Date(),
+        amount: dto.amount,
+        paymentMethod: dto.paymentMethod,
+        referenceNumber: dto.referenceNumber,
+        notes: dto.notes,
+        paymentProof: dto.paymentProof,
+        receivedBy: userId,
+        status: 'pending',
+      });
+
+      await manager.save(Payment, payment);
+
+      const newBalanceDue = effectiveBalanceDue - dto.amount;
+      const invoiceStatus = completedPaid >= Number(invoice.grandTotal) ? 'fully_paid'
+        : completedPaid > 0 ? 'partially_paid'
+        : invoice.status === 'cancelled' ? 'cancelled'
+        : 'unpaid';
+
+      await manager.update(Invoice, invoiceId, {
+        totalPaid: completedPaid,
+        balanceDue: newBalanceDue,
+        status: invoiceStatus,
+      });
+
+      // Audit logged outside the transaction so audit failure doesn't roll back the payment.
+      this.auditLogsService.log({
+        enterpriseId,
+        userId,
+        entityType: 'invoice',
+        entityId: invoiceId,
+        action: 'payment',
+        description: `Recorded payment ${paymentNumber} of ${dto.amount} for invoice ${invoice.invoiceNumber} — under processing`,
+        newValues: { amount: dto.amount, paymentNumber, status: 'pending' },
+      }).catch((err) => console.error('[audit/bg failed]', err?.message || err));
+
+      const freshInvoice = await this.findOne(invoiceId, enterpriseId);
+      return freshInvoice;
     });
-
-    await this.paymentRepository.save(payment);
-
-    // Update invoice: totalPaid = verified only, balanceDue = effective remaining
-    const newBalanceDue = effectiveBalanceDue - dto.amount;
-    const invoiceStatus = completedPaid >= Number(invoice.grandTotal) ? 'fully_paid'
-      : completedPaid > 0 ? 'partially_paid'
-      : invoice.status === 'cancelled' ? 'cancelled'
-      : 'unpaid';
-
-    await this.invoiceRepository.update(invoiceId, {
-      totalPaid: completedPaid,
-      balanceDue: newBalanceDue,
-      status: invoiceStatus,
-    });
-
-    this.auditLogsService.log({
-      enterpriseId,
-      userId,
-      entityType: 'invoice',
-      entityId: invoiceId,
-      action: 'payment',
-      description: `Recorded payment ${paymentNumber} of ${dto.amount} for invoice ${invoice.invoiceNumber} — under processing`,
-      newValues: { amount: dto.amount, paymentNumber, status: 'pending' },
-    }).catch(() => {});
-
-    return this.findOne(invoiceId, enterpriseId);
   }
 
   async verifyPayment(paymentId: number, invoiceId: number, enterpriseId: number, userId?: number) {
@@ -482,7 +488,7 @@ export class InvoicesService {
       action: 'payment_verified',
       description: `Verified payment ${payment.paymentNumber} of ${payment.amount} — marked as paid`,
       newValues: { paymentId, newStatus },
-    }).catch(() => {});
+    }).catch((err) => console.error('[audit/bg failed]', err?.message || err));
 
     return this.findOne(invoiceId, enterpriseId);
   }

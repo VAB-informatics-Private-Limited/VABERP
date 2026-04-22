@@ -1,5 +1,5 @@
 'use client';
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Table, Button, Input, Select, Tag, Modal, Form, InputNumber,
   DatePicker, Space, Card, Row, Col, Statistic, Tooltip, Tabs, Badge, Result,
@@ -7,6 +7,7 @@ import {
 import {
   PlusOutlined, EditOutlined, DeleteOutlined, WarningOutlined,
   ExclamationCircleOutlined, StopOutlined, LockOutlined,
+  SearchOutlined, ClearOutlined,
 } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuthStore, usePermissions } from '@/stores/authStore';
@@ -37,10 +38,33 @@ export default function WasteInventoryPage() {
   const canAccess = userType === 'enterprise' || hasPermission('waste_management', 'waste_inventory', 'view');
   const qc = useQueryClient();
   const [page, setPage] = useState(1);
+  const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>();
   const [categoryFilter, setCategoryFilter] = useState<number>();
   const [classFilter, setClassFilter] = useState<string>();
+
+  // Debounce search input so typing doesn't fire a request every keystroke
+  const searchDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (searchDebounce.current) clearTimeout(searchDebounce.current);
+    searchDebounce.current = setTimeout(() => {
+      setSearch(searchInput);
+      setPage(1);
+    }, 350);
+    return () => {
+      if (searchDebounce.current) clearTimeout(searchDebounce.current);
+    };
+  }, [searchInput]);
+
+  const handleClearAll = () => {
+    setSearchInput('');
+    setSearch('');
+    setStatusFilter(undefined);
+    setCategoryFilter(undefined);
+    setClassFilter(undefined);
+    setPage(1);
+  };
   const [inventoryModal, setInventoryModal] = useState(false);
   const [categoryModal, setCategoryModal] = useState(false);
   const [sourceModal, setSourceModal] = useState(false);
@@ -210,19 +234,27 @@ export default function WasteInventoryPage() {
       </Row>
 
       {/* Filters */}
-      <div className="flex gap-3 mb-4 flex-wrap">
-        <Search placeholder="Search batch, location..." allowClear style={{ width: 260 }} onSearch={v => { setSearch(v); setPage(1); }} />
-        <Select placeholder="Status" allowClear style={{ width: 160 }} onChange={v => { setStatusFilter(v); setPage(1); }}>
+      <div className="flex gap-3 mb-4 flex-wrap items-center">
+        <Input
+          placeholder="Search batch, location, category, source..."
+          prefix={<SearchOutlined />}
+          allowClear
+          style={{ width: 300 }}
+          value={searchInput}
+          onChange={(e) => setSearchInput(e.target.value)}
+        />
+        <Select placeholder="Status" allowClear style={{ width: 160 }} value={statusFilter} onChange={v => { setStatusFilter(v); setPage(1); }}>
           {['available','partially_disposed','reserved','expired','quarantined','fully_disposed'].map(s =>
             <Option key={s} value={s}>{s.replace(/_/g,' ').toUpperCase()}</Option>
           )}
         </Select>
-        <Select placeholder="Category" allowClear style={{ width: 180 }} onChange={v => { setCategoryFilter(v); setPage(1); }}>
+        <Select placeholder="Category" allowClear style={{ width: 180 }} value={categoryFilter} onChange={v => { setCategoryFilter(v); setPage(1); }}>
           {categories.map((c: WasteCategory) => <Option key={c.id} value={c.id}>{c.name}</Option>)}
         </Select>
-        <Select placeholder="Classification" allowClear style={{ width: 160 }} onChange={v => { setClassFilter(v); setPage(1); }}>
+        <Select placeholder="Classification" allowClear style={{ width: 160 }} value={classFilter} onChange={v => { setClassFilter(v); setPage(1); }}>
           {['recyclable','hazardous','general','e-waste','organic'].map(c => <Option key={c} value={c}>{c}</Option>)}
         </Select>
+        <Button icon={<ClearOutlined />} onClick={handleClearAll}>Clear</Button>
       </div>
 
       <Table dataSource={data?.data ?? []} columns={columns} rowKey="id" loading={isFetching}

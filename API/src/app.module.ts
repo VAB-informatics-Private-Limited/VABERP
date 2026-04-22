@@ -54,6 +54,7 @@ import { MaintenanceBomModule } from './modules/maintenance-bom/maintenance-bom.
 import { MaintenanceRemindersModule } from './modules/maintenance-reminders/maintenance-reminders.module';
 import { MaintenanceWorkOrdersModule } from './modules/maintenance-work-orders/maintenance-work-orders.module';
 import { MaintenanceDowntimeModule } from './modules/maintenance-downtime/maintenance-downtime.module';
+import { SparePartsModule } from './modules/spare-parts/spare-parts.module';
 import { OrganizerModule } from './modules/organizer/organizer.module';
 import { WasteInventoryModule } from './modules/waste-inventory/waste-inventory.module';
 import { WasteDisposalModule } from './modules/waste-disposal/waste-disposal.module';
@@ -73,11 +74,17 @@ import jwtConfig from './config/jwt.config';
       envFilePath: ['.env.local', '.env'],
     }),
 
-    // Rate limiting: 100 requests per 60 seconds per IP
+    // Rate limiting: two tiers — default for all endpoints, tighter for auth
     ThrottlerModule.forRoot([
       {
+        name: 'default',
         ttl: 60000,
         limit: 100,
+      },
+      {
+        name: 'auth',
+        ttl: 60000,
+        limit: 10,
       },
     ]),
 
@@ -150,6 +157,7 @@ import jwtConfig from './config/jwt.config';
     MaintenanceRemindersModule,
     MaintenanceWorkOrdersModule,
     MaintenanceDowntimeModule,
+    SparePartsModule,
     OrganizerModule,
     WasteInventoryModule,
     WasteDisposalModule,

@@ -31,7 +31,7 @@ export class NotificationsService {
       link: params.link,
       isRead: false,
     });
-    return this.repo.save(notification).catch(() => {});
+    return this.repo.save(notification).catch((err) => console.error('[audit/bg failed]', err?.message || err));
   }
 
   async findAll(enterpriseId: number, page = 1, limit = 20, unreadOnly = false) {

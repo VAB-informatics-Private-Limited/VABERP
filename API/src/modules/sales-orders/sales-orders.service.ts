@@ -222,7 +222,7 @@ export class SalesOrdersService {
       entityId: savedSo.id,
       action: 'create',
       description: `Created sales order ${orderNumber}`,
-    }).catch(() => {});
+    }).catch((err) => console.error('[audit/bg failed]', err?.message || err));
 
     return this.findOne(savedSo.id, enterpriseId);
   }
@@ -375,7 +375,7 @@ This is an automated notification.`;
       action: 'status_change',
       description: `Status changed from "${oldStatus}" to "${status}" on sales order`,
       newValues: { oldStatus, newStatus: status },
-    }).catch(() => {});
+    }).catch((err) => console.error('[audit/bg failed]', err?.message || err));
 
     return this.findOne(id, enterpriseId);
   }
@@ -689,7 +689,7 @@ This is an automated notification.`;
       entityId: id,
       action: 'update',
       description: `Updated sales order ${so.orderNumber}: ${changeSummary}`,
-    }).catch(() => {});
+    }).catch((err) => console.error('[audit/bg failed]', err?.message || err));
 
     return this.findOne(id, enterpriseId);
   }

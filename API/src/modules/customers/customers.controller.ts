@@ -12,6 +12,7 @@ import {
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { CustomersService } from './customers.service';
 import { EnterpriseId, RequirePermission, DataStartDate, CurrentUser, OwnDataOnly, CurrentUserId } from '../../common/decorators';
+import { CreateCustomerDto, UpdateCustomerDto } from './dto/customer.dto';
 
 @ApiTags('Customers')
 @Controller('customers')
@@ -53,7 +54,7 @@ export class CustomersController {
   async create(
     @EnterpriseId() enterpriseId: number,
     @CurrentUser() user: any,
-    @Body() createDto: any,
+    @Body() createDto: CreateCustomerDto,
   ) {
     return this.customersService.create(enterpriseId, createDto, user);
   }
@@ -65,7 +66,7 @@ export class CustomersController {
     @Param('id', ParseIntPipe) id: number,
     @EnterpriseId() enterpriseId: number,
     @CurrentUser() user: any,
-    @Body() updateDto: any,
+    @Body() updateDto: UpdateCustomerDto,
   ) {
     return this.customersService.update(id, enterpriseId, updateDto, user);
   }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Spin } from 'antd';
 import { useAuthStore } from '@/stores/authStore';
@@ -11,9 +11,12 @@ interface ProtectedRouteProps {
   children: React.ReactNode;
 }
 
+const PERMISSION_POLL_MS = 5000;
+
 export function ProtectedRoute({ children }: ProtectedRouteProps) {
   const router = useRouter();
   const { isAuthenticated, user, userType, setPermissions, _hasHydrated } = useAuthStore();
+  const lastPermissionsRef = useRef<string>('');
 
   useEffect(() => {
     // Don't redirect until the store has rehydrated from localStorage
@@ -24,19 +27,35 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
       return;
     }
 
-    // Always sync the latest permissions from the server for employees
-    // so changes made by admin are reflected without requiring re-login
-    if (userType === 'employee') {
-      getPermissions().then((res) => {
-        if (res.data) {
-          setPermissions(normalizePermissions(res.data));
+    if (userType !== 'employee') return;
+
+    const syncPermissions = async () => {
+      if (typeof document !== 'undefined' && document.hidden) return;
+      try {
+        const res = await getPermissions();
+        if (!res.data) return;
+        const normalized = normalizePermissions(res.data);
+        const serialized = JSON.stringify(normalized);
+        if (serialized !== lastPermissionsRef.current) {
+          lastPermissionsRef.current = serialized;
+          setPermissions(normalized);
         }
-      }).catch(() => {
+      } catch {
         // silently ignore — stale permissions in store are still usable
-      });
-    }
+      }
+    };
+
+    syncPermissions();
+    const intervalId = setInterval(syncPermissions, PERMISSION_POLL_MS);
+    const onVisibility = () => { if (!document.hidden) syncPermissions(); };
+    document.addEventListener('visibilitychange', onVisibility);
+
+    return () => {
+      clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [_hasHydrated, isAuthenticated, user]);
+  }, [_hasHydrated, isAuthenticated, user, userType]);
 
   // Show spinner while waiting for localStorage rehydration
   if (!_hasHydrated) {

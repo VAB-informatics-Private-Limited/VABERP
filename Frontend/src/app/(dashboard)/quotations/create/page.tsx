@@ -55,12 +55,12 @@ function CreateQuotationContent() {
   return (
     <div>
       <Title level={4} className="mb-6">
-        {enquiryId ? `Create Quotation for Enquiry #${enquiryId}` : 'Create Quotation'}
+        {enquiryId ? `Create & Send Quotation for Enquiry #${enquiryId}` : 'Create & Send Quotation'}
       </Title>
       <QuotationBuilder
         onSubmit={(data) => mutation.mutate(data)}
         loading={mutation.isPending}
-        submitText="Create Quotation"
+        submitText="Create & Send Quotation"
         initialEnquiryData={enquiryData?.data}
       />
     </div>

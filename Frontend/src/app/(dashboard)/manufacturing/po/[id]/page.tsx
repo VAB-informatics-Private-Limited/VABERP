@@ -377,7 +377,7 @@ export default function ManufacturingPODetailPage() {
       setStageCompletedDate(dayjs());
       // Update stage data directly from the mutation response (already has fresh data from findOne)
       // This ensures the modal updates synchronously before the button re-enables
-      if (response?.data?.stage_progress) {
+      if (response?.data?.stage_progress && Array.isArray(response.data.stage_progress)) {
         const stages = (response.data.stage_progress as any[]).map((s: any) => ({
           id: s.id,
           process_name: s.stage_name,

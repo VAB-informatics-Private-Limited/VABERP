@@ -1,6 +1,12 @@
 import { Controller, Get, Post, Patch, Delete, Param, Body, Query, ParseIntPipe } from '@nestjs/common';
 import { WasteDisposalService } from './waste-disposal.service';
 import { RequirePermission, EnterpriseId, CurrentUser } from '../../common/decorators';
+import {
+  CreateDisposalTransactionDto,
+  UpdateDisposalTransactionDto,
+  CompleteDisposalDto,
+  DisposalLineDto,
+} from './dto/waste-disposal.dto';
 
 @Controller('waste-disposal')
 export class WasteDisposalController {
@@ -37,13 +43,13 @@ export class WasteDisposalController {
 
   @Post()
   @RequirePermission('waste_management', 'waste_disposal', 'create')
-  create(@EnterpriseId() enterpriseId: number, @CurrentUser() user: any, @Body() dto: any) {
+  create(@EnterpriseId() enterpriseId: number, @CurrentUser() user: any, @Body() dto: CreateDisposalTransactionDto) {
     return this.svc.createTransaction(enterpriseId, dto, user?.sub ?? user?.id);
   }
 
   @Patch(':id')
   @RequirePermission('waste_management', 'waste_disposal', 'edit')
-  update(@Param('id', ParseIntPipe) id: number, @EnterpriseId() enterpriseId: number, @Body() dto: any) {
+  update(@Param('id', ParseIntPipe) id: number, @EnterpriseId() enterpriseId: number, @Body() dto: UpdateDisposalTransactionDto) {
     return this.svc.updateTransaction(id, enterpriseId, dto);
   }
 
@@ -55,7 +61,7 @@ export class WasteDisposalController {
 
   @Post(':id/complete')
   @RequirePermission('waste_management', 'waste_disposal', 'edit')
-  complete(@Param('id', ParseIntPipe) id: number, @EnterpriseId() enterpriseId: number, @CurrentUser() user: any, @Body() dto: any) {
+  complete(@Param('id', ParseIntPipe) id: number, @EnterpriseId() enterpriseId: number, @CurrentUser() user: any, @Body() dto: CompleteDisposalDto) {
     return this.svc.complete(id, enterpriseId, dto, user?.sub ?? user?.id);
   }
 
@@ -67,7 +73,7 @@ export class WasteDisposalController {
 
   @Post(':id/lines')
   @RequirePermission('waste_management', 'waste_disposal', 'edit')
-  addLine(@Param('id', ParseIntPipe) id: number, @EnterpriseId() enterpriseId: number, @CurrentUser() user: any, @Body() dto: any) {
+  addLine(@Param('id', ParseIntPipe) id: number, @EnterpriseId() enterpriseId: number, @CurrentUser() user: any, @Body() dto: DisposalLineDto) {
     return this.svc.addLine(id, enterpriseId, dto, user?.sub ?? user?.id);
   }
 

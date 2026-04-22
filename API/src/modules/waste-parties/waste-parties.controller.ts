@@ -1,6 +1,7 @@
 import { Controller, Get, Post, Patch, Delete, Param, Body, Query, ParseIntPipe } from '@nestjs/common';
 import { WastePartiesService } from './waste-parties.service';
 import { RequirePermission, EnterpriseId } from '../../common/decorators';
+import { CreateWastePartyDto, UpdateWastePartyDto, UpsertRateDto } from './dto/waste-party.dto';
 
 @Controller('waste-parties')
 export class WastePartiesController {
@@ -31,13 +32,13 @@ export class WastePartiesController {
 
   @Post()
   @RequirePermission('waste_management', 'waste_parties', 'create')
-  create(@EnterpriseId() enterpriseId: number, @Body() dto: any) {
+  create(@EnterpriseId() enterpriseId: number, @Body() dto: CreateWastePartyDto) {
     return this.svc.createParty(enterpriseId, dto);
   }
 
   @Patch(':id')
   @RequirePermission('waste_management', 'waste_parties', 'edit')
-  update(@Param('id', ParseIntPipe) id: number, @EnterpriseId() enterpriseId: number, @Body() dto: any) {
+  update(@Param('id', ParseIntPipe) id: number, @EnterpriseId() enterpriseId: number, @Body() dto: UpdateWastePartyDto) {
     return this.svc.updateParty(id, enterpriseId, dto);
   }
 
@@ -55,13 +56,13 @@ export class WastePartiesController {
 
   @Post(':id/rates')
   @RequirePermission('waste_management', 'waste_parties', 'edit')
-  addRate(@Param('id', ParseIntPipe) id: number, @EnterpriseId() enterpriseId: number, @Body() dto: any) {
+  addRate(@Param('id', ParseIntPipe) id: number, @EnterpriseId() enterpriseId: number, @Body() dto: UpsertRateDto) {
     return this.svc.addRate(id, enterpriseId, dto);
   }
 
   @Patch('rates/:rateId')
   @RequirePermission('waste_management', 'waste_parties', 'edit')
-  updateRate(@Param('rateId', ParseIntPipe) rateId: number, @EnterpriseId() enterpriseId: number, @Body() dto: any) {
+  updateRate(@Param('rateId', ParseIntPipe) rateId: number, @EnterpriseId() enterpriseId: number, @Body() dto: UpsertRateDto) {
     return this.svc.updateRate(rateId, enterpriseId, dto);
   }
 

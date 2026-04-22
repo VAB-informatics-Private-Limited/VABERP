@@ -163,7 +163,7 @@ export class PurchaseOrdersService {
       entityId: savedPo.id,
       userId,
       enterpriseId,
-    }).catch(() => {});
+    }).catch((err) => console.error('[audit/bg failed]', err?.message || err));
     this.notificationsService.create({
       enterpriseId,
       title: 'New Purchase Order Created',
@@ -308,7 +308,7 @@ export class PurchaseOrdersService {
       entityId: savedPo.id,
       userId,
       enterpriseId,
-    }).catch(() => {});
+    }).catch((err) => console.error('[audit/bg failed]', err?.message || err));
     this.notificationsService.create({
       enterpriseId,
       title: 'Purchase Order Created from Indent',
@@ -338,7 +338,7 @@ export class PurchaseOrdersService {
       entityId: id,
       userId,
       enterpriseId,
-    }).catch(() => {});
+    }).catch((err) => console.error('[audit/bg failed]', err?.message || err));
     return approveResult;
   }
 
@@ -443,7 +443,7 @@ export class PurchaseOrdersService {
       entityId: id,
       userId,
       enterpriseId,
-    }).catch(() => {});
+    }).catch((err) => console.error('[audit/bg failed]', err?.message || err));
     return receiveResult;
   }
 
@@ -471,7 +471,7 @@ export class PurchaseOrdersService {
       entityId: id,
       userId: user?.id,
       enterpriseId,
-    }).catch(() => {});
+    }).catch((err) => console.error('[audit/bg failed]', err?.message || err));
 
     return { message: 'Purchase order deleted successfully', data: null };
   }

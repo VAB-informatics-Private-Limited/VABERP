@@ -32,7 +32,7 @@ export default function DashboardLayout({
 
   return (
     <ProtectedRoute>
-      <Layout style={{ height: '100vh', overflow: 'hidden' }}>
+      <Layout className="app-shell">
         {!isMobile && (
           <div className="no-print">
             <Sidebar collapsed={collapsed} />
@@ -51,7 +51,7 @@ export default function DashboardLayout({
           </Drawer>
         )}
         <Layout
-          className="print:!ml-0"
+          className="print:!ml-0 app-main"
           style={{
             marginLeft: isMobile ? 0 : (collapsed ? 80 : 240),
             transition: 'margin-left 0.2s',
@@ -69,10 +69,7 @@ export default function DashboardLayout({
               }}
             />
           </div>
-          <Content
-            className="p-3 md:p-6 bg-[#f0f4f8]"
-            style={{ height: 'calc(100vh - 64px)', overflowY: 'auto' }}
-          >
+          <Content className="app-content p-3 md:p-6">
             {children}
           </Content>
         </Layout>

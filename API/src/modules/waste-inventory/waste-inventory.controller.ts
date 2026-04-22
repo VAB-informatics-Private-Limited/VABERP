@@ -1,6 +1,12 @@
 import { Controller, Get, Post, Patch, Delete, Param, Body, Query, ParseIntPipe } from '@nestjs/common';
 import { WasteInventoryService } from './waste-inventory.service';
 import { RequirePermission, EnterpriseId, CurrentUser } from '../../common/decorators';
+import {
+  CreateCategoryDto, UpdateCategoryDto,
+  CreateSourceDto, UpdateSourceDto,
+  CreateWasteInventoryDto, UpdateWasteInventoryDto,
+  QuarantineDto, WriteOffDto,
+} from './dto/waste-inventory.dto';
 
 @Controller('waste-inventory')
 export class WasteInventoryController {
@@ -20,13 +26,13 @@ export class WasteInventoryController {
 
   @Post('categories')
   @RequirePermission('waste_management', 'waste_inventory', 'create')
-  createCategory(@EnterpriseId() enterpriseId: number, @Body() dto: any) {
+  createCategory(@EnterpriseId() enterpriseId: number, @Body() dto: CreateCategoryDto) {
     return this.svc.createCategory(enterpriseId, dto);
   }
 
   @Patch('categories/:id')
   @RequirePermission('waste_management', 'waste_inventory', 'edit')
-  updateCategory(@Param('id', ParseIntPipe) id: number, @EnterpriseId() enterpriseId: number, @Body() dto: any) {
+  updateCategory(@Param('id', ParseIntPipe) id: number, @EnterpriseId() enterpriseId: number, @Body() dto: UpdateCategoryDto) {
     return this.svc.updateCategory(id, enterpriseId, dto);
   }
 
@@ -44,13 +50,13 @@ export class WasteInventoryController {
 
   @Post('sources')
   @RequirePermission('waste_management', 'waste_inventory', 'create')
-  createSource(@EnterpriseId() enterpriseId: number, @Body() dto: any) {
+  createSource(@EnterpriseId() enterpriseId: number, @Body() dto: CreateSourceDto) {
     return this.svc.createSource(enterpriseId, dto);
   }
 
   @Patch('sources/:id')
   @RequirePermission('waste_management', 'waste_inventory', 'edit')
-  updateSource(@Param('id', ParseIntPipe) id: number, @EnterpriseId() enterpriseId: number, @Body() dto: any) {
+  updateSource(@Param('id', ParseIntPipe) id: number, @EnterpriseId() enterpriseId: number, @Body() dto: UpdateSourceDto) {
     return this.svc.updateSource(id, enterpriseId, dto);
   }
 
@@ -86,25 +92,25 @@ export class WasteInventoryController {
 
   @Post()
   @RequirePermission('waste_management', 'waste_inventory', 'create')
-  create(@EnterpriseId() enterpriseId: number, @CurrentUser() user: any, @Body() dto: any) {
+  create(@EnterpriseId() enterpriseId: number, @CurrentUser() user: any, @Body() dto: CreateWasteInventoryDto) {
     return this.svc.createInventory(enterpriseId, dto, user?.sub ?? user?.id);
   }
 
   @Patch(':id')
   @RequirePermission('waste_management', 'waste_inventory', 'edit')
-  update(@Param('id', ParseIntPipe) id: number, @EnterpriseId() enterpriseId: number, @Body() dto: any) {
+  update(@Param('id', ParseIntPipe) id: number, @EnterpriseId() enterpriseId: number, @Body() dto: UpdateWasteInventoryDto) {
     return this.svc.updateInventory(id, enterpriseId, dto);
   }
 
   @Post(':id/quarantine')
   @RequirePermission('waste_management', 'waste_inventory', 'edit')
-  quarantine(@Param('id', ParseIntPipe) id: number, @EnterpriseId() enterpriseId: number, @CurrentUser() user: any, @Body() dto: any) {
-    return this.svc.quarantine(id, enterpriseId, dto.notes, user?.sub ?? user?.id);
+  quarantine(@Param('id', ParseIntPipe) id: number, @EnterpriseId() enterpriseId: number, @CurrentUser() user: any, @Body() dto: QuarantineDto) {
+    return this.svc.quarantine(id, enterpriseId, dto.notes ?? '', user?.sub ?? user?.id);
   }
 
   @Post(':id/write-off')
   @RequirePermission('waste_management', 'waste_inventory', 'edit')
-  writeOff(@Param('id', ParseIntPipe) id: number, @EnterpriseId() enterpriseId: number, @CurrentUser() user: any, @Body() dto: any) {
+  writeOff(@Param('id', ParseIntPipe) id: number, @EnterpriseId() enterpriseId: number, @CurrentUser() user: any, @Body() dto: WriteOffDto) {
     return this.svc.writeOff(id, enterpriseId, dto, user?.sub ?? user?.id);
   }
 }

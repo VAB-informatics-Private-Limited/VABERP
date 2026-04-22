@@ -283,9 +283,13 @@ export default function SubscriptionsPage() {
       render: (_: unknown, record: EnterpriseSubscription) => (
         <Button
           size="small"
-          type="primary"
-          ghost
           onClick={() => openAssignModal(record)}
+          style={{
+            background: '#0f172a',
+            borderColor: '#0f172a',
+            color: '#ffffff',
+            fontWeight: 500,
+          }}
         >
           Assign Plan
         </Button>
@@ -554,7 +558,16 @@ export default function SubscriptionsPage() {
 
               <div className="flex justify-end gap-2">
                 <Button onClick={() => setAssignModalOpen(false)}>Cancel</Button>
-                <Button type="primary" htmlType="submit" loading={submitting}>
+                <Button
+                  htmlType="submit"
+                  loading={submitting}
+                  style={{
+                    background: '#0f172a',
+                    borderColor: '#0f172a',
+                    color: '#ffffff',
+                    fontWeight: 500,
+                  }}
+                >
                   Confirm &amp; Assign
                 </Button>
               </div>

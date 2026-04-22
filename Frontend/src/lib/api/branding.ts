@@ -24,36 +24,28 @@ export async function saveBranding(data: Partial<EnterpriseBranding>): Promise<A
 export async function uploadBrandingLogo(file: File): Promise<ApiResponse<EnterpriseBranding>> {
   const formData = new FormData();
   formData.append('logo', file);
-  const response = await apiClient.post('/branding/logo', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  });
+  const response = await apiClient.post('/branding/logo', formData);
   return response.data;
 }
 
 export async function uploadBrandingLogoSmall(file: File): Promise<ApiResponse<EnterpriseBranding>> {
   const formData = new FormData();
   formData.append('logo', file);
-  const response = await apiClient.post('/branding/logo-small', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  });
+  const response = await apiClient.post('/branding/logo-small', formData);
   return response.data;
 }
 
 export async function uploadBrandingFavicon(file: File): Promise<ApiResponse<EnterpriseBranding>> {
   const formData = new FormData();
   formData.append('favicon', file);
-  const response = await apiClient.post('/branding/favicon', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  });
+  const response = await apiClient.post('/branding/favicon', formData);
   return response.data;
 }
 
 export async function uploadBrandingLoginBg(file: File): Promise<ApiResponse<EnterpriseBranding>> {
   const formData = new FormData();
   formData.append('image', file);
-  const response = await apiClient.post('/branding/login-bg', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  });
+  const response = await apiClient.post('/branding/login-bg', formData);
   return response.data;
 }
 

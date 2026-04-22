@@ -1,7 +1,7 @@
 import { Controller, Get, Patch, Body } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { EnterprisesService } from './enterprises.service';
-import { EnterpriseId } from '../../common/decorators';
+import { EnterpriseId, RequirePermission } from '../../common/decorators';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 
 @ApiTags('Enterprises')
@@ -17,7 +17,8 @@ export class EnterprisesController {
   }
 
   @Patch('profile')
-  @ApiOperation({ summary: 'Update enterprise profile' })
+  @RequirePermission('employees', 'permissions', 'edit')
+  @ApiOperation({ summary: 'Update enterprise profile (admin-level permission required)' })
   async updateProfile(
     @EnterpriseId() enterpriseId: number,
     @Body() updateDto: UpdateProfileDto,

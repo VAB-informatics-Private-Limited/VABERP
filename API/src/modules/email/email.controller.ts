@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { EmailService, SendEmailDto } from './email.service';
+import { RequirePermission } from '../../common/decorators';
 
 @ApiTags('Email')
 @Controller('email')
@@ -14,7 +15,8 @@ export class EmailController {
   constructor(private readonly emailService: EmailService) {}
 
   @Post('send')
-  @ApiOperation({ summary: 'Send an email' })
+  @RequirePermission('employees', 'permissions', 'edit')
+  @ApiOperation({ summary: 'Send an email (admin-level permission required)' })
   async sendEmail(@Body() dto: SendEmailDto) {
     const result = await this.emailService.sendEmail(dto);
     return {

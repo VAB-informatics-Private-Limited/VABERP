@@ -10,7 +10,7 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { InterestStatusesService } from './interest-statuses.service';
-import { EnterpriseId } from '../../common/decorators';
+import { EnterpriseId, RequirePermission } from '../../common/decorators';
 import { CreateInterestStatusDto } from './dto/create-interest-status.dto';
 import { UpdateInterestStatusDto } from './dto/update-interest-status.dto';
 
@@ -27,6 +27,7 @@ export class InterestStatusesController {
   }
 
   @Post()
+  @RequirePermission('crm', 'settings', 'edit')
   @ApiOperation({ summary: 'Create a new interest status' })
   async create(
     @EnterpriseId() enterpriseId: number,
@@ -36,6 +37,7 @@ export class InterestStatusesController {
   }
 
   @Patch(':id')
+  @RequirePermission('crm', 'settings', 'edit')
   @ApiOperation({ summary: 'Update an interest status' })
   async update(
     @Param('id', ParseIntPipe) id: number,
@@ -46,6 +48,7 @@ export class InterestStatusesController {
   }
 
   @Delete(':id')
+  @RequirePermission('crm', 'settings', 'edit')
   @ApiOperation({ summary: 'Delete an interest status' })
   async delete(
     @Param('id', ParseIntPipe) id: number,

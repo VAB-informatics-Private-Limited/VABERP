@@ -1,5 +1,7 @@
-import { Controller, Post, Body, Get, UseGuards, Request } from '@nestjs/common';
+import { Controller, Post, Body, Get, UseGuards, Request, Res } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
+import { Response } from 'express';
 import { AuthService } from './auth.service';
 import {
   EmployeeLoginDto,
@@ -18,11 +20,34 @@ import { CurrentUser } from '../../common/decorators';
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
+  // Helper: set the JWT as a secure httpOnly cookie on the response.
+  private setAuthCookie(res: Response, token: string) {
+    res.cookie('access_token', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 24 * 60 * 60 * 1000, // 24h, matches typical JWT TTL
+      path: '/',
+    });
+  }
+
+  private clearAuthCookie(res: Response) {
+    res.clearCookie('access_token', { path: '/' });
+  }
+
   @Public()
+  @Throttle({ auth: { limit: 10, ttl: 60000 } })
   @Post('employee/login')
   @ApiOperation({ summary: 'Employee login' })
-  async employeeLogin(@Body() dto: EmployeeLoginDto) {
-    return this.authService.employeeLogin(dto);
+  async employeeLogin(
+    @Body() dto: EmployeeLoginDto,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const result = await this.authService.employeeLogin(dto);
+    if (result?.data?.token) {
+      this.setAuthCookie(res, result.data.token);
+    }
+    return result;
   }
 
   @Public()
@@ -33,6 +58,7 @@ export class AuthController {
   }
 
   @Public()
+  @Throttle({ auth: { limit: 5, ttl: 60000 } })
   @Post('enterprise/verify-otp')
   @ApiOperation({ summary: 'Verify OTP for enterprise login' })
   async verifyOtp(@Body() dto: VerifyOtpDto) {
@@ -40,10 +66,26 @@ export class AuthController {
   }
 
   @Public()
+  @Throttle({ auth: { limit: 10, ttl: 60000 } })
   @Post('enterprise/login')
   @ApiOperation({ summary: 'Enterprise login with password' })
-  async enterpriseLogin(@Body() dto: EnterpriseLoginDto) {
-    return this.authService.enterpriseLogin(dto);
+  async enterpriseLogin(
+    @Body() dto: EnterpriseLoginDto,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const result = await this.authService.enterpriseLogin(dto);
+    if (result?.data?.token) {
+      this.setAuthCookie(res, result.data.token);
+    }
+    return result;
+  }
+
+  @Public()
+  @Post('logout')
+  @ApiOperation({ summary: 'Clear httpOnly auth cookie (safe to call even without valid JWT)' })
+  async logout(@Res({ passthrough: true }) res: Response) {
+    this.clearAuthCookie(res);
+    return { message: 'Logged out' };
   }
 
   @Public()
@@ -54,6 +96,7 @@ export class AuthController {
   }
 
   @Public()
+  @Throttle({ auth: { limit: 5, ttl: 60000 } })
   @Post('reset-password')
   @ApiOperation({ summary: 'Reset password with old password verification' })
   async resetPassword(@Body() dto: ResetPasswordDto) {

@@ -41,10 +41,12 @@ export class AuthService {
   ) {}
 
   async employeeLogin(dto: EmployeeLoginDto) {
-    const employee = await this.employeeRepository.findOne({
-      where: { email: dto.email },
-      relations: ['enterprise'],
-    });
+    const employee = await this.employeeRepository
+      .createQueryBuilder('employee')
+      .leftJoinAndSelect('employee.enterprise', 'enterprise')
+      .addSelect('employee.password')
+      .where('employee.email = :email', { email: dto.email })
+      .getOne();
 
     if (!employee) {
       throw new UnauthorizedException('Invalid email or password');
@@ -85,7 +87,7 @@ export class AuthService {
       entityId: employee.id,
       action: 'login',
       description: `Employee "${employeeName}" logged in`,
-    }).catch(() => {});
+    }).catch((err) => console.error('[audit/bg failed]', err?.message || err));
 
     return {
       message: 'Login successful',
@@ -213,9 +215,11 @@ export class AuthService {
   }
 
   async enterpriseLogin(dto: EnterpriseLoginDto) {
-    const enterprise = await this.enterpriseRepository.findOne({
-      where: { email: dto.email },
-    });
+    const enterprise = await this.enterpriseRepository
+      .createQueryBuilder('enterprise')
+      .addSelect('enterprise.password')
+      .where('enterprise.email = :email', { email: dto.email })
+      .getOne();
 
     if (!enterprise) {
       throw new UnauthorizedException('Invalid email or password');
@@ -349,9 +353,11 @@ export class AuthService {
 
   async resetPassword(dto: ResetPasswordDto) {
     // Try enterprise first
-    let enterprise = await this.enterpriseRepository.findOne({
-      where: { email: dto.emailId },
-    });
+    let enterprise = await this.enterpriseRepository
+      .createQueryBuilder('enterprise')
+      .addSelect('enterprise.password')
+      .where('enterprise.email = :email', { email: dto.emailId })
+      .getOne();
 
     if (enterprise) {
       const isOldPasswordValid = await bcrypt.compare(dto.oldpassword, enterprise.password);
@@ -369,9 +375,11 @@ export class AuthService {
     }
 
     // Try employee
-    const employee = await this.employeeRepository.findOne({
-      where: { email: dto.emailId },
-    });
+    const employee = await this.employeeRepository
+      .createQueryBuilder('employee')
+      .addSelect('employee.password')
+      .where('employee.email = :email', { email: dto.emailId })
+      .getOne();
 
     if (employee) {
       const isOldPasswordValid = await bcrypt.compare(dto.oldpassword, employee.password);

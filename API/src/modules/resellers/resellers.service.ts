@@ -125,7 +125,11 @@ export class ResellersService implements OnApplicationBootstrap {
   // ─── Auth ─────────────────────────────────────────────────────────────────
 
   async login(dto: ResellerLoginDto) {
-    const reseller = await this.resellerRepository.findOne({ where: { email: dto.email } });
+    const reseller = await this.resellerRepository
+      .createQueryBuilder('reseller')
+      .addSelect('reseller.password')
+      .where('reseller.email = :email', { email: dto.email })
+      .getOne();
     if (!reseller) throw new UnauthorizedException('Invalid email or password');
     if (reseller.status !== 'active') throw new UnauthorizedException('Account is inactive');
 
@@ -223,7 +227,11 @@ export class ResellersService implements OnApplicationBootstrap {
   }
 
   async changePassword(resellerId: number, dto: { currentPassword: string; newPassword: string }) {
-    const reseller = await this.resellerRepository.findOne({ where: { id: resellerId } });
+    const reseller = await this.resellerRepository
+      .createQueryBuilder('reseller')
+      .addSelect('reseller.password')
+      .where('reseller.id = :id', { id: resellerId })
+      .getOne();
     if (!reseller) throw new NotFoundException('Reseller not found');
 
     const isValid = await bcrypt.compare(dto.currentPassword, reseller.password);
@@ -762,12 +770,16 @@ export class ResellersService implements OnApplicationBootstrap {
       total_revenue: string;
     }> = await this.resellerRepository.manager.query(
       `SELECT
-         COUNT(e.id) as total_tenants,
-         COUNT(e.id) FILTER (WHERE e.status='active' AND e.expiry_date > now()) as active_subscriptions,
-         COUNT(e.id) FILTER (WHERE e.expiry_date < now()) as expired_subscriptions,
-         COALESCE(SUM(pp.amount),0) as total_revenue
+         COUNT(DISTINCT e.id) as total_tenants,
+         COUNT(DISTINCT e.id) FILTER (WHERE e.status='active' AND e.expiry_date > now()) as active_subscriptions,
+         COUNT(DISTINCT e.id) FILTER (WHERE e.expiry_date < now()) as expired_subscriptions,
+         COALESCE((
+           SELECT SUM(pp.amount)
+           FROM platform_payments pp
+           INNER JOIN enterprises e2 ON e2.id = pp.enterprise_id
+           WHERE e2.reseller_id = $1 AND pp.status = 'verified'
+         ), 0) as total_revenue
        FROM enterprises e
-       LEFT JOIN platform_payments pp ON pp.enterprise_id = e.id AND pp.status='verified'
        WHERE e.reseller_id = $1`,
       [resellerId],
     );

@@ -23,10 +23,34 @@
   --color-secondary: #111827;
 }
 
-body {
+html, body {
   color: rgb(var(--foreground-rgb));
   background-color: var(--color-bg-layout);
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  overscroll-behavior: none;
+  -webkit-text-size-adjust: 100%;
+}
+
+/* App shell — consistent background across root + inner layouts so no
+   white/grey stripes show during scroll or when a child element has its
+   own bg. Mobile browsers also have an inconsistent "100vh" (dynamic
+   address bar) — we use 100dvh with a 100vh fallback. */
+.app-shell,
+.app-shell > .ant-layout,
+.app-main {
+  background: var(--color-bg-layout) !important;
+}
+.app-shell {
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+}
+.app-content {
+  background: var(--color-bg-layout) !important;
+  height: calc(100vh - 64px);
+  height: calc(100dvh - 64px);
+  overflow: auto;
+  min-width: 0;
 }
 
 
@@ -571,7 +595,7 @@ body {
   }
 }
 
-/* ============ Mobile Responsive Styles ============ */
+/* ============ Mobile Responsive Styles (<= 767px) ============ */
 @media (max-width: 767px) {
   .ant-layout-sider {
     display: none !important;
@@ -593,6 +617,29 @@ body {
     width: 100% !important;
   }
 
+  /* Any flex-wrap filter bar collapses to vertical stack on narrow screens */
+  .flex.flex-wrap > .ant-input,
+  .flex.flex-wrap > .ant-input-affix-wrapper,
+  .flex.flex-wrap > .ant-select,
+  .flex.flex-wrap > .ant-picker,
+  .flex.flex-wrap > .ant-picker-range,
+  .flex.flex-wrap > .ant-btn {
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  /* Tailwind grid-cols-2 inside forms should stack on mobile */
+  .grid.grid-cols-2 {
+    grid-template-columns: 1fr !important;
+    gap: 0.75rem !important;
+  }
+
+  /* Ant Design Form 2-column rows stack */
+  .ant-form .ant-col:not(.ant-col-24) {
+    flex: 0 0 100% !important;
+    max-width: 100% !important;
+  }
+
   .login-card {
     padding: 24px 16px !important;
     margin: 16px !important;
@@ -600,12 +647,23 @@ body {
   }
 
   .ant-modal {
-    max-width: calc(100vw - 32px) !important;
-    top: 20px !important;
+    max-width: calc(100vw - 16px) !important;
+    top: 12px !important;
+    margin: 0 8px !important;
   }
+  .ant-modal-content { padding: 16px !important; }
+  .ant-modal-body { padding: 0 !important; max-height: calc(100vh - 180px); overflow-y: auto; }
 
+  /* Force all tables to scroll horizontally when content is wider than viewport */
   .ant-table-wrapper {
     overflow-x: auto !important;
+  }
+  .ant-table-wrapper .ant-table {
+    min-width: max-content;
+  }
+  .ant-table-cell {
+    padding: 8px 10px !important;
+    white-space: nowrap;
   }
 
   .ant-card-body {
@@ -639,4 +697,81 @@ body {
   .ant-layout-header {
     padding: 0 8px !important;
   }
+
+  /* Reduce content padding on very small screens */
+  .ant-layout-content {
+    padding: 8px !important;
+  }
+
+  /* Hard guard against horizontal overflow at the root */
+  html, body {
+    max-width: 100vw;
+    overflow-x: hidden;
+  }
+
+  /* Cards always fit the content width */
+  .ant-card {
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+  }
+  .ant-card-body {
+    padding: 12px !important;
+  }
+
+  /* Remove any hover "lift" on mobile — translateY causes visible
+     jitter on touch devices and can reveal the underlying background. */
+  .ant-card:hover {
+    transform: none !important;
+  }
+
+  /* Page headers and hero banners — softer on mobile */
+  .page-header-banner {
+    /* Neutralise the negative margins that caused white stripes on small
+       screens when the Content padding shrank to 8px. */
+    margin: 0 0 12px 0 !important;
+    padding: 14px 16px !important;
+    border-radius: 12px !important;
+    /* Use a single-direction gradient and slightly desaturated colors
+       so the banner stops fighting for attention on small screens. */
+    background: linear-gradient(135deg, #1e3a8a 0%, #4338ca 60%, #7c3aed 100%) !important;
+  }
+  .page-header-banner::after { display: none !important; }
+  .page-header-banner-title {
+    font-size: 17px !important;
+    letter-spacing: 0 !important;
+  }
+  .page-header-banner-subtitle {
+    font-size: 12px !important;
+  }
+
+  /* Page title + subtitle defaults */
+  .page-header-title { font-size: 18px !important; }
+  .page-header-subtitle { font-size: 12px !important; }
+
+  /* Button sizes compress slightly */
+  .ant-btn { font-size: 13px !important; }
+
+  /* Row of KPIs — 2 across on mobile when Col xs is not specified */
+  .ant-row > .ant-col { padding: 4px !important; }
+
+  /* Popconfirm and dropdown menus hug to left to avoid overflow */
+  .ant-popover, .ant-dropdown { max-width: calc(100vw - 16px) !important; }
+
+  /* Long-form text inputs with large set widths in inline styles */
+  .ant-input[style*="width"],
+  .ant-select[style*="width"],
+  .ant-picker[style*="width"] {
+    width: 100% !important;
+  }
+}
+
+/* ============ Small tablet / large phone (768px - 991px) ============ */
+@media (min-width: 768px) and (max-width: 991px) {
+  .flex.flex-wrap > .ant-input,
+  .flex.flex-wrap > .ant-select,
+  .flex.flex-wrap > .ant-picker {
+    min-width: 0 !important;
+  }
+  .ant-table-cell { padding: 10px 12px !important; }
+  .ant-modal { max-width: calc(100vw - 48px) !important; }
 }

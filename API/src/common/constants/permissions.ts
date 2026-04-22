@@ -76,6 +76,7 @@ export const PERMISSION_STRUCTURE: Record<string, Record<string, string[]>> = {
     reminder_rules:  ['view', 'create', 'edit', 'delete'],
     vendors:         ['view', 'create', 'edit', 'delete'],
     downtime:        ['view', 'create', 'edit'],
+    spares:          ['view', 'create', 'edit', 'delete'],
   },
   waste_management: {
     waste_inventory: ['view', 'create', 'edit', 'delete'],

@@ -13,6 +13,8 @@ import { getMachine, updateMeterReading } from '@/lib/api/machinery';
 import { getWorkOrders } from '@/lib/api/machinery';
 import { getDowntimeLogs } from '@/lib/api/machinery';
 import { OrganizerContextWidget } from '@/components/organizer/OrganizerContextWidget';
+import { MachineSparesTab } from '@/components/machinery/MachineSparesTab';
+import { getMachineSpares } from '@/lib/api/spare-parts';
 import { message } from 'antd';
 
 const STATUS_COLORS: Record<string, string> = {
@@ -42,6 +44,12 @@ export default function MachineDetailPage() {
   const { data: downtimeLogs = [] } = useQuery({
     queryKey: ['downtime', machineId],
     queryFn: () => getDowntimeLogs({ machineId }),
+    enabled: !!machineId,
+  });
+
+  const { data: machineSpares = [] } = useQuery({
+    queryKey: ['machine-spares', machineId],
+    queryFn: () => getMachineSpares(machineId),
     enabled: !!machineId,
   });
 
@@ -153,6 +161,15 @@ export default function MachineDetailPage() {
             children: (
               <Card>
                 <Table dataSource={downtimeLogs} columns={dtColumns} rowKey="id" pagination={false} size="small" />
+              </Card>
+            ),
+          },
+          {
+            key: 'spares',
+            label: `Spare Parts (${machineSpares.length})`,
+            children: (
+              <Card>
+                <MachineSparesTab machineId={machineId} machine={machine} />
               </Card>
             ),
           },

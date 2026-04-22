@@ -50,7 +50,7 @@ export class TeamUpdatesService {
           `${managerName} posted a new update: "${dto.title}". ` +
           `Log in to VAB ERP to view the full details.`;
 
-        this.smsService.sendBulk(phones, smsText).catch(() => {});
+        this.smsService.sendBulk(phones, smsText).catch((err) => console.error('[audit/bg failed]', err?.message || err));
       }
     }
 

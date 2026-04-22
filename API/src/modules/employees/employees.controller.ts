@@ -12,6 +12,14 @@ import {
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { EmployeesService } from './employees.service';
 import { EnterpriseId, CurrentUser, RequirePermission, RequireEnterprise } from '../../common/decorators';
+import {
+  CreateNameDto,
+  UpdateNameDto,
+  CreateDesignationDto,
+  UpdateDesignationDto,
+  CreateEmployeeDto,
+  UpdateEmployeeDto,
+} from './dto/masters.dto';
 
 @ApiTags('Employees')
 @Controller('employees')
@@ -44,7 +52,7 @@ export class EmployeesController {
   @RequirePermission('employees', 'departments', 'create')
   async createDepartment(
     @EnterpriseId() enterpriseId: number,
-    @Body() body: any,
+    @Body() body: CreateNameDto,
   ) {
     return this.employeesService.createDepartment(enterpriseId, body);
   }
@@ -55,7 +63,7 @@ export class EmployeesController {
   async updateDepartment(
     @Param('id', ParseIntPipe) id: number,
     @EnterpriseId() enterpriseId: number,
-    @Body() body: any,
+    @Body() body: UpdateNameDto,
   ) {
     return this.employeesService.updateDepartment(id, enterpriseId, body);
   }
@@ -90,7 +98,7 @@ export class EmployeesController {
   @RequirePermission('employees', 'designations', 'create')
   async createDesignation(
     @EnterpriseId() enterpriseId: number,
-    @Body() body: any,
+    @Body() body: CreateDesignationDto,
   ) {
     return this.employeesService.createDesignation(enterpriseId, body);
   }
@@ -101,7 +109,7 @@ export class EmployeesController {
   async updateDesignation(
     @Param('id', ParseIntPipe) id: number,
     @EnterpriseId() enterpriseId: number,
-    @Body() body: any,
+    @Body() body: UpdateDesignationDto,
   ) {
     return this.employeesService.updateDesignation(id, enterpriseId, body);
   }
@@ -160,7 +168,7 @@ export class EmployeesController {
   @Post('reporting-managers')
   @ApiOperation({ summary: 'Create reporting manager' })
   @RequirePermission('employees', 'all_employees', 'create')
-  async createReportingManager(@EnterpriseId() enterpriseId: number, @Body() body: any) {
+  async createReportingManager(@EnterpriseId() enterpriseId: number, @Body() body: CreateNameDto) {
     return this.employeesService.createReportingManager(enterpriseId, body);
   }
 
@@ -170,7 +178,7 @@ export class EmployeesController {
   async updateReportingManager(
     @Param('id', ParseIntPipe) id: number,
     @EnterpriseId() enterpriseId: number,
-    @Body() body: any,
+    @Body() body: UpdateNameDto,
   ) {
     return this.employeesService.updateReportingManager(id, enterpriseId, body);
   }
@@ -219,7 +227,7 @@ export class EmployeesController {
   async create(
     @EnterpriseId() enterpriseId: number,
     @CurrentUser() user: any,
-    @Body() createDto: any,
+    @Body() createDto: CreateEmployeeDto,
   ) {
     return this.employeesService.create(enterpriseId, createDto, user);
   }
@@ -231,7 +239,7 @@ export class EmployeesController {
     @Param('id', ParseIntPipe) id: number,
     @EnterpriseId() enterpriseId: number,
     @CurrentUser() user: any,
-    @Body() updateDto: any,
+    @Body() updateDto: UpdateEmployeeDto,
   ) {
     return this.employeesService.update(id, enterpriseId, updateDto, user);
   }

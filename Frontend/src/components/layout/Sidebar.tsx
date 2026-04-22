@@ -258,6 +258,8 @@ export function Sidebar({ collapsed, inDrawer, onMenuClick }: SidebarProps) {
   // ── MACHINERY MAINTENANCE ─────────────────────────────────────────────────
   const machineryChildren = [
     canView('machinery_management', 'machines')       && { key: '/machinery',                 label: 'Machines' },
+    canView('machinery_management', 'spares')         && { key: '/machinery/spare-parts',     label: 'Spare Parts' },
+    canView('machinery_management', 'spares')         && { key: '/machinery/spare-map',       label: 'Spare Templates' },
     canView('machinery_management', 'work_orders')    && { key: '/maintenance-work-orders',   label: 'Work Orders' },
     canView('machinery_management', 'reminder_rules') && { key: '/maintenance-reminders',     label: 'Reminders' },
     canView('machinery_management', 'vendors')        && { key: '/maintenance-vendors',       label: 'Vendors & AMC' },

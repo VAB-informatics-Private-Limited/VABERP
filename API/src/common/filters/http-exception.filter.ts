@@ -4,17 +4,21 @@ import {
   ArgumentsHost,
   HttpException,
   HttpStatus,
+  Logger,
 } from '@nestjs/common';
 import { Response } from 'express';
 
 @Catch()
 export class HttpExceptionFilter implements ExceptionFilter {
+  private readonly logger = new Logger('HttpExceptionFilter');
+
   catch(exception: unknown, host: ArgumentsHost) {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
+    const isProd = process.env.NODE_ENV === 'production';
 
     let status = HttpStatus.INTERNAL_SERVER_ERROR;
-    let message = 'Internal server error';
+    let message: string | string[] = 'Internal server error';
     let errors: any = null;
 
     if (exception instanceof HttpException) {
@@ -29,10 +33,13 @@ export class HttpExceptionFilter implements ExceptionFilter {
         errors = responseObj.errors || null;
       }
     } else if (exception instanceof Error) {
-      message = exception.message;
+      // Log full detail server-side, but don't leak internals to client in prod
+      this.logger.error(`Unhandled error: ${exception.message}`, exception.stack);
+      message = isProd ? 'Internal server error' : exception.message;
+    } else {
+      this.logger.error('Unknown exception thrown', exception as any);
     }
 
-    // Format response to match PHP backend format
     response.status(status).json({
       status: 'failed',
       statuscode: status,

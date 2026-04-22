@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Category } from './entities/category.entity';
@@ -311,6 +311,42 @@ export class ProductsService {
 
     if (!product) {
       throw new NotFoundException('Product not found');
+    }
+
+    // Block delete if this product is referenced in business records
+    const manager = this.productRepository.manager;
+    const [qi] = await manager.query(
+      `SELECT q.quotation_number FROM quotation_items qi
+       JOIN quotations q ON q.id = qi.quotation_id
+       WHERE qi.product_id = $1 LIMIT 1`,
+      [id],
+    );
+    if (qi) {
+      throw new BadRequestException(
+        `Cannot delete product "${product.productName}". It is used in Quotation ${qi.quotation_number || '(linked)'}. Remove it from that quotation first.`,
+      );
+    }
+    const [ii] = await manager.query(
+      `SELECT i.invoice_number FROM invoice_items ii
+       JOIN invoices i ON i.id = ii.invoice_id
+       WHERE ii.product_id = $1 LIMIT 1`,
+      [id],
+    );
+    if (ii) {
+      throw new BadRequestException(
+        `Cannot delete product "${product.productName}". It is used in Invoice ${ii.invoice_number || '(linked)'}. Remove it from that invoice first.`,
+      );
+    }
+    const [soi] = await manager.query(
+      `SELECT so.sales_order_number FROM sales_order_items soi
+       JOIN sales_orders so ON so.id = soi.sales_order_id
+       WHERE soi.product_id = $1 LIMIT 1`,
+      [id],
+    );
+    if (soi) {
+      throw new BadRequestException(
+        `Cannot delete product "${product.productName}". It is used in Purchase Order ${soi.sales_order_number || '(linked)'}.`,
+      );
     }
 
     // Delete related attributes first

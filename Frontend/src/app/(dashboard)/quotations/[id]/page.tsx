@@ -656,6 +656,7 @@ export default function ViewQuotationPage() {
           format="DD MMM YYYY"
           style={{ width: '100%' }}
           placeholder="Select ETA date"
+          disabledDate={(current) => current && current < dayjs().startOf('day')}
         />
       </Modal>
     </div>
