@@ -26,3 +26,7 @@ Thumbs.db
 
 # TypeScript build info
 *.tsbuildinfo
+check_qa_contents.py
+check_server_dirs.py
+compare_dev_qa.py
+.claude/settings.local.json
