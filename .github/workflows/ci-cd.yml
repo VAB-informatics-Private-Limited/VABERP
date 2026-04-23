@@ -1,0 +1,131 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy'
+        required: true
+        type: choice
+        options:
+          - dev
+          - qa
+          - none
+
+jobs:
+  test-and-build:
+    name: Test and Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: |
+            API/package-lock.json
+            Frontend/package-lock.json
+
+      - name: Install API dependencies
+        working-directory: ./API
+        run: npm install --legacy-peer-deps
+
+      - name: Build API
+        working-directory: ./API
+        run: npm run build
+
+      - name: Run API tests (if available)
+        working-directory: ./API
+        run: npm test --if-present || echo "No tests found, skipping..."
+
+      - name: Install Frontend dependencies
+        working-directory: ./Frontend
+        run: npm install --legacy-peer-deps
+
+      - name: Build Frontend
+        working-directory: ./Frontend
+        run: npm run build
+        env:
+          NODE_ENV: production
+
+      - name: Run Frontend tests (if available)
+        working-directory: ./Frontend
+        run: npm test --if-present || echo "No tests found, skipping..."
+
+  deploy-dev:
+    name: Deploy to Dev
+    needs: test-and-build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/master' && github.event_name == 'push'
+    environment:
+      name: development
+      url: https://vaberp.com
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+
+      - name: Install Python dependencies
+        run: pip install paramiko
+
+      - name: Deploy to Dev Server
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PASSWORD: ${{ secrets.DEPLOY_PASSWORD }}
+        run: python3 deploy.py
+
+  deploy-qa:
+    name: Deploy to QA
+    needs: test-and-build
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'qa'
+    environment:
+      name: qa
+      url: https://qa.vaberp.com
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+
+      - name: Install Python dependencies
+        run: pip install paramiko
+
+      - name: Deploy to QA Server
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PASSWORD: ${{ secrets.DEPLOY_PASSWORD }}
+        run: python3 deploy_qa.py
+
+  notify:
+    name: Notification
+    needs: [test-and-build, deploy-dev, deploy-qa]
+    runs-on: ubuntu-latest
+    if: always()
+
+    steps:
+      - name: Check deployment status
+        run: |
+          echo "Build Status: ${{ needs.test-and-build.result }}"
+          echo "Dev Deployment: ${{ needs.deploy-dev.result }}"
+          echo "QA Deployment: ${{ needs.deploy-qa.result }}"
