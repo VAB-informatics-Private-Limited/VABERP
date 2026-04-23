@@ -16,8 +16,8 @@ PASSWORD2 = os.getenv("DEPLOY_PASSWORD", "6BH07w0xB48?~kW-F")
 REMOTE_API = "/var/www/html/enterprise/api"
 REMOTE_FE  = "/var/www/html/enterprise/frontend"
 
-LOCAL_API = Path("C:/Users/UNITECH2/Desktop/enterprise/API")
-LOCAL_FE  = Path("C:/Users/UNITECH2/Desktop/enterprise/Frontend")
+LOCAL_API = Path(__file__).parent / "API"
+LOCAL_FE  = Path(__file__).parent / "Frontend"
 
 EXCLUDE = {
     "node_modules", ".git", ".next", "dist", ".angular",
