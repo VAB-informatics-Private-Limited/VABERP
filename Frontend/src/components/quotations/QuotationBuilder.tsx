@@ -10,6 +10,7 @@ import { Enquiry } from '@/types/enquiry';
 import { getDropdownProductsList } from '@/lib/api/products';
 import { getCustomerList } from '@/lib/api/customers';
 import { checkQuotationMobile } from '@/lib/api/quotations';
+import { MOBILE_RULE } from '@/lib/validations/shared';
 import { useAuthStore } from '@/stores/authStore';
 import dayjs from 'dayjs';
 import type { ColumnsType } from 'antd/es/table';
@@ -118,7 +119,10 @@ export function QuotationBuilder({ initialData, initialEnquiryData, onSubmit, lo
       unit: product.unit,
       quantity: 1,
       unit_price: Number(product.price) || 0,
-      discount_percent: 0,
+      // Auto-apply the tier discount matching this initial quantity (if any).
+      // Previously this was hardcoded to 0 so the tier only kicked in after the
+      // user edited the quantity — the discount didn't "reflect" on add.
+      discount_percent: tierDiscount ?? 0,
       discount_tiers: tiers,
       tax_percent: product.gst_rate != null ? Number(product.gst_rate) : 18,
       total_amount: Number(product.price) || 0,
@@ -133,6 +137,14 @@ export function QuotationBuilder({ initialData, initialEnquiryData, onSubmit, lo
     const updatedItems = [...items];
     const item = { ...updatedItems[index], [field]: value };
 
+    // When the quantity changes, auto-apply the matching tier discount (if any)
+    // so users don't have to remember to refresh or re-pick the product.
+    if (field === 'quantity') {
+      const tierPct = getTierDiscount(item.discount_tiers, Number(value) || 0);
+      if (tierPct != null) {
+        item.discount_percent = tierPct;
+      }
+    }
 
     item.total_amount = calculateItemTotal(item);
     updatedItems[index] = item;
@@ -489,7 +501,7 @@ export function QuotationBuilder({ initialData, initialEnquiryData, onSubmit, lo
                   label="Mobile"
                   rules={[
                     { required: true, message: 'Required' },
-                    { pattern: /^[6-9]\d{9}$/, message: 'Enter a valid 10-digit mobile number' },
+                    MOBILE_RULE,
                   ]}
                   help={mobileWarning ? <span style={{ color: '#faad14' }}>⚠ {mobileWarning}</span> : undefined}
                   validateStatus={mobileWarning ? 'warning' : undefined}

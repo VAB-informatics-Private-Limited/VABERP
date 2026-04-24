@@ -364,7 +364,12 @@ export class MaterialRequestsService {
   private async issueOneItem(mr: any, item: any, enterpriseId: number, userId?: number) {
     const qtyToIssue = Number(item.quantityApproved) - Number(item.quantityIssued);
     if (qtyToIssue <= 0) {
-      throw new BadRequestException(`Item "${item.itemName}" is already fully issued`);
+      // Already fully issued — make the operation idempotent. Normalize status
+      // and return without error so parallel clicks / stale UI don't fail.
+      if (item.status !== 'issued') {
+        await this.mrItemRepository.update(item.id, { status: 'issued' });
+      }
+      return;
     }
 
     // Stock was already deducted during the approve step, so we just mark as issued.
@@ -446,7 +451,15 @@ export class MaterialRequestsService {
     const approvedItems = mr.items.filter((i: any) => i.status === 'approved' && Number(i.quantityIssued) < Number(i.quantityApproved));
 
     if (approvedItems.length === 0) {
-      throw new BadRequestException('No approved items to issue');
+      // Nothing new to issue — make idempotent: normalize any stuck statuses and return.
+      const stuckApproved = mr.items.filter(
+        (i: any) => i.status === 'approved' && Number(i.quantityIssued) >= Number(i.quantityApproved || 0),
+      );
+      for (const item of stuckApproved) {
+        await this.mrItemRepository.update(item.id, { status: 'issued' });
+      }
+      await this.checkAndUpdateMrStatus(id);
+      return this.findOne(id, enterpriseId);
     }
 
     for (const item of approvedItems) {
@@ -478,42 +491,62 @@ export class MaterialRequestsService {
       throw new BadRequestException('Item not found in this material request');
     }
 
-    // Allow issuing when status is 'issued' but there's still remaining qty vs requested
-    if (item.status === 'issued' && Number(item.quantityIssued) < Number(item.quantityRequested)) {
-      // Auto-increase approved qty to match requested, then issue remaining
-      const remaining = Number(item.quantityRequested) - Number(item.quantityIssued);
+    const requested = Number(item.quantityRequested);
+    const approved = Number(item.quantityApproved || 0);
+    const issued = Number(item.quantityIssued || 0);
 
-      // Validate stock before issuing
+    // Idempotent: fully issued already → normalize status and return success.
+    if (issued >= requested) {
+      if (item.status !== 'issued') {
+        await this.mrItemRepository.update(itemId, { status: 'issued' });
+      }
+      await this.checkAndUpdateMrStatus(id);
+      return this.findOne(id, enterpriseId);
+    }
+
+    // Post-procurement path: status is 'issued' but requested > issued means
+    // procurement delivered more stock and user wants to issue the rest.
+    if (item.status === 'issued' && issued < requested) {
+      const remaining = requested - issued;
       if (item.rawMaterialId) {
         const rawMat = await this.rawMaterialRepository.findOne({
           where: { id: item.rawMaterialId, enterpriseId },
         });
-        if (!rawMat || Number(rawMat.availableStock) < remaining) {
-          const available = rawMat ? Number(rawMat.availableStock) : 0;
+        const available = rawMat ? Number(rawMat.availableStock) : 0;
+        if (available < remaining) {
           throw new BadRequestException(
             `Insufficient stock for "${item.itemName}". Required: ${remaining}, Available: ${available}. Cannot issue until stock is available.`,
           );
         }
       }
-
       await this.mrItemRepository.update(itemId, {
-        quantityApproved: Number(item.quantityRequested),
-        quantityIssued: Number(item.quantityRequested),
+        quantityApproved: requested,
+        quantityIssued: requested,
         status: 'issued',
       });
       await this.checkAndUpdateMrStatus(id);
-      await this.notifyManufacturingOnIssue(mr, [{ ...item, quantityIssued: remaining, itemName: item.itemName }]);
+      await this.notifyManufacturingOnIssue(mr, [
+        { ...item, quantityIssued: remaining, itemName: item.itemName },
+      ]);
       return this.findOne(id, enterpriseId);
     }
 
     if (item.status !== 'approved' && item.status !== 'partially_issued') {
-      throw new BadRequestException(`Item "${item.itemName}" is not approved (status: ${item.status})`);
+      throw new BadRequestException(
+        `Item "${item.itemName}" is not approved (status: ${item.status})`,
+      );
+    }
+
+    // Fully issued up to the approved cap — respect inventory's approval.
+    // If user wants more, procurement must be triggered first (handled elsewhere).
+    if (issued >= approved) {
+      await this.mrItemRepository.update(itemId, { status: 'issued' });
+      await this.checkAndUpdateMrStatus(id);
+      return this.findOne(id, enterpriseId);
     }
 
     await this.issueOneItem(mr, item, enterpriseId, userId);
     await this.checkAndUpdateMrStatus(id);
-
-    // Notify manufacturing side about the issued item
     await this.notifyManufacturingOnIssue(mr, [item]);
 
     return this.findOne(id, enterpriseId);

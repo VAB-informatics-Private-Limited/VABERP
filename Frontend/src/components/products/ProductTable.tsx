@@ -1,7 +1,7 @@
 'use client';
 
 import { Table, Button, Tag, Space, Popconfirm, message } from 'antd';
-import { EditOutlined, DeleteOutlined, SettingOutlined } from '@ant-design/icons';
+import { EditOutlined, DeleteOutlined, SettingOutlined, CheckCircleFilled, MinusCircleOutlined } from '@ant-design/icons';
 import { useRouter } from 'next/navigation';
 import { Product } from '@/types/product';
 import { usePermissions } from '@/stores/authStore';
@@ -71,6 +71,26 @@ export function ProductTable({ data, loading, pagination, onDelete }: ProductTab
       key: 'price',
       sorter: (a, b) => (Number(a.price) || 0) - (Number(b.price) || 0),
       render: (price) => (price ? `₹${price}` : '-'),
+    },
+    {
+      title: 'BOM',
+      key: 'bom',
+      width: 90,
+      filters: [
+        { text: 'With BOM', value: true },
+        { text: 'Missing BOM', value: false },
+      ],
+      onFilter: (value, record) => !!record.has_bom === value,
+      render: (_, record) =>
+        record.has_bom ? (
+          <Tag icon={<CheckCircleFilled />} color="green" className="!m-0">
+            Master
+          </Tag>
+        ) : (
+          <Tag icon={<MinusCircleOutlined />} color="default" className="!m-0">
+            None
+          </Tag>
+        ),
     },
     {
       title: 'Status',

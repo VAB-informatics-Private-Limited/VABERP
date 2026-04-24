@@ -45,6 +45,7 @@ export interface Product {
   discount_tiers?: DiscountTier[];
   image?: string;
   status: 'active' | 'inactive';
+  has_bom?: boolean;
   created_date: string;
 }
 
@@ -86,4 +87,5 @@ export interface ProductFormData {
   max_discount_percent?: number;
   discount_tiers?: DiscountTier[];
   status?: 'active' | 'inactive';
+  bom?: import('./product-bom').ProductBomInput;
 }

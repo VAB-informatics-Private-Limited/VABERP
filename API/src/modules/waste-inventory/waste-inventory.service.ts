@@ -77,6 +77,7 @@ export class WasteInventoryService {
     const q = this.inventoryRepo.createQueryBuilder('wi')
       .leftJoinAndSelect('wi.category', 'cat')
       .leftJoinAndSelect('wi.source', 'src')
+      .leftJoinAndSelect('wi.rawMaterial', 'rm')
       .where('wi.enterpriseId = :enterpriseId', { enterpriseId });
 
     if (filters.status) q.andWhere('wi.status = :status', { status: filters.status });
@@ -84,11 +85,16 @@ export class WasteInventoryService {
     if (filters.sourceId) q.andWhere('wi.sourceId = :sourceId', { sourceId: filters.sourceId });
     if (filters.search) {
       q.andWhere(
-        '(wi.batchNo ILIKE :s OR wi.storageLocation ILIKE :s OR cat.name ILIKE :s OR src.name ILIKE :s)',
+        '(wi.batchNo ILIKE :s OR wi.storageLocation ILIKE :s OR cat.name ILIKE :s OR src.name ILIKE :s OR rm.materialName ILIKE :s)',
         { s: `%${filters.search}%` },
       );
     }
     if (filters.classification) q.andWhere('cat.classification = :cls', { cls: filters.classification });
+    // Production-only view: show just the waste rows that came from production
+    // (i.e., tied to a raw material). Default to true so the inventory page
+    // mirrors the "waste generated while production" requirement.
+    const productionOnly = filters.productionOnly !== false && filters.productionOnly !== 'false';
+    if (productionOnly) q.andWhere('wi.rawMaterialId IS NOT NULL');
 
     const [data, total] = await q
       .skip((page - 1) * limit)
@@ -96,7 +102,25 @@ export class WasteInventoryService {
       .orderBy('wi.createdDate', 'DESC')
       .getManyAndCount();
 
-    return { message: 'Inventory fetched', data, totalRecords: total, page };
+    // Attach recent logs to each row so the UI can show how the aggregate was built.
+    const ids = data.map((r) => r.id);
+    let logsByInv = new Map<number, WasteInventoryLog[]>();
+    if (ids.length > 0) {
+      const logs = await this.logRepo
+        .createQueryBuilder('log')
+        .leftJoinAndSelect('log.performedByEmployee', 'emp')
+        .where('log.inventory_id IN (:...ids)', { ids })
+        .orderBy('log.created_date', 'DESC')
+        .getMany();
+      for (const l of logs) {
+        const arr = logsByInv.get(l.inventoryId) || [];
+        arr.push(l);
+        logsByInv.set(l.inventoryId, arr);
+      }
+    }
+    const enriched = data.map((r) => ({ ...r, logs: logsByInv.get(r.id) || [] }));
+
+    return { message: 'Inventory fetched', data: enriched, totalRecords: total, page };
   }
 
   async getInventoryItem(id: number, enterpriseId: number) {
@@ -177,6 +201,158 @@ export class WasteInventoryService {
     }));
 
     return { message: 'Inventory entry created', data: saved };
+  }
+
+  /**
+   * Record waste generated during production.
+   *
+   * Aggregates by (enterprise, raw_material, category): finds an existing active
+   * inventory row and adds to it, or creates one if none exists. Writes a
+   * detailed log entry so you can trace how the total was built up:
+   * "Plastic = 10 kg" with logs showing Job Card A → 4 kg, Job Card B → 6 kg.
+   */
+  async recordProductionWaste(
+    enterpriseId: number,
+    dto: {
+      jobCardId: number;
+      rawMaterialId: number;
+      categoryId?: number;
+      quantity: number;
+      unit?: string;
+      consumedQuantity?: number;
+      notes?: string;
+    },
+    userId?: number,
+  ) {
+    if (!dto.quantity || Number(dto.quantity) <= 0) {
+      throw new BadRequestException('Waste quantity must be greater than 0');
+    }
+
+    // Resolve or auto-seed a category. If the user didn't pass one, or none exist
+    // for this enterprise yet, create a sensible default "Production Waste" so the
+    // flow doesn't block on first use.
+    let category = dto.categoryId
+      ? await this.categoryRepo.findOne({ where: { id: dto.categoryId, enterpriseId } })
+      : null;
+
+    if (!category) {
+      category = await this.categoryRepo.findOne({
+        where: { enterpriseId, code: 'PROD_WASTE' as any },
+      });
+    }
+    if (!category) {
+      category = await this.categoryRepo.findOne({
+        where: { enterpriseId, isActive: true },
+        order: { id: 'ASC' },
+      });
+    }
+    if (!category) {
+      // Seed a default so the waste flow works out of the box.
+      category = await this.categoryRepo.save(this.categoryRepo.create({
+        enterpriseId,
+        name: 'Production Waste',
+        code: 'PROD_WASTE',
+        classification: 'general',
+        unit: dto.unit || 'kg',
+        requiresManifest: false,
+        isActive: true,
+      }));
+    }
+
+    return this.dataSource.transaction(async (manager) => {
+      const invRepo = manager.getRepository(WasteInventory);
+      const logRepo = manager.getRepository(WasteInventoryLog);
+
+      // Find an existing active aggregate row for (enterprise, material, category).
+      let row = await invRepo
+        .createQueryBuilder('wi')
+        .where('wi.enterprise_id = :enterpriseId', { enterpriseId })
+        .andWhere('wi.raw_material_id = :rawMaterialId', { rawMaterialId: dto.rawMaterialId })
+        .andWhere('wi.category_id = :categoryId', { categoryId: category.id })
+        .andWhere("wi.status = 'available'")
+        .orderBy('wi.id', 'DESC')
+        .getOne();
+
+      const qty = Number(dto.quantity);
+      const unit = dto.unit || category.unit || 'kg';
+
+      if (row) {
+        row.quantityGenerated = Number(row.quantityGenerated) + qty;
+        row.quantityAvailable = Number(row.quantityAvailable) + qty;
+        row.productionJobId = dto.jobCardId;
+        await invRepo.save(row);
+      } else {
+        const batchNo = await this.generateBatchNo(enterpriseId);
+        row = invRepo.create({
+          enterpriseId,
+          batchNo,
+          categoryId: category.id,
+          rawMaterialId: dto.rawMaterialId,
+          productionJobId: dto.jobCardId,
+          quantityGenerated: qty,
+          quantityAvailable: qty,
+          quantityReserved: 0,
+          unit,
+          storageDate: new Date(),
+          status: 'available',
+          enteredBy: userId ?? null,
+        });
+        row = await invRepo.save(row);
+      }
+
+      const consumedPart = Number(dto.consumedQuantity || 0) > 0 ? ` · consumed ${dto.consumedQuantity}` : '';
+      const userNote = dto.notes ? ` · ${dto.notes}` : '';
+      const logNote = `Job Card #${dto.jobCardId}${consumedPart} · waste ${qty} ${unit}${userNote}`;
+
+      await logRepo.save(logRepo.create({
+        inventoryId: row.id,
+        action: 'generated',
+        quantityDelta: qty,
+        quantityAfter: Number(row.quantityAvailable),
+        referenceType: 'job_card',
+        referenceId: dto.jobCardId,
+        performedBy: userId ?? null,
+        notes: logNote,
+      }));
+
+      return { message: 'Production waste recorded', data: row };
+    });
+  }
+
+  /**
+   * Full detailed log of how waste was built up for a given raw material.
+   * Returns aggregated totals + per-entry logs.
+   */
+  async getProductionWasteByMaterial(enterpriseId: number, rawMaterialId: number) {
+    const rows = await this.inventoryRepo.find({
+      where: { enterpriseId, rawMaterialId },
+      relations: ['category', 'rawMaterial'],
+      order: { createdDate: 'DESC' },
+    });
+
+    const inventoryIds = rows.map((r) => r.id);
+    let logs: WasteInventoryLog[] = [];
+    if (inventoryIds.length > 0) {
+      logs = await this.logRepo
+        .createQueryBuilder('log')
+        .where('log.inventory_id IN (:...ids)', { ids: inventoryIds })
+        .orderBy('log.created_date', 'DESC')
+        .getMany();
+    }
+
+    const totalGenerated = rows.reduce((s, r) => s + Number(r.quantityGenerated || 0), 0);
+    const totalAvailable = rows.reduce((s, r) => s + Number(r.quantityAvailable || 0), 0);
+
+    return {
+      message: 'Production waste log fetched',
+      data: {
+        rawMaterialId,
+        totalGenerated,
+        totalAvailable,
+        rows,
+        logs,
+      },
+    };
   }
 
   async updateInventory(id: number, enterpriseId: number, dto: any) {

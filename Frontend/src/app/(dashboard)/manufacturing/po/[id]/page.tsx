@@ -11,7 +11,7 @@ import {
   EditOutlined, FileTextOutlined, CheckCircleOutlined,
   ExclamationCircleOutlined, ClockCircleOutlined,
   PlusOutlined, SendOutlined, StopOutlined, SyncOutlined,
-  PauseCircleOutlined, ToolOutlined, AppstoreOutlined,
+  PauseCircleOutlined, ToolOutlined, AppstoreOutlined, SaveOutlined,
   RocketOutlined, UnlockOutlined, CloseCircleOutlined,
   WarningOutlined, LockOutlined, UserOutlined,
   ArrowLeftOutlined,
@@ -31,14 +31,17 @@ import {
   getManufacturingPurchaseOrders,
   getManufacturingPurchaseOrderById,
   createBom,
+  updateBomItems,
   getBomByPurchaseOrder,
+  getBomsByPurchaseOrder,
   createJobCardsFromBom,
   sendForApproval,
   updateManufacturingDetails,
   startProductionForItem,
   requestInventoryForItem,
 } from '@/lib/api/bom';
-import { getMaterialRequestById, issueMaterials, issueSingleItem, issuePartialItem, confirmMaterialsReceived } from '@/lib/api/material-requests';
+import { getMaterialRequestById, confirmMaterialsReceived } from '@/lib/api/material-requests';
+import { getWasteCategories, recordProductionWaste } from '@/lib/api/waste';
 import { getRawMaterialList } from '@/lib/api/raw-materials'; // kept for other usages
 import { getStageMasters } from '@/lib/api/stage-masters';
 import { useAuthStore } from '@/stores/authStore';
@@ -164,10 +167,20 @@ export default function ManufacturingPODetailPage() {
   const [stageNotes, setStageNotes] = useState('');
   const [stageDescription, setStageDescription] = useState('');
   const [stageCompletedDate, setStageCompletedDate] = useState<dayjs.Dayjs | null>(null);
+  const [wasteRawMaterialId, setWasteRawMaterialId] = useState<number | null>(null);
+  const [wasteQuantity, setWasteQuantity] = useState<number>(0);
+  const [wasteUnit, setWasteUnit] = useState<string>('');
+  const [wasteConsumedQty, setWasteConsumedQty] = useState<number>(0);
+  const [wasteNotes, setWasteNotes] = useState<string>('');
+
+  const { data: wasteCategoriesData } = useQuery({
+    queryKey: ['waste-categories'],
+    queryFn: getWasteCategories,
+    staleTime: 300000,
+  });
+  const wasteCategories = wasteCategoriesData || [];
   const [childJobCards, setChildJobCards] = useState<JobCard[]>([]);
   const [childJobCardsMap, setChildJobCardsMap] = useState<Record<number, JobCard[]>>({});
-  const [issuePartialModal, setIssuePartialModal] = useState<{ open: boolean; item: any | null }>({ open: false, item: null });
-  const [issuePartialQty, setIssuePartialQty] = useState<number>(0);
 
   const { data: stagesData } = useQuery({
     queryKey: ['stage-masters'],
@@ -190,6 +203,11 @@ export default function ManufacturingPODetailPage() {
     availableStock: number;
   }>>([]);
 
+  const [bomForProductId, setBomForProductId] = useState<number | null>(null);
+  const [editingBomId, setEditingBomId] = useState<number | null>(null);
+  const [productPickerOpen, setProductPickerOpen] = useState(false);
+  const [detailBoms, setDetailBoms] = useState<Bom[]>([]);
+
 
   /* ── Load PO data ── */
   const loadData = useCallback(async (silent = false) => {
@@ -202,11 +220,20 @@ export default function ManufacturingPODetailPage() {
       setDetailPO(po);
 
       let bom: Bom | null = null;
+      let bomList: Bom[] = [];
       if (po.bom_count > 0) {
-        const r = await getBomByPurchaseOrder(poId);
-        bom = r.data || null;
+        try {
+          const rList = await getBomsByPurchaseOrder(poId);
+          bomList = rList.data || [];
+          bom = bomList[0] || null;
+        } catch {
+          const r = await getBomByPurchaseOrder(poId);
+          bom = r.data || null;
+          bomList = bom ? [bom] : [];
+        }
       }
       setDetailBom(bom);
+      setDetailBoms(bomList);
 
       const jcRes = await getJobCardList({ salesOrderId: poId, pageSize: 100 });
       const jcList = jcRes.data || [];
@@ -282,24 +309,6 @@ export default function ManufacturingPODetailPage() {
     }
   };
 
-  const issueAllMutation = useMutation({
-    mutationFn: (mrId: number) => issueMaterials(mrId),
-    onSuccess: () => { message.success('All approved materials issued'); refreshDetailMR(); },
-    onError: (err: any) => message.error(err?.response?.data?.message || 'Failed to issue materials'),
-  });
-
-  const issueItemMutation = useMutation({
-    mutationFn: ({ mrId, itemId }: { mrId: number; itemId: number }) => issueSingleItem(mrId, itemId),
-    onSuccess: () => { message.success('Material issued'); refreshDetailMR(); },
-    onError: (err: any) => message.error(err?.response?.data?.message || 'Failed to issue item'),
-  });
-
-  const issuePartialMutation = useMutation({
-    mutationFn: ({ mrId, itemId, qty }: { mrId: number; itemId: number; qty: number }) => issuePartialItem(mrId, itemId, qty),
-    onSuccess: () => { message.success('Partial materials issued'); setIssuePartialModal({ open: false, item: null }); setIssuePartialQty(0); refreshDetailMR(); },
-    onError: (err: any) => message.error(err?.response?.data?.message || 'Failed to issue partial'),
-  });
-
   const confirmReceivedMutation = useMutation({
     mutationFn: (mrId: number) => confirmMaterialsReceived(mrId),
     onSuccess: () => { message.success('Receipt confirmed — materials received by manufacturing'); refreshPage(); refreshDetailMR(); },
@@ -319,11 +328,53 @@ export default function ManufacturingPODetailPage() {
   });
 
   const createBomMutation = useMutation({
-    mutationFn: ({ poId, items }: { poId: number; items?: Array<{ rawMaterialId?: number; itemName: string; requiredQuantity: number; unitOfMeasure?: string }> }) =>
-      createBom({ purchaseOrderId: poId, items }),
-    onSuccess: (result) => { message.success('BOM created'); setCurrentBom(result.data || null); setBomModalOpen(false); setBomViewModalOpen(true); setBomItems([]); refreshPage(); },
-    onError: (err: any) => message.error(err?.response?.data?.message || 'Failed to create BOM'),
+    mutationFn: ({ poId, productId, items }: { poId: number; productId: number; items?: Array<{ rawMaterialId?: number; itemName: string; requiredQuantity: number; unitOfMeasure?: string }> }) =>
+      createBom({ purchaseOrderId: poId, productId, items }),
+    onSuccess: (result) => {
+      message.success(`BOM saved: ${result.data?.bom_number || ''}`);
+      setCurrentBom(result.data || null);
+      setBomModalOpen(false);
+      setBomForProductId(null);
+      setEditingBomId(null);
+      setBomItems([]);
+      refreshPage();
+    },
+    onError: (err: any) => message.error(err?.response?.data?.message || 'Failed to save BOM'),
   });
+
+  const updateBomMutation = useMutation({
+    mutationFn: ({ bomId, items }: { bomId: number; items: Array<{ rawMaterialId?: number; itemName: string; requiredQuantity: number; unitOfMeasure?: string }> }) =>
+      updateBomItems(bomId, items),
+    onSuccess: (result) => {
+      message.success(`BOM updated: ${result.data?.bom_number || ''}`);
+      setCurrentBom(result.data || null);
+      setBomModalOpen(false);
+      setBomForProductId(null);
+      setEditingBomId(null);
+      setBomItems([]);
+      refreshPage();
+    },
+    onError: (err: any) => message.error(err?.response?.data?.message || 'Failed to update BOM'),
+  });
+
+  const openEditBom = (bom: Bom) => {
+    setSelectedPO(detailPO);
+    setEditingBomId(bom.id);
+    setBomForProductId(bom.product_id || null);
+    setBomItems(
+      (bom.items || []).map((it) => {
+        const rm = it.raw_material_id ? rawMaterials.find((r) => r.id === it.raw_material_id) : undefined;
+        return {
+          rawMaterialId: it.raw_material_id || undefined,
+          itemName: it.item_name,
+          requiredQuantity: Number(it.required_quantity),
+          unitOfMeasure: it.unit_of_measure || rm?.unit_of_measure || '',
+          availableStock: rm?.available_stock || 0,
+        };
+      }),
+    );
+    setBomModalOpen(true);
+  };
 
   const createJobCardsMutation = useMutation({
     mutationFn: ({ bomId, jobCards }: { bomId: number; jobCards: any[] }) =>
@@ -333,9 +384,33 @@ export default function ManufacturingPODetailPage() {
   });
 
   const startProductionMutation = useMutation({
-    mutationFn: async (job: JobCard) => { await updateJobCardStatus(job.id, 'in_process', enterpriseId!); },
-    onSuccess: () => { message.success('Production started'); refreshPage(); },
-    onError: (err: any) => message.error(err?.response?.data?.message || 'Failed'),
+    mutationFn: async ({ job, force }: { job: JobCard; force?: boolean }) => {
+      await updateJobCardStatus(job.id, 'in_process', enterpriseId!, force);
+    },
+    onSuccess: (_data, vars) => {
+      message.success(vars.force ? 'Production started with partial materials' : 'Production started');
+      refreshPage();
+    },
+    onError: (err: any, vars) => {
+      const msg: string = err?.response?.data?.message || 'Failed';
+      // Partial-materials override: offer to proceed anyway.
+      if (!vars.force && msg.includes('Materials not fully issued')) {
+        Modal.confirm({
+          title: 'Start with partial materials?',
+          content: (
+            <div>
+              <p className="mb-2 text-sm">{msg}</p>
+              <p className="text-xs text-gray-500">You can proceed now and issue the rest later. The job card will be marked in-process.</p>
+            </div>
+          ),
+          okText: 'Start anyway',
+          okButtonProps: { danger: true },
+          onOk: () => startProductionMutation.mutateAsync({ job: vars.job, force: true }),
+        });
+      } else {
+        message.error(msg);
+      }
+    },
   });
 
   const startItemProductionMutation = useMutation({
@@ -499,7 +574,50 @@ export default function ManufacturingPODetailPage() {
     if (po.bom_count > 0) {
       try { const r = await getBomByPurchaseOrder(po.id); setCurrentBom(r.data || null); setBomViewModalOpen(true); }
       catch { message.error('Failed to load BOM'); }
-    } else { setBomModalOpen(true); }
+    } else { openBomCreation(po); }
+  };
+
+  // Collect distinct products in the PO that still need a BOM.
+  const getProductsNeedingBom = (po: ManufacturingPO, existingBoms: Bom[]) => {
+    const covered = new Set<number>(existingBoms.map((b) => b.product_id).filter(Boolean) as number[]);
+    const seen = new Set<number>();
+    const list: Array<{ product_id: number; product_name: string; quantity: number; unit: string }> = [];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    for (const it of (po.items || []) as any[]) {
+      const pid = it.product_id || it.productId;
+      if (!pid || covered.has(pid) || seen.has(pid)) continue;
+      seen.add(pid);
+      list.push({
+        product_id: pid,
+        product_name: it.item_name || it.product_name || 'Product',
+        quantity: Number(it.quantity || 0),
+        unit: it.unit_of_measure || '',
+      });
+    }
+    return list;
+  };
+
+  const openBomCreation = (po: ManufacturingPO) => {
+    setSelectedPO(po);
+    const pending = getProductsNeedingBom(po, detailBoms);
+    if (pending.length === 0) {
+      message.info('All products in this PO already have a BOM');
+      return;
+    }
+    if (pending.length === 1) {
+      setBomForProductId(pending[0].product_id);
+      setBomItems([]);
+      setBomModalOpen(true);
+    } else {
+      setProductPickerOpen(true);
+    }
+  };
+
+  const pickProductForBom = (productId: number) => {
+    setProductPickerOpen(false);
+    setBomForProductId(productId);
+    setBomItems([]);
+    setBomModalOpen(true);
   };
 
   const handleCreateJobCards = (values: any) => {
@@ -532,7 +650,6 @@ export default function ManufacturingPODetailPage() {
   const isOnHold = detailPO.status === 'on_hold';
   const holdReason = detailPO.hold_reason;
   const mrIssued = !!(detailMR && ['fulfilled', 'partially_fulfilled'].includes(detailMR.status));
-  const canCreateJobCards = (ws === 'approved' || mrIssued) && detailJobCards.length === 0;
 
   return (
     <div>
@@ -633,64 +750,142 @@ export default function ManufacturingPODetailPage() {
 
         {/* ── CURRENT STATUS & ACTION SECTION ── */}
         {ws === 'pending_review' && (
-          <Card size="small" className="border-blue-200 bg-blue-50">
-            <div className="flex items-start gap-3">
-              <FileTextOutlined className="text-blue-500 text-xl mt-1" />
-              <div className="flex-1">
-                <Text strong className="text-base block">Step 1: Create Bill of Materials (BOM)</Text>
-                <Text type="secondary" className="text-sm block mt-1">
-                  List all raw materials needed to manufacture this product (e.g., sensors, screws, components).
-                  After creating the BOM, you can send it for inventory approval.
+          <Card size="small" className="border-gray-300">
+            <div className="flex items-center justify-between gap-4 flex-wrap">
+              <div>
+                <Text strong className="text-sm block">Step 1 — Create BOMs per product</Text>
+                <Text type="secondary" className="text-xs">
+                  Add raw materials for each product in this order.
                 </Text>
-                <div className="mt-3 flex gap-2">
-                  <Button type="primary" size="large" icon={<PlusOutlined />}
-                    onClick={() => { setSelectedPO(detailPO); setBomModalOpen(true); }}
-                    loading={createBomMutation.isPending}>
-                    Create BOM
-                  </Button>
-                  <Button size="large" icon={<EditOutlined />} onClick={() => openEditDetails(detailPO)}>
-                    Edit Details
-                  </Button>
-                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button size="middle" icon={<EditOutlined />} onClick={() => openEditDetails(detailPO)}>
+                  Edit Details
+                </Button>
+                <Button
+                  size="middle"
+                  icon={<PlusOutlined />}
+                  onClick={() => { openBomCreation(detailPO); }}
+                  loading={createBomMutation.isPending}
+                  style={{ background: '#000', color: '#fff', borderColor: '#000' }}
+                >
+                  Create BOM
+                </Button>
               </div>
             </div>
           </Card>
         )}
 
-        {ws === 'bom_created' && detailBom && (
-          <Card size="small" className="border-cyan-200 bg-cyan-50">
-            <div className="flex items-start gap-3">
-              <SendOutlined className="text-cyan-600 text-xl mt-1" />
-              <div className="flex-1">
-                <Text strong className="text-base block">Step 2: Send BOM for Inventory Approval</Text>
-                <Text type="secondary" className="text-sm block mt-1">
-                  BOM has been created with {detailBom.items.length} material(s).
-                  Send it to the Inventory team for material availability check and approval.
-                </Text>
-                <div className="mt-3 flex gap-2">
-                  <Button type="primary" size="large" icon={<SendOutlined />} onClick={() => openSendForApproval(detailPO)}>
-                    Send to Inventory for Approval
+        {ws === 'bom_created' && detailBoms.length > 0 && (() => {
+          const bomByProduct = new Map<number, Bom>();
+          for (const b of detailBoms) if (b.product_id) bomByProduct.set(b.product_id, b);
+
+          // Distinct products in the order (in their PO order)
+          const seen = new Set<number>();
+          const productList: Array<{ product_id: number; product_name: string }> = [];
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          for (const it of (detailPO.items || []) as any[]) {
+            const pid = it.product_id || it.productId;
+            if (!pid || seen.has(pid)) continue;
+            seen.add(pid);
+            productList.push({ product_id: pid, product_name: it.item_name || it.product_name || 'Product' });
+          }
+          const doneCount = productList.filter((p) => bomByProduct.has(p.product_id)).length;
+          const missing = productList.length - doneCount;
+          const allDone = missing === 0;
+
+          return (
+            <Card size="small" className="border-gray-300">
+              <div className="flex items-center justify-between gap-4 flex-wrap mb-3">
+                <div>
+                  <Text strong className="text-sm block">Step 2 — Bill of Materials</Text>
+                  <Text type="secondary" className="text-xs">
+                    {doneCount} of {productList.length} products have a BOM
+                  </Text>
+                </div>
+                <div className="flex gap-2">
+                  {!allDone && (
+                    <Button size="middle" icon={<PlusOutlined />} onClick={() => openBomCreation(detailPO)}>
+                      Create next BOM
+                    </Button>
+                  )}
+                  <Button
+                    size="middle"
+                    icon={<SendOutlined />}
+                    onClick={() => openSendForApproval(detailPO)}
+                    disabled={!allDone}
+                    style={allDone ? { background: '#000', color: '#fff', borderColor: '#000' } : undefined}
+                  >
+                    Send for Approval
                   </Button>
                 </div>
               </div>
-            </div>
-          </Card>
-        )}
+
+              {/* Per-product status strip */}
+              <div className="flex flex-wrap gap-2">
+                {productList.map((p) => {
+                  const bom = bomByProduct.get(p.product_id);
+                  return (
+                    <div
+                      key={p.product_id}
+                      className={`flex items-center gap-2 px-2 py-1 rounded border text-xs ${
+                        bom ? 'border-gray-300 bg-white text-gray-700' : 'border-dashed border-gray-400 bg-gray-50 text-gray-500'
+                      }`}
+                    >
+                      {bom ? <CheckCircleOutlined className="text-gray-700" /> : <ClockCircleOutlined className="text-gray-400" />}
+                      <span className="font-medium">{p.product_name}</span>
+                      {bom ? (
+                        <span className="text-gray-500">· {bom.bom_number}</span>
+                      ) : (
+                        <Button
+                          size="small"
+                          type="text"
+                          className="!px-1 !py-0 !h-auto"
+                          onClick={() => pickProductForBom(p.product_id)}
+                        >
+                          + Create
+                        </Button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </Card>
+          );
+        })()}
 
         {ws === 'pending_approval' && (
-          <Card size="small" className="border-orange-200 bg-orange-50">
-            <div className="flex items-start gap-3">
-              <ClockCircleOutlined className="text-orange-500 text-xl mt-1" />
-              <div className="flex-1">
-                <Text strong className="text-base block">Waiting for Inventory Approval</Text>
-                <Text type="secondary" className="text-sm block mt-1">
-                  The material request (from your BOM) has been sent to the Inventory team.
-                  They are reviewing raw material availability. You will be notified once they respond.
+          <Card size="small" className="border-gray-300">
+            <div className="flex items-center justify-between gap-4 flex-wrap">
+              <div>
+                <Text strong className="text-sm block">Waiting for Inventory Approval</Text>
+                <Text type="secondary" className="text-xs block mt-1">
+                  Material request sent{detailMR ? `: ${detailMR.request_number}` : ''}. If you changed a BOM, refresh the request.
                 </Text>
-                {detailMR && (
-                  <Tag color="processing" className="mt-2">Material Request: {detailMR.request_number}</Tag>
-                )}
               </div>
+              {detailMR && detailMR.status === 'pending' && (
+                <Button
+                  size="middle"
+                  icon={<SyncOutlined />}
+                  onClick={() => sendForApprovalMutation.mutate({
+                    poId: detailPO.id,
+                    data: {
+                      priority: detailPO.manufacturing_priority || 0,
+                      notes: detailPO.manufacturing_notes || '',
+                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                      items: (detailPO.items || []).map((it: any) => ({
+                        itemId: it.id,
+                        itemName: it.item_name,
+                        quantity: it.quantity,
+                        unitOfMeasure: it.unit_of_measure,
+                      })),
+                    },
+                  })}
+                  loading={sendForApprovalMutation.isPending}
+                >
+                  Refresh materials list
+                </Button>
+              )}
             </div>
           </Card>
         )}
@@ -715,29 +910,81 @@ export default function ManufacturingPODetailPage() {
           </Card>
         )}
 
-        {canCreateJobCards && (
-          <Card size="small" className="border-green-200 bg-green-50">
-            <div className="flex items-start gap-3">
-              <ToolOutlined className="text-green-600 text-xl mt-1" />
-              <div className="flex-1">
-                <Text strong className="text-base text-green-700 block">Step 3: Create Job Cards</Text>
-                <Text type="secondary" className="text-sm block mt-1">
-                  {mrIssued ? 'Raw materials have been issued by Inventory.' : 'All raw materials approved by Inventory.'} Create job cards to start production.
-                </Text>
-                <div className="mt-3">
-                  <Button type="primary" size="large" icon={<PlusOutlined />} onClick={() => {
-                    setSelectedPO(detailPO);
-                    setCurrentBom(detailBom);
-                    jobCardForm.resetFields();
-                    setJobCardModalOpen(true);
-                  }}>
-                    Create Job Cards
-                  </Button>
+        {/* Step 3 — Per-product job cards status */}
+        {(ws === 'approved' || mrIssued || detailJobCards.length > 0) && detailBoms.length > 0 && (() => {
+          const jcByProduct = new Map<number, JobCard>();
+          for (const jc of detailJobCards) {
+            if (jc.parent_job_card_id) continue; // skip children
+            if (jc.product_id && !jcByProduct.has(jc.product_id)) {
+              jcByProduct.set(jc.product_id, jc);
+            }
+          }
+          const rows = detailBoms
+            .filter((b) => b.product_id != null)
+            .map((b) => ({
+              bom: b,
+              product_name: b.product_name || 'Product',
+              jc: jcByProduct.get(b.product_id as number) || null,
+            }));
+          const doneCount = rows.filter((r) => r.jc).length;
+          const allDone = rows.length > 0 && doneCount === rows.length;
+          const canCreateAny = (ws === 'approved' || mrIssued) && !allDone;
+
+          return (
+            <Card size="small" className="border-gray-300">
+              <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
+                <div>
+                  <Text strong className="text-sm block">Step 3 — Job Cards</Text>
+                  <Text type="secondary" className="text-xs">
+                    {doneCount} of {rows.length} product(s) have a job card
+                  </Text>
                 </div>
               </div>
-            </div>
-          </Card>
-        )}
+              <div className="flex flex-wrap gap-2">
+                {rows.map(({ bom, product_name, jc }) => (
+                  <div
+                    key={bom.id}
+                    className={`flex items-center gap-2 px-2 py-1 rounded border text-xs ${
+                      jc ? 'border-gray-300 bg-white text-gray-700' : 'border-dashed border-gray-400 bg-gray-50 text-gray-500'
+                    }`}
+                  >
+                    {jc ? <CheckCircleOutlined className="text-gray-700" /> : <ClockCircleOutlined className="text-gray-400" />}
+                    <span className="font-medium">{product_name}</span>
+                    {jc ? (
+                      <>
+                        <span className="text-gray-500">· {jc.job_card_number}</span>
+                        <Button
+                          size="small"
+                          type="text"
+                          className="!px-1 !py-0 !h-auto"
+                          onClick={() => router.push(`/manufacturing/${jc.id}`)}
+                        >
+                          view
+                        </Button>
+                      </>
+                    ) : (
+                      canCreateAny && (
+                        <Button
+                          size="small"
+                          type="text"
+                          className="!px-1 !py-0 !h-auto"
+                          onClick={() => {
+                            setSelectedPO(detailPO);
+                            setCurrentBom(bom);
+                            jobCardForm.resetFields();
+                            setJobCardModalOpen(true);
+                          }}
+                        >
+                          + Create
+                        </Button>
+                      )
+                    )}
+                  </div>
+                ))}
+              </div>
+            </Card>
+          );
+        })()}
 
         {/* ── INVENTORY APPROVAL RESPONSE (Material Request Details) ── */}
         {detailMR && detailMR.items && detailMR.items.length > 0 && (
@@ -846,51 +1093,18 @@ export default function ManufacturingPODetailPage() {
                         </td>
                         <td className="p-2">
                           <Space size={4} wrap>
-                            {(isApproved || isPartiallyIssued) && (
-                              <Button
-                                size="small"
-                                type="primary"
-                                icon={<SendOutlined />}
-                                loading={issueItemMutation.isPending}
-                                onClick={() => {
-                                  Modal.confirm({
-                                    title: `Issue "${item.item_name}"?`,
-                                    content: `Issue all remaining ${Number(item.quantity_requested) - Number(item.quantity_issued)} ${item.unit_of_measure || 'units'} to manufacturing.`,
-                                    okText: 'Issue',
-                                    onOk: () => issueItemMutation.mutateAsync({ mrId: detailMR.id, itemId: item.id }),
-                                  });
-                                }}
-                              >
-                                Issue
-                              </Button>
-                            )}
-                            {(isApproved || isPartiallyIssued) && (
-                              <Button
-                                size="small"
-                                icon={<SendOutlined />}
-                                loading={issuePartialMutation.isPending}
-                                onClick={() => {
-                                  setIssuePartialQty(0);
-                                  setIssuePartialModal({ open: true, item });
-                                }}
-                              >
-                                Issue Partial
-                              </Button>
-                            )}
                             {isUnavailable && (
                               <Button
                                 size="small"
-                                type="primary"
-                                danger
                                 icon={<SyncOutlined />}
                                 loading={requestInventoryMutation.isPending}
                                 onClick={() => {
                                   const poItem = detailPO.items.find(pi => pi.product_id === item.product_id);
                                   if (poItem) {
                                     Modal.confirm({
-                                      title: 'Recheck Inventory?',
-                                      content: `Request Inventory team to recheck stock for "${item.item_name}". They will verify if materials are now available.`,
-                                      okText: 'Recheck Inventory',
+                                      title: 'Ask Inventory to recheck?',
+                                      content: `Request Inventory team to recheck stock for "${item.item_name}".`,
+                                      okText: 'Recheck',
                                       onOk: () => requestInventoryMutation.mutateAsync({ poId: detailPO.id, itemId: poItem.id }),
                                     });
                                   }
@@ -899,10 +1113,10 @@ export default function ManufacturingPODetailPage() {
                                 Recheck
                               </Button>
                             )}
-                            {isPartiallyIssued && !isApproved && (
-                              <span className="text-xs text-orange-500">Partially issued</span>
+                            {(isApproved || isPartiallyIssued) && (
+                              <span className="text-xs text-gray-500">Waiting for Inventory to issue</span>
                             )}
-                            {isFullyIssued && <span className="text-xs text-green-600">Ready</span>}
+                            {isFullyIssued && <span className="text-xs text-green-600">Issued · confirm receipt below</span>}
                             {isPending && <span className="text-xs text-gray-400">Under review</span>}
                           </Space>
                         </td>
@@ -912,27 +1126,6 @@ export default function ManufacturingPODetailPage() {
                 </tbody>
               </table>
             </div>
-
-            {/* Issue All button */}
-            {detailMR.items.some(i => i.status === 'approved') && (
-              <div className="mt-3 flex justify-end">
-                <Button
-                  type="primary"
-                  icon={<SendOutlined />}
-                  loading={issueAllMutation.isPending}
-                  onClick={() => {
-                    Modal.confirm({
-                      title: 'Issue All Approved Materials?',
-                      content: 'This will issue all approved materials to the manufacturing team.',
-                      okText: 'Issue All',
-                      onOk: () => issueAllMutation.mutateAsync(detailMR.id),
-                    });
-                  }}
-                >
-                  Issue All
-                </Button>
-              </div>
-            )}
 
             {/* Confirm Received button */}
             {!detailMR.confirmed_received && detailMR.items.some(i => ['issued', 'partially_issued'].includes(i.status)) && (
@@ -969,39 +1162,6 @@ export default function ManufacturingPODetailPage() {
             )}
           </Card>
         )}
-
-        {/* Issue Partial Modal */}
-        <Modal
-          title={`Issue Partial: ${issuePartialModal.item?.item_name}`}
-          open={issuePartialModal.open}
-          onCancel={() => { setIssuePartialModal({ open: false, item: null }); setIssuePartialQty(0); }}
-          onOk={() => {
-            if (!issuePartialModal.item || issuePartialQty <= 0) return;
-            issuePartialMutation.mutate({ mrId: detailMR!.id, itemId: issuePartialModal.item.id, qty: issuePartialQty });
-          }}
-          okText="Issue Partial"
-          confirmLoading={issuePartialMutation.isPending}
-        >
-          {issuePartialModal.item && (
-            <div className="space-y-3">
-              <div className="text-sm text-gray-600">
-                Requested: <strong>{issuePartialModal.item.quantity_requested} {issuePartialModal.item.unit_of_measure || ''}</strong>
-                {' · '}Already issued: <strong>{issuePartialModal.item.quantity_issued} {issuePartialModal.item.unit_of_measure || ''}</strong>
-                {' · '}Remaining: <strong>{Number(issuePartialModal.item.quantity_requested) - Number(issuePartialModal.item.quantity_issued)} {issuePartialModal.item.unit_of_measure || ''}</strong>
-              </div>
-              <div>
-                <Text className="text-sm">Quantity to issue now:</Text>
-                <InputNumber
-                  min={1}
-                  max={Number(issuePartialModal.item.quantity_requested) - Number(issuePartialModal.item.quantity_issued)}
-                  value={issuePartialQty}
-                  onChange={v => setIssuePartialQty(Number(v) || 0)}
-                  className="w-full mt-1"
-                />
-              </div>
-            </div>
-          )}
-        </Modal>
 
         {/* ── PURCHASE ORDER DETAILS ── */}
         <Card size="small" title="Purchase Order Details" extra={
@@ -1294,7 +1454,7 @@ export default function ManufacturingPODetailPage() {
                                   onClick={() => Modal.confirm({
                                     title: 'Start Production?',
                                     content: `Start production for ${itemJobCard.product_name}`,
-                                    onOk: () => startProductionMutation.mutateAsync(itemJobCard),
+                                    onOk: () => startProductionMutation.mutateAsync({ job: itemJobCard }),
                                   })}
                                 >
                                   Start Production
@@ -1313,7 +1473,7 @@ export default function ManufacturingPODetailPage() {
                                   content: `Start production for "${itemJobCard.product_name}" with materials already available? Remaining items can be arranged separately.`,
                                   okText: 'Release for Manufacturing',
                                   okButtonProps: { style: { backgroundColor: '#52c41a' } },
-                                  onOk: () => startProductionMutation.mutateAsync(itemJobCard),
+                                  onOk: () => startProductionMutation.mutateAsync({ job: itemJobCard }),
                                 })}
                               >
                                 Release for Mfg
@@ -1382,75 +1542,157 @@ export default function ManufacturingPODetailPage() {
           })()}
         </Card>
 
-        {/* ── BOM SECTION ── */}
-        {(detailPO || detailBom) && (
-          <Card size="small" title={
-            <span className="flex items-center gap-2">
-              Bill of Materials
-            </span>
-          } extra={
-            !detailBom && (
-              <Button size="small" type="primary" icon={<PlusOutlined />}
-                onClick={() => { setSelectedPO(detailPO); setBomModalOpen(true); }}
-                loading={createBomMutation.isPending}
-              >Create BOM</Button>
-            )
-          }>
-            {detailBom ? (
-              <>
-                <table className="w-full text-sm border rounded-lg overflow-hidden">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="text-left p-2 font-medium">Material</th>
-                      <th className="text-center p-2 font-medium w-24">Required</th>
-                      <th className="text-center p-2 font-medium w-20">Type</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {detailBom.items.map((r: BomItem) => (
-                      <tr key={r.id} className={`border-t ${r.is_custom ? 'bg-blue-50' : ''}`}>
-                        <td className="p-2">
-                          <div className="font-medium">{r.item_name}</div>
-                          {r.raw_material_code && <div className="text-xs text-gray-400 font-mono">{r.raw_material_code}</div>}
-                          {!r.raw_material_code && r.product_code && <div className="text-xs text-gray-400">{r.product_code}</div>}
-                        </td>
-                        <td className="p-2 text-center">{r.required_quantity} {r.unit_of_measure || ''}</td>
-                        <td className="p-2 text-center">
-                          {r.is_custom ? <Tag color="blue" className="!m-0">Custom</Tag> : <Tag color="default" className="!m-0"><LockOutlined className="mr-1" />BOM</Tag>}
-                        </td>
+        {/* ── BOM SECTION (per product) ── */}
+        {detailPO && (() => {
+          // Distinct products in the PO, each row showing its BOM status.
+          const seen = new Set<number>();
+          const productRows: Array<{ product_id: number; product_name: string; quantity: number; unit: string; bom?: Bom }> = [];
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          for (const it of (detailPO.items || []) as any[]) {
+            const pid = it.product_id || it.productId;
+            if (!pid || seen.has(pid)) continue;
+            seen.add(pid);
+            productRows.push({
+              product_id: pid,
+              product_name: it.item_name || it.product_name || 'Product',
+              quantity: Number(it.quantity || 0),
+              unit: it.unit_of_measure || '',
+              bom: detailBoms.find((b) => b.product_id === pid),
+            });
+          }
+          const createdCount = productRows.filter((r) => !!r.bom).length;
+
+          return (
+            <Card size="small" title={
+              <span className="flex items-center gap-2">
+                Bill of Materials (per product)
+                <Badge count={`${createdCount} / ${productRows.length}`} showZero
+                  color={createdCount === productRows.length && productRows.length > 0 ? 'green' : createdCount > 0 ? 'blue' : 'default'} />
+              </span>
+            }>
+              {productRows.length === 0 ? (
+                <div className="text-center py-6 text-gray-400">No products on this order.</div>
+              ) : (
+                <>
+                  <div className="text-xs text-gray-500 mb-3">
+                    Each product needs its own BOM. Add the raw materials manually for each product below.
+                  </div>
+                  <table className="w-full text-sm border rounded-lg overflow-hidden">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="text-left p-2 font-medium">Product</th>
+                        <th className="text-center p-2 font-medium w-24">Qty</th>
+                        <th className="text-left p-2 font-medium w-48">BOM</th>
+                        <th className="text-right p-2 font-medium w-40">Action</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </>
-            ) : (
-              <div className="text-center py-6 text-gray-400">No BOM created yet.</div>
-            )}
-          </Card>
-        )}
+                    </thead>
+                    <tbody>
+                      {productRows.map((row) => (
+                        <tr key={row.product_id} className="border-t">
+                          <td className="p-2">
+                            <div className="font-medium">{row.product_name}</div>
+                          </td>
+                          <td className="p-2 text-center">{row.quantity} {row.unit}</td>
+                          <td className="p-2">
+                            {row.bom ? (
+                              <div>
+                                <Tag color="green" icon={<CheckCircleOutlined />} className="!m-0">
+                                  {row.bom.bom_number}
+                                </Tag>
+                                <span className="text-xs text-gray-400 ml-2">
+                                  {row.bom.items.length} material(s)
+                                </span>
+                              </div>
+                            ) : (
+                              <Tag color="default" className="!m-0">
+                                Not created
+                              </Tag>
+                            )}
+                          </td>
+                          <td className="p-2 text-right">
+                            {row.bom ? (
+                              <Space>
+                                <Button size="small" icon={<EyeOutlined />}
+                                  onClick={() => { setCurrentBom(row.bom!); setBomViewModalOpen(true); }}
+                                >
+                                  View
+                                </Button>
+                                <Button size="small" icon={<EditOutlined />}
+                                  onClick={() => openEditBom(row.bom!)}
+                                >
+                                  Edit
+                                </Button>
+                              </Space>
+                            ) : (
+                              <Button
+                                size="small"
+                                icon={<PlusOutlined />}
+                                onClick={() => pickProductForBom(row.product_id)}
+                                loading={createBomMutation.isPending && bomForProductId === row.product_id}
+                                style={{ background: '#000', color: '#fff', borderColor: '#000' }}
+                              >
+                                Create BOM
+                              </Button>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </>
+              )}
+            </Card>
+          );
+        })()}
 
         {/* ── JOB CARDS SECTION ── */}
         {(() => {
           const jcMrItems = detailMR?.items || [];
-          const jcNoMR = !detailMR || detailPO.material_approval_status === 'none';
-          const jcTotalItems = jcMrItems.length;
-          const jcFullyIssuedItems = jcMrItems.filter(mi => Number(mi.quantity_issued) >= Number(mi.quantity_requested) && Number(mi.quantity_requested) > 0);
-          const jcCanStartProduction = !jcNoMR && jcTotalItems > 0 && jcFullyIssuedItems.length === jcTotalItems;
+
+          // Per-product material availability, computed from each product's own BOM
+          // vs the aggregated MR's issued quantities.
+          const materialStatusForProduct = (productId?: number): {
+            status: 'fully' | 'partial' | 'none' | 'no_bom';
+            shortItems: string[];
+          } => {
+            if (!productId) return { status: 'no_bom', shortItems: [] };
+            const bom = detailBoms.find((b) => b.product_id === productId);
+            if (!bom || !bom.items || bom.items.length === 0) return { status: 'no_bom', shortItems: [] };
+
+            let fully = 0;
+            let partial = 0;
+            let totalNeeded = 0;
+            const shortItems: string[] = [];
+
+            for (const bi of bom.items) {
+              const needed = Number(bi.required_quantity || 0);
+              if (needed <= 0) continue;
+              totalNeeded += 1;
+              let issued = 0;
+              if (bi.raw_material_id) {
+                const mi = jcMrItems.find((m) => m.raw_material_id === bi.raw_material_id);
+                issued = mi ? Number(mi.quantity_issued || 0) : 0;
+              } else {
+                const mi = jcMrItems.find((m) => !m.raw_material_id && m.item_name === bi.item_name);
+                issued = mi ? Number(mi.quantity_issued || 0) : 0;
+              }
+              if (issued >= needed) fully += 1;
+              else if (issued > 0) partial += 1;
+              else shortItems.push(bi.item_name);
+            }
+
+            if (totalNeeded === 0) return { status: 'no_bom', shortItems: [] };
+            if (fully === totalNeeded) return { status: 'fully', shortItems };
+            if (fully + partial > 0) return { status: 'partial', shortItems };
+            return { status: 'none', shortItems };
+          };
+
           return (detailBom || detailJobCards.length > 0) && (
           <Card size="small" title={
             <span className="flex items-center gap-2">
               Job Cards
               <Badge count={detailJobCards.length} showZero color={detailJobCards.length > 0 ? 'blue' : 'default'} />
             </span>
-          } extra={
-            detailBom && canCreateJobCards && (
-              <Button size="small" type="primary" icon={<PlusOutlined />} onClick={() => {
-                setSelectedPO(detailPO);
-                setCurrentBom(detailBom);
-                jobCardForm.resetFields();
-                setJobCardModalOpen(true);
-              }}>Create Job Cards</Button>
-            )
           }>
             {detailJobCards.length === 0 ? (
               <div className="text-center py-6 text-gray-400">No job cards yet.</div>
@@ -1555,18 +1797,65 @@ export default function ManufacturingPODetailPage() {
                           ))}
                         </div>
                       )}
+                      {/* Per-product material status indicator */}
+                      {(() => {
+                        const { status, shortItems } = materialStatusForProduct(jc.product_id);
+                        if (status === 'no_bom') return null;
+                        const label =
+                          status === 'fully' ? 'Fully Issued' :
+                          status === 'partial' ? 'Partially Issued' : 'Not Issued';
+                        const tone =
+                          status === 'fully' ? { border: '#d9f7be', dot: '#52c41a' } :
+                          status === 'partial' ? { border: '#ffe7ba', dot: '#fa8c16' } :
+                          { border: '#ffccc7', dot: '#ff4d4f' };
+                        return (
+                          <div
+                            className="mb-3 flex items-center gap-2 px-2 py-1 rounded border text-xs"
+                            style={{ borderColor: tone.border, background: '#fff' }}
+                          >
+                            <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 999, background: tone.dot }} />
+                            <span className="text-gray-700 font-medium">Materials: {label}</span>
+                            {shortItems.length > 0 && status !== 'fully' && (
+                              <span className="text-gray-500">· missing: {shortItems.slice(0, 3).join(', ')}{shortItems.length > 3 ? ` (+${shortItems.length - 3})` : ''}</span>
+                            )}
+                          </div>
+                        );
+                      })()}
+
                       <Space wrap size={8}>
                         <Button size="small" icon={<EyeOutlined />} onClick={() => router.push(`/manufacturing/${jc.id}`)}>Details</Button>
-                        {jc.status === 'pending' && jcCanStartProduction && !isOnHold && (
-                          <Button size="small" type="primary" icon={<PlayCircleOutlined />}
-                            loading={startProductionMutation.isPending}
-                            onClick={() => Modal.confirm({ title: 'Start Production?', content: `Start production for ${jc.product_name}`, onOk: () => startProductionMutation.mutateAsync(jc) })}>
-                            Start Production
-                          </Button>
-                        )}
-                        {jc.status === 'pending' && !jcCanStartProduction && !isOnHold && (
-                          <Tag color="orange" icon={<ExclamationCircleOutlined />}>On Hold - Waiting for Materials</Tag>
-                        )}
+                        {(() => {
+                          if (jc.status !== 'pending' || isOnHold) return null;
+                          const { status } = materialStatusForProduct(jc.product_id);
+                          // Allow click whenever there's something to work with. If materials
+                          // are only partial, the backend rejects and the mutation opens a
+                          // confirmation modal to "Start anyway" via force=true.
+                          const canStart = status === 'fully' || status === 'partial';
+                          return (
+                            <>
+                              <Button
+                                size="small"
+                                icon={<PlayCircleOutlined />}
+                                disabled={!canStart}
+                                loading={startProductionMutation.isPending}
+                                onClick={() => Modal.confirm({
+                                  title: 'Start Production?',
+                                  content: `Start production for ${jc.product_name}`,
+                                  onOk: () => startProductionMutation.mutateAsync({ job: jc }),
+                                })}
+                                style={canStart ? { background: '#000', color: '#fff', borderColor: '#000' } : undefined}
+                              >
+                                Start Production
+                              </Button>
+                              {status === 'partial' && (
+                                <span className="text-xs text-orange-600">Partial materials</span>
+                              )}
+                              {status === 'none' && (
+                                <span className="text-xs text-gray-500">Waiting for materials</span>
+                              )}
+                            </>
+                          );
+                        })()}
                         {jc.status === 'pending' && isOnHold && (
                           <Tag color="warning" icon={<PauseCircleOutlined />}>ON HOLD</Tag>
                         )}
@@ -1618,7 +1907,7 @@ export default function ManufacturingPODetailPage() {
         <Form form={approvalForm} layout="vertical" onFinish={handleSendForApproval}>
           <Row gutter={16}>
             <Col span={8}><Form.Item name="priority" label="Priority"><Select options={[{ value: 0, label: 'Normal' }, { value: 1, label: '⚡ High' }, { value: 2, label: '🔴 Urgent' }]} /></Form.Item></Col>
-            <Col span={16}><Form.Item name="expectedDelivery" label="Expected Delivery"><DatePicker className="w-full" format="DD MMM YYYY" /></Form.Item></Col>
+            <Col span={16}><Form.Item name="expectedDelivery" label="Expected Delivery"><DatePicker className="w-full" format="DD MMM YYYY" disabledDate={(d) => !!d && d.isBefore(dayjs().startOf('day'))} /></Form.Item></Col>
           </Row>
           <Form.Item name="notes" label="Notes for Inventory Team"><TextArea rows={2} placeholder="Any special instructions for the inventory team..." /></Form.Item>
         </Form>
@@ -1661,6 +1950,55 @@ export default function ManufacturingPODetailPage() {
         </div>
       </Modal>
 
+      {/* Product picker — choose which product to create a BOM for */}
+      <Modal
+        title={
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center">
+              <AppstoreOutlined className="text-purple-600 text-lg" />
+            </div>
+            <div>
+              <div className="text-base font-semibold">Select a Product</div>
+              <div className="text-xs text-gray-400 font-normal">
+                {selectedPO?.order_number} — each product needs its own BOM
+              </div>
+            </div>
+          </div>
+        }
+        open={productPickerOpen}
+        onCancel={() => setProductPickerOpen(false)}
+        footer={null}
+        width={640}
+      >
+        {selectedPO && (() => {
+          const pending = getProductsNeedingBom(selectedPO, detailBoms);
+          const coveredCount = (selectedPO.items || []).length - pending.length;
+          return (
+            <div>
+              <div className="text-xs text-gray-500 mb-3">
+                {coveredCount > 0 && <span>{coveredCount} already has a BOM. </span>}
+                Pick a product to create its BOM. Items pre-fill from the product&apos;s master BOM when one exists.
+              </div>
+              <div className="space-y-2">
+                {pending.map((p) => (
+                  <button
+                    key={p.product_id}
+                    onClick={() => pickProductForBom(p.product_id)}
+                    className="w-full text-left p-3 bg-white hover:bg-blue-50 border border-gray-200 hover:border-blue-300 rounded-lg transition-colors flex items-center justify-between group"
+                  >
+                    <div>
+                      <div className="font-medium text-gray-900">{p.product_name}</div>
+                      <div className="text-xs text-gray-400">Qty: {p.quantity} {p.unit}</div>
+                    </div>
+                    <PlusOutlined className="text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </button>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
+      </Modal>
+
       {/* Create BOM */}
       <Modal
         title={
@@ -1669,15 +2007,23 @@ export default function ManufacturingPODetailPage() {
               <FileTextOutlined className="text-blue-600 text-lg" />
             </div>
             <div>
-              <div className="text-base font-semibold">Create Bill of Materials</div>
+              <div className="text-base font-semibold">
+                {editingBomId ? 'Edit BOM' : 'Create BOM'}{bomForProductId && selectedPO ? ` — ${
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  selectedPO.items.find((it: any) => (it.product_id || it.productId) === bomForProductId)?.item_name || 'Product'
+                }` : ''}
+              </div>
               <div className="text-xs text-gray-400 font-normal">{selectedPO?.order_number} — {selectedPO?.customer_name}</div>
             </div>
           </div>
         }
         open={bomModalOpen}
-        onCancel={() => { setBomModalOpen(false); setSelectedPO(null); setBomItems([]); }}
+        onCancel={() => { setBomModalOpen(false); setBomForProductId(null); setEditingBomId(null); setBomItems([]); }}
         onOk={() => {
-          if (!selectedPO) return;
+          if (!selectedPO || !bomForProductId) {
+            message.warning('Select a product first');
+            return;
+          }
           const validItems = bomItems.filter(bi => (bi.rawMaterialId || bi.itemName.trim()) && bi.requiredQuantity > 0);
           if (validItems.length === 0) {
             message.warning('Add at least one material to the BOM');
@@ -1689,107 +2035,79 @@ export default function ManufacturingPODetailPage() {
             requiredQuantity: bi.requiredQuantity,
             unitOfMeasure: bi.unitOfMeasure,
           }));
-          createBomMutation.mutate({ poId: selectedPO.id, items });
+          if (editingBomId) {
+            updateBomMutation.mutate({ bomId: editingBomId, items });
+          } else {
+            createBomMutation.mutate({ poId: selectedPO.id, productId: bomForProductId, items });
+          }
         }}
-        okText={<span><CheckCircleOutlined className="mr-1" />Create BOM</span>}
-        confirmLoading={createBomMutation.isPending}
-        width={800}
+        okText={<span><SaveOutlined className="mr-1" />{editingBomId ? 'Save Changes' : 'Save BOM'}</span>}
+        cancelText="Cancel"
+        confirmLoading={createBomMutation.isPending || updateBomMutation.isPending}
+        width={760}
         okButtonProps={{
           disabled: bomItems.filter(bi => (bi.rawMaterialId || bi.itemName.trim()) && bi.requiredQuantity > 0).length === 0,
-          size: 'large',
+          size: 'middle',
+          style: { background: '#000', color: '#fff', borderColor: '#000' },
         }}
-        cancelButtonProps={{ size: 'large' }}
+        cancelButtonProps={{ size: 'middle' }}
         styles={{ body: { padding: '16px 24px' } }}
       >
         {selectedPO && <div>
-          {/* Order products summary */}
-          <div className="bg-gray-50 rounded-lg p-3 mb-4">
-            <Text className="text-xs text-gray-500 block mb-2 font-medium uppercase tracking-wide">Products in this order</Text>
-            <div className="flex flex-wrap gap-2">
-              {selectedPO.items?.map((item: any, i: number) => (
-                <div key={i} className="bg-white border rounded-md px-3 py-1.5 text-sm flex items-center gap-2">
-                  <AppstoreOutlined className="text-blue-400" />
-                  <span className="font-medium">{item.item_name}</span>
-                  <Tag className="!m-0 text-xs">x{item.quantity} {item.unit_of_measure || ''}</Tag>
+          {/* Selected product summary */}
+          {bomForProductId && (() => {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const item: any = selectedPO.items?.find((it: any) => (it.product_id || it.productId) === bomForProductId);
+            if (!item) return null;
+            return (
+              <div className="bg-gray-50 rounded-lg p-3 mb-4 flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
+                  <AppstoreOutlined className="text-blue-500 text-lg" />
                 </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Materials list header */}
-          <div className="flex items-center justify-between mb-3">
-            <div>
-              <Text strong className="text-base">Raw Materials Required</Text>
-              {bomItems.length > 0 && (
-                <Tag color="blue" className="ml-2">{bomItems.filter(bi => (bi.rawMaterialId || bi.itemName.trim()) && bi.requiredQuantity > 0).length} item(s)</Tag>
-              )}
-            </div>
-            <Button type="primary" icon={<PlusOutlined />} size="middle"
-              onClick={() => setBomItems(prev => [...prev, { rawMaterialId: undefined, itemName: '', requiredQuantity: 1, unitOfMeasure: '', availableStock: 0 }])}>
-              Add Material
-            </Button>
-          </div>
-
-          {bomItems.length === 0 ? (
-            <div className="border-2 border-dashed border-gray-200 rounded-xl p-8 text-center">
-              <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                <ToolOutlined className="text-2xl text-gray-400" />
+                <div className="flex-1">
+                  <Text className="text-xs text-gray-500 block uppercase tracking-wide">Building BOM for</Text>
+                  <Text strong className="text-base">{item.item_name}</Text>
+                </div>
+                <Tag color="blue" className="!m-0">Qty: {item.quantity} {item.unit_of_measure || ''}</Tag>
               </div>
-              <Text strong className="text-base block mb-1">No materials added yet</Text>
-              <Text type="secondary" className="text-sm block mb-4">
-                Add raw materials from inventory or enter custom materials manually
-              </Text>
-              <Button type="primary" icon={<PlusOutlined />}
-                onClick={() => setBomItems(prev => [...prev, { rawMaterialId: undefined, itemName: '', requiredQuantity: 1, unitOfMeasure: '', availableStock: 0 }])}>
-                Add First Material
-              </Button>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {bomItems.map((bi, idx) => (
-                <div key={idx} className={`rounded-lg border transition-all ${
-                  bi.rawMaterialId ? 'bg-green-50 border-green-200' :
-                  bi.itemName.trim() ? 'bg-blue-50 border-blue-200' :
-                  'bg-white border-gray-200 shadow-sm'
-                }`}>
-                  {/* Header row */}
-                  <div className="flex items-center gap-2 px-3 pt-3 pb-2">
-                    <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold text-gray-600 flex-shrink-0">
-                      {idx + 1}
-                    </div>
-                    <Text className="text-xs font-medium text-gray-500 uppercase tracking-wide">Material {idx + 1}</Text>
-                    <div className="flex-1" />
-                    <Button
-                      type="text"
-                      danger
-                      size="small"
-                      icon={<CloseCircleOutlined />}
-                      onClick={() => setBomItems(prev => prev.filter((_, i) => i !== idx))}
-                    />
-                  </div>
+            );
+          })()}
 
-                  {/* Inputs grid */}
-                  <div className="px-3 pb-3 grid grid-cols-1 gap-2">
-                    {/* Material dropdown */}
-                    <div>
-                      <Text className="text-xs text-gray-500 block mb-1">Select from Inventory</Text>
+          {/* Simple flat table: Material | Qty | Unit | × */}
+          <table className="w-full text-sm border rounded-lg overflow-hidden">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="text-left p-2 font-medium" style={{ width: '55%' }}>Material</th>
+                <th className="text-left p-2 font-medium" style={{ width: '20%' }}>Qty</th>
+                <th className="text-left p-2 font-medium" style={{ width: '15%' }}>Unit</th>
+                <th className="p-2" style={{ width: '10%' }}></th>
+              </tr>
+            </thead>
+            <tbody>
+              {bomItems.length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="p-6 text-center text-gray-400">
+                    No materials added yet. Click <strong>+ Add Material</strong> below to start.
+                  </td>
+                </tr>
+              ) : (
+                bomItems.map((bi, idx) => (
+                  <tr key={idx} className="border-t">
+                    <td className="p-2">
                       <Select
                         showSearch
                         allowClear
-                        placeholder="Search by name or code..."
-                        size="large"
+                        placeholder="Search material or type custom name..."
                         className="w-full"
-                        value={bi.rawMaterialId ? `rm_${bi.rawMaterialId}` : undefined}
+                        value={bi.rawMaterialId ? `rm_${bi.rawMaterialId}` : (bi.itemName ? `custom_${idx}` : undefined)}
                         filterOption={(input, option) =>
-                          String(option?.searchtext || '').toLowerCase().includes(input.toLowerCase())
+                          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                          String((option as any)?.searchtext || '').toLowerCase().includes(input.toLowerCase())
                         }
                         onChange={(val) => {
                           if (!val) {
                             setBomItems(prev => prev.map((item, i) => i === idx ? {
-                              ...item,
-                              rawMaterialId: undefined,
-                              unitOfMeasure: item.itemName.trim() ? item.unitOfMeasure : '',
-                              availableStock: 0,
+                              ...item, rawMaterialId: undefined, itemName: '', unitOfMeasure: '', availableStock: 0,
                             } : item));
                             return;
                           }
@@ -1805,17 +2123,33 @@ export default function ManufacturingPODetailPage() {
                             } : item));
                           }
                         }}
+                        dropdownRender={(menu) => (
+                          <>
+                            {menu}
+                            <div className="border-t p-2">
+                              <Input
+                                size="small"
+                                placeholder="Or type a custom name and press Enter"
+                                onPressEnter={(e) => {
+                                  const name = (e.target as HTMLInputElement).value.trim();
+                                  if (!name) return;
+                                  setBomItems(prev => prev.map((item, i) => i === idx ? {
+                                    ...item, rawMaterialId: undefined, itemName: name,
+                                  } : item));
+                                  (e.target as HTMLInputElement).value = '';
+                                }}
+                              />
+                            </div>
+                          </>
+                        )}
                         options={rawMaterials
                           .filter(r => r.status === 'active')
                           .map(r => ({
                             value: `rm_${r.id}`,
                             searchtext: `${r.material_name} ${r.material_code || ''}`,
                             label: (
-                              <div className="flex justify-between items-center py-0.5">
-                                <div>
-                                  <div className="font-medium text-sm">{r.material_name}</div>
-                                  {r.material_code && <div className="text-xs text-gray-400">{r.material_code}</div>}
-                                </div>
+                              <div className="flex justify-between items-center">
+                                <span>{r.material_name}</span>
                                 <Tag color={Number(r.available_stock) > 0 ? 'green' : 'red'} className="!m-0 text-xs">
                                   {r.available_stock} {r.unit_of_measure || ''}
                                 </Tag>
@@ -1823,90 +2157,51 @@ export default function ManufacturingPODetailPage() {
                             ),
                           }))}
                       />
-                      {bi.rawMaterialId && (
-                        <div className="flex items-center gap-2 mt-1">
-                          <Tag color="green" className="!m-0 text-xs" icon={<CheckCircleOutlined />}>Inventory Item</Tag>
-                          <Text className="text-xs text-gray-500">Stock available: <strong>{bi.availableStock} {bi.unitOfMeasure}</strong></Text>
-                        </div>
+                      {!bi.rawMaterialId && bi.itemName && (
+                        <Tag color="blue" className="!m-0 text-xs mt-1">Custom: {bi.itemName}</Tag>
                       )}
-                    </div>
+                    </td>
+                    <td className="p-2">
+                      <InputNumber
+                        min={0.01}
+                        step={1}
+                        value={bi.requiredQuantity}
+                        onChange={(val) => setBomItems(prev => prev.map((item, i) => i === idx ? { ...item, requiredQuantity: Number(val) || 0 } : item))}
+                        style={{ width: '100%' }}
+                        placeholder="Qty"
+                      />
+                    </td>
+                    <td className="p-2">
+                      <Input
+                        placeholder="kg, pcs..."
+                        value={bi.unitOfMeasure}
+                        disabled={!!bi.rawMaterialId}
+                        onChange={(e) => setBomItems(prev => prev.map((item, i) => i === idx ? { ...item, unitOfMeasure: e.target.value } : item))}
+                      />
+                    </td>
+                    <td className="p-2 text-center">
+                      <Button
+                        type="text"
+                        danger
+                        icon={<CloseCircleOutlined />}
+                        onClick={() => setBomItems(prev => prev.filter((_, i) => i !== idx))}
+                      />
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
 
-                    {/* Custom name (shown when no inventory item selected) */}
-                    {!bi.rawMaterialId && (
-                      <div>
-                        <Text className="text-xs text-gray-500 block mb-1">— Or enter custom material name</Text>
-                        <Input
-                          placeholder="e.g. Steel Rod, Copper Wire..."
-                          size="large"
-                          value={bi.itemName}
-                          onChange={(e) => setBomItems(prev => prev.map((item, i) => i === idx ? { ...item, itemName: e.target.value } : item))}
-                        />
-                        {bi.itemName.trim() && (
-                          <Tag color="blue" className="!m-0 text-xs mt-1">Custom Material</Tag>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Quantity + Unit row */}
-                    <div className="flex gap-3 items-end">
-                      <div className="flex-1">
-                        <Text className="text-xs text-gray-500 block mb-1">Required Quantity *</Text>
-                        <InputNumber
-                          min={0.01}
-                          step={1}
-                          value={bi.requiredQuantity}
-                          onChange={(val) => setBomItems(prev => prev.map((item, i) => i === idx ? { ...item, requiredQuantity: val || 0 } : item))}
-                          style={{ width: '100%' }}
-                          size="large"
-                          placeholder="Enter quantity"
-                        />
-                      </div>
-                      <div style={{ width: 140 }}>
-                        <Text className="text-xs text-gray-500 block mb-1">Unit of Measure</Text>
-                        {bi.rawMaterialId ? (
-                          <Input size="large" value={bi.unitOfMeasure} disabled />
-                        ) : (
-                          <Input
-                            placeholder="kg, pcs, m..."
-                            size="large"
-                            value={bi.unitOfMeasure}
-                            onChange={(e) => setBomItems(prev => prev.map((item, i) => i === idx ? { ...item, unitOfMeasure: e.target.value } : item))}
-                          />
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ))}
-
-              {/* Add more button at bottom */}
-              <Button
-                type="dashed"
-                block
-                icon={<PlusOutlined />}
-                className="!h-12 !border-gray-300 hover:!border-blue-400"
-                onClick={() => setBomItems(prev => [...prev, { rawMaterialId: undefined, itemName: '', requiredQuantity: 1, unitOfMeasure: '', availableStock: 0 }])}
-              >
-                Add Another Material
-              </Button>
-            </div>
-          )}
-
-          {/* Summary */}
-          {bomItems.filter(bi => (bi.rawMaterialId || bi.itemName.trim()) && bi.requiredQuantity > 0).length > 0 && (
-            <div className="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-3 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <CheckCircleOutlined className="text-blue-500" />
-                <Text className="text-sm">
-                  <strong>{bomItems.filter(bi => bi.rawMaterialId && bi.requiredQuantity > 0).length}</strong> inventory item(s)
-                  {bomItems.filter(bi => !bi.rawMaterialId && bi.itemName.trim() && bi.requiredQuantity > 0).length > 0 && (
-                    <>, <strong>{bomItems.filter(bi => !bi.rawMaterialId && bi.itemName.trim() && bi.requiredQuantity > 0).length}</strong> custom material(s)</>
-                  )}
-                </Text>
-              </div>
-              <Text type="secondary" className="text-xs">Ready to create BOM</Text>
-            </div>
-          )}
+          <Button
+            type="dashed"
+            block
+            icon={<PlusOutlined />}
+            className="!mt-3"
+            onClick={() => setBomItems(prev => [...prev, { rawMaterialId: undefined, itemName: '', requiredQuantity: 1, unitOfMeasure: '', availableStock: 0 }])}
+          >
+            + Add Material
+          </Button>
         </div>}
       </Modal>
 
@@ -1955,6 +2250,8 @@ export default function ManufacturingPODetailPage() {
         okText={<span><CheckCircleOutlined className="mr-1" />Create Job Card</span>}
         confirmLoading={createJobCardsMutation.isPending}
         width={800}
+        maskClosable={false}
+        keyboard={false}
         okButtonProps={{ size: 'large' }}
         cancelButtonProps={{ size: 'large' }}
         styles={{ body: { padding: '16px 24px' } }}
@@ -1989,12 +2286,33 @@ export default function ManufacturingPODetailPage() {
             </Col>
             <Col xs={24} sm={8}>
               <Form.Item name="startDate" label="Start Date">
-                <DatePicker className="w-full" size="large" format="DD MMM YYYY" placeholder="Select start date" />
+                <DatePicker
+                  className="w-full"
+                  size="large"
+                  format="DD MMM YYYY"
+                  placeholder="Select start date"
+                  disabledDate={(current) => current && current.isBefore(dayjs().startOf('day'))}
+                />
               </Form.Item>
             </Col>
             <Col xs={24} sm={8}>
-              <Form.Item name="expectedCompletion" label="Expected Completion">
-                <DatePicker className="w-full" size="large" format="DD MMM YYYY" placeholder="Select deadline" />
+              <Form.Item
+                name="expectedCompletion"
+                label="Expected Completion"
+                dependencies={['startDate']}
+              >
+                <DatePicker
+                  className="w-full"
+                  size="large"
+                  format="DD MMM YYYY"
+                  placeholder="Select deadline"
+                  disabledDate={(current) => {
+                    if (!current) return false;
+                    const start = jobCardForm.getFieldValue('startDate') as dayjs.Dayjs | undefined;
+                    const minDate = start && start.isAfter(dayjs(), 'day') ? start : dayjs().startOf('day');
+                    return current.isBefore(minDate, 'day');
+                  }}
+                />
               </Form.Item>
             </Col>
           </Row>
@@ -2122,54 +2440,148 @@ export default function ManufacturingPODetailPage() {
                           <Tag color="warning" icon={<PauseCircleOutlined />}>ON HOLD — Production paused</Tag>
                         ) : (
                           <>
-                            <div className="bg-white rounded border border-blue-200 p-3 space-y-3">
-                              <Text strong className="text-xs text-blue-700 uppercase tracking-wide block">Complete this stage</Text>
+                            <div className="bg-white rounded border border-gray-200 p-3 space-y-3">
                               <div>
-                                <Text className="text-xs text-gray-500 block mb-1">Completed Date</Text>
-                                <DatePicker
-                                  showTime
-                                  className="w-full"
-                                  value={stageCompletedDate}
-                                  onChange={val => setStageCompletedDate(val)}
-                                  format="DD MMM YYYY, hh:mm A"
-                                  size="small"
-                                />
-                              </div>
-                              <div>
-                                <Text className="text-xs text-gray-500 block mb-1">Description / Work Done</Text>
+                                <Text className="text-xs text-gray-500 block mb-1">What was done</Text>
                                 <Input.TextArea
-                                  placeholder="Describe the work completed in this stage..."
+                                  placeholder="Short note on the work completed (optional)"
                                   rows={2}
-                                  size="small"
                                   value={stageDescription}
                                   onChange={e => setStageDescription(e.target.value)}
                                 />
                               </div>
-                              <div>
-                                <Text className="text-xs text-gray-500 block mb-1">Notes (optional)</Text>
-                                <Input.TextArea
-                                  placeholder="Any additional notes or observations..."
-                                  rows={1}
-                                  size="small"
-                                  value={stageNotes}
-                                  onChange={e => setStageNotes(e.target.value)}
-                                />
-                              </div>
+
+                              {/* Waste recording — restricted to materials ACTUALLY ISSUED for this product */}
+                              {(() => {
+                                // Issued materials for this job card = BOM items with matching issued MR items.
+                                const jcBom = selectedJob ? detailBoms.find((b) => b.product_id === selectedJob.product_id) : undefined;
+                                const mrItems = detailMR?.items || [];
+                                const issuedMaterials = (jcBom?.items || [])
+                                  .map((bi) => {
+                                    if (!bi.raw_material_id) return null;
+                                    const mi = mrItems.find((m) => m.raw_material_id === bi.raw_material_id);
+                                    if (!mi) return null;
+                                    const issued = Number(mi.quantity_issued || 0);
+                                    if (issued <= 0) return null;
+                                    return {
+                                      raw_material_id: bi.raw_material_id,
+                                      name: bi.item_name,
+                                      issued,
+                                      unit: bi.unit_of_measure || mi.unit_of_measure || '',
+                                    };
+                                  })
+                                  .filter((x): x is { raw_material_id: number; name: string; issued: number; unit: string } => !!x);
+
+                                const selected = issuedMaterials.find((m) => m.raw_material_id === wasteRawMaterialId);
+                                const maxWaste = selected ? Math.max(0, selected.issued - wasteConsumedQty) : 0;
+
+                                return (
+                                  <div className="pt-2 border-t border-gray-100">
+                                    <Text className="text-xs text-gray-500 block mb-2">Waste generated (optional — only for issued materials)</Text>
+                                    {issuedMaterials.length === 0 ? (
+                                      <div className="text-xs text-gray-400 bg-gray-50 rounded p-2 border border-gray-100">
+                                        No materials have been issued for this product yet — waste cannot be recorded.
+                                      </div>
+                                    ) : (
+                                      <div className="flex flex-wrap gap-2 items-start">
+                                        <Select
+                                          placeholder="Issued material"
+                                          allowClear
+                                          style={{ minWidth: 200, flex: '1 1 200px' }}
+                                          value={wasteRawMaterialId ?? undefined}
+                                          onChange={(val) => {
+                                            setWasteRawMaterialId(val ?? null);
+                                            const m = issuedMaterials.find((x) => x.raw_material_id === val);
+                                            setWasteUnit(m?.unit || '');
+                                            setWasteConsumedQty(0);
+                                            setWasteQuantity(0);
+                                          }}
+                                          options={issuedMaterials.map((m) => ({
+                                            value: m.raw_material_id,
+                                            label: `${m.name} · issued ${m.issued} ${m.unit}`,
+                                          }))}
+                                        />
+                                        <InputNumber
+                                          placeholder="Consumed"
+                                          min={0}
+                                          max={selected ? selected.issued : undefined}
+                                          value={wasteConsumedQty || undefined}
+                                          onChange={(v) => setWasteConsumedQty(Number(v) || 0)}
+                                          style={{ width: 110 }}
+                                          disabled={!selected}
+                                        />
+                                        <InputNumber
+                                          placeholder="Waste"
+                                          min={0}
+                                          max={maxWaste || undefined}
+                                          value={wasteQuantity || undefined}
+                                          onChange={(v) => setWasteQuantity(Number(v) || 0)}
+                                          style={{ width: 100 }}
+                                          disabled={!selected}
+                                        />
+                                        <Input
+                                          placeholder="Unit"
+                                          value={wasteUnit}
+                                          disabled
+                                          style={{ width: 80 }}
+                                        />
+                                        <Input
+                                          placeholder="Notes (optional)"
+                                          value={wasteNotes}
+                                          onChange={(e) => setWasteNotes(e.target.value)}
+                                          style={{ flex: '1 1 160px', minWidth: 140 }}
+                                        />
+                                      </div>
+                                    )}
+                                    {selected && (
+                                      <div className="text-xs text-gray-400 mt-1">
+                                        Consumed + Waste must be ≤ Issued ({selected.issued} {selected.unit}).
+                                        Remaining after save: {Math.max(0, selected.issued - wasteConsumedQty - wasteQuantity)} {selected.unit}.
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })()}
                             </div>
                             <Button
-                              type="primary"
                               icon={<CheckCircleOutlined />}
-                              style={{ background: '#52c41a', borderColor: '#52c41a' }}
                               loading={completeCurrentStageMutation.isPending}
                               block
-                              onClick={() => {
+                              style={{ background: '#000', color: '#fff', borderColor: '#000' }}
+                              onClick={async () => {
                                 if (!selectedJob) return;
+                                // Record waste only if a real issued material was selected and qty > 0.
+                                if (wasteRawMaterialId && wasteQuantity > 0) {
+                                  try {
+                                    const stagePart = `stage ${idx + 1} (${stage.process_name})`;
+                                    // Backend auto-creates a default "Production Waste" category if none exists.
+                                    await recordProductionWaste({
+                                      jobCardId: selectedJob.id,
+                                      rawMaterialId: wasteRawMaterialId,
+                                      categoryId: wasteCategories[0]?.id,
+                                      quantity: wasteQuantity,
+                                      unit: wasteUnit || undefined,
+                                      consumedQuantity: wasteConsumedQty || undefined,
+                                      notes: [stagePart, wasteNotes].filter(Boolean).join(' · '),
+                                    });
+                                    queryClient.invalidateQueries({ queryKey: ['waste-inventory'] });
+                                    queryClient.invalidateQueries({ queryKey: ['waste-dashboard'] });
+                                    queryClient.invalidateQueries({ queryKey: ['waste-categories'] });
+                                  } catch (e: any) {
+                                    message.warning(e?.response?.data?.message || 'Could not record waste — continuing with stage completion');
+                                  }
+                                }
                                 completeCurrentStageMutation.mutate({
                                   jobId: selectedJob.id,
                                   notes: stageNotes || undefined,
                                   completedDate: stageCompletedDate ? stageCompletedDate.toISOString() : undefined,
                                   description: stageDescription || undefined,
                                 });
+                                setWasteRawMaterialId(null);
+                                setWasteQuantity(0);
+                                setWasteUnit('');
+                                setWasteConsumedQty(0);
+                                setWasteNotes('');
                               }}
                             >
                               Complete Stage

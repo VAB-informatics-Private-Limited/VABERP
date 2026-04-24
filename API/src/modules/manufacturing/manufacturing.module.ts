@@ -10,6 +10,8 @@ import { ProcessStage } from './entities/process-stage.entity';
 import { ProcessTemplate } from './entities/process-template.entity';
 import { Bom } from './entities/bom.entity';
 import { BomItem } from './entities/bom-item.entity';
+import { ProductBom } from '../products/entities/product-bom.entity';
+import { ProductBomItem } from '../products/entities/product-bom-item.entity';
 import { Inventory } from '../inventory/entities/inventory.entity';
 import { InventoryLedger } from '../inventory/entities/inventory-ledger.entity';
 import { SalesOrder } from '../sales-orders/entities/sales-order.entity';
@@ -26,6 +28,7 @@ import { RawMaterialLedger } from '../raw-materials/entities/raw-material-ledger
     TypeOrmModule.forFeature([
       JobCard, JobCardProgress, JobCardStageHistory, ProcessStage, ProcessTemplate,
       Bom, BomItem,
+      ProductBom, ProductBomItem,
       Inventory, InventoryLedger,
       SalesOrder, SalesOrderItem,
       StageMaster,

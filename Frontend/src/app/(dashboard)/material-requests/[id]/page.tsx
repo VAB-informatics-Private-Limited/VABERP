@@ -520,11 +520,21 @@ export default function MaterialRequestDetailPage() {
   const hasApprovedItems = mr.items?.some((i) => i.status === 'approved' && i.quantity_issued < i.quantity_approved);
   const pendingItems = mr.items?.filter((i) => i.status === 'pending') || [];
   const shortItems = pendingItems.filter(i => i.available_stock < i.quantity_requested);
-  const allShortItems = mr.items?.filter(i => i.available_stock < i.quantity_requested && i.status !== 'issued' && i.status !== 'approved') || [];
+  // An item is "short" if it can't be fully covered from existing stock or already-issued qty.
+  // Also include items explicitly marked insufficient/rejected, or approved-for-less-than-requested.
+  const allShortItems = mr.items?.filter(i => {
+    if (i.status === 'issued' && i.quantity_issued >= i.quantity_requested) return false;
+    if (i.status === 'insufficient' || i.status === 'rejected') return true;
+    const shortOfStock = Number(i.available_stock || 0) + Number(i.quantity_issued || 0) < Number(i.quantity_requested);
+    const partialApproval = i.status === 'approved' && Number(i.quantity_approved || 0) < Number(i.quantity_requested);
+    return shortOfStock || partialApproval;
+  }) || [];
   const isManufacturingRequest = mr.purpose?.includes('Manufacturing') || mr.sales_order_id;
   const approvedNotIssuedCount = mr.items?.filter(i => i.status === 'approved' && i.quantity_issued < i.quantity_approved).length || 0;
   const issuedButRemainingItems = mr.items?.filter(i => i.status === 'issued' && i.quantity_issued < i.quantity_requested) || [];
-  const canCreateIndent = allShortItems.length > 0 && !indent;
+  // Allow raising a new indent if there are shortages AND no open indent exists.
+  const openIndentExists = !!indent && !indentClosed;
+  const canCreateIndent = allShortItems.length > 0 && !openIndentExists;
   const allItemsIssued = mr.items?.every(i => i.quantity_issued >= i.quantity_requested);
 
   // Workflow step for this MR
@@ -538,103 +548,120 @@ export default function MaterialRequestDetailPage() {
     return 0;
   };
 
+  // One primary status message + one primary action, based on current state.
+  const renderStatusLine = () => {
+    if (hasProcurementRelease) {
+      return { tone: 'success', title: 'Procurement released stock — all items auto-issued to manufacturing.' };
+    }
+    if (hasProcurementFulfillment) {
+      return { tone: 'success', title: `${procurementFulfilledItems.length} procured item(s) ready — approve to issue.` };
+    }
+    if (mr.status === 'rejected') {
+      return { tone: 'error', title: 'Request rejected — check inventory and recheck stock.' };
+    }
+    if (mr.status === 'fulfilled' && allItemsIssued) {
+      return { tone: 'success', title: 'Fulfilled — all items issued to manufacturing.' };
+    }
+    if (allItemsIssued) {
+      return { tone: 'success', title: 'All materials issued. Production can proceed.' };
+    }
+    if (shortItems.length > 0 && hasPendingItems) {
+      return { tone: 'warning', title: `${shortItems.length} item(s) short of stock — review & approve available, raise indent for shortages.` };
+    }
+    if (hasPendingItems && isManufacturingRequest) {
+      return { tone: 'info', title: 'Awaiting your approval for manufacturing materials.' };
+    }
+    if (hasApprovedItems) {
+      return { tone: 'info', title: `${approvedNotIssuedCount} item(s) approved — issue to manufacturing.` };
+    }
+    if (mr.status === 'partially_approved') {
+      return { tone: 'info', title: 'Partially approved. Refresh or recheck stock to re-process.' };
+    }
+    return { tone: 'info', title: `Status: ${getStatusLabel(mr.status)}` };
+  };
+
+  const statusLine = renderStatusLine();
+  const toneBorder = {
+    success: '#d9f7be',
+    warning: '#ffe7ba',
+    error: '#ffccc7',
+    info: '#d9d9d9',
+  } as Record<string, string>;
+  const toneDot = {
+    success: '#52c41a',
+    warning: '#fa8c16',
+    error: '#ff4d4f',
+    info: '#8c8c8c',
+  } as Record<string, string>;
+
   return (
     <div>
-      <div className="flex flex-wrap justify-between items-center mb-6 gap-3">
+      {/* Header */}
+      <div className="flex flex-wrap justify-between items-center mb-4 gap-3">
         <div className="flex items-center gap-3">
           <Button icon={<ArrowLeftOutlined />} onClick={() => router.push('/material-requests')} type="text" />
           <div>
-            <Title level={4} className="!mb-0">{mr.request_number}</Title>
+            <div className="flex items-center gap-2">
+              <Title level={5} className="!mb-0">{mr.request_number}</Title>
+              <Tag className="!m-0" style={{ borderColor: '#d9d9d9', background: '#fafafa', color: '#595959' }}>
+                {getStatusLabel(mr.status)}
+              </Tag>
+              {mr.order_number && (
+                <Tag className="!m-0" style={{ borderColor: '#d9d9d9', background: '#fff', color: '#262626' }}>
+                  PO: {mr.order_number}
+                </Tag>
+              )}
+              {isManufacturingRequest && (
+                <Tag className="!m-0" style={{ borderColor: '#d9d9d9', background: '#fff', color: '#595959' }}>
+                  Manufacturing
+                </Tag>
+              )}
+            </div>
             {mr.job_card_name && (
-              <Text className="text-sm text-gray-600">{mr.job_card_name}{mr.job_card_number ? ` (${mr.job_card_number})` : ''}</Text>
+              <Text type="secondary" className="text-xs">
+                {mr.job_card_name}{mr.job_card_number ? ` · ${mr.job_card_number}` : ''}
+              </Text>
             )}
           </div>
-          {mr.order_number && (
-            <Tag color="blue" style={{ fontSize: 14, padding: '2px 12px' }}>PO: {mr.order_number}</Tag>
-          )}
-          <Tag color={getStatusColor(mr.status)} style={{ fontSize: 14, padding: '2px 12px' }}>
-            {getStatusLabel(mr.status)}
-          </Tag>
-          {isManufacturingRequest && <Tag color="purple">Manufacturing Request</Tag>}
         </div>
         <Space wrap>
-          {/* Refresh Stock Button — always visible */}
           <Button
+            size="middle"
             icon={<SyncOutlined spin={refreshStockMutation.isPending} />}
             onClick={() => refreshStockMutation.mutate()}
             loading={refreshStockMutation.isPending}
-            size="large"
           >
             Refresh Stock
           </Button>
           {hasPendingItems && (
-            <Button type="primary" icon={<CheckCircleOutlined />} onClick={openApproveModal} size="large">
-              {hasProcurementFulfillment ? 'Approve Procured Items' : 'Review & Approve'}
-            </Button>
-          )}
-          {canCreateIndent && (
             <Button
-              type="primary"
-              danger
-              icon={<FileTextOutlined />}
-              size="large"
-              loading={createIndentMutation.isPending}
-              onClick={() => {
-                Modal.confirm({
-                  title: 'Create Indent for Shortage Items',
-                  content: (
-                    <div>
-                      <p className="mb-2">This will create an indent for <strong>{allShortItems.length} item(s)</strong> with insufficient stock:</p>
-                      <ul className="list-disc pl-5">
-                        {allShortItems.map(i => (
-                          <li key={i.id}>
-                            <strong>{i.item_name}</strong>: needs {i.quantity_requested}, available {i.available_stock} — <span className="text-red-500">short by {i.quantity_requested - i.available_stock}</span>
-                          </li>
-                        ))}
-                      </ul>
-                      <p className="mt-3 text-gray-500">You can edit the indent before sending to procurement.</p>
-                    </div>
-                  ),
-                  okText: 'Create Indent',
-                  okType: 'primary',
-                  width: 500,
-                  onOk: () => createIndentMutation.mutateAsync(),
-                });
-              }}
+              size="middle"
+              icon={<CheckCircleOutlined />}
+              onClick={openApproveModal}
+              style={{ background: '#000', color: '#fff', borderColor: '#000' }}
             >
-              Create Indent ({allShortItems.length} short)
-            </Button>
-          )}
-          {indent && (
-            <Button
-              icon={<FileTextOutlined />}
-              size="large"
-              onClick={() => router.push(`/procurement/indents/${indent.id}`)}
-              className="border-blue-400 text-blue-600"
-            >
-              View Indent ({indent.indent_number})
-            </Button>
-          )}
-          {hasApprovedItems && approvedNotIssuedCount > 0 && (
-            <Button
-              type="primary"
-              icon={<SendOutlined />}
-              onClick={() => {
-                Modal.confirm({
-                  title: 'Issue All Approved Materials to Manufacturing',
-                  content: `This will issue all ${approvedNotIssuedCount} approved item(s) from inventory to manufacturing. Continue?`,
-                  okText: 'Issue All to Manufacturing',
-                  onOk: () => issueAllMutation.mutateAsync(),
-                });
-              }}
-              loading={issueAllMutation.isPending}
-              size="large"
-              style={{ backgroundColor: '#52c41a', borderColor: '#52c41a' }}
-            >
-              Issue All to Manufacturing ({approvedNotIssuedCount})
+              {hasProcurementFulfillment ? 'Approve Procured' : 'Review & Approve'}
             </Button>
           )}
         </Space>
+      </div>
+
+      {/* Single consolidated status line */}
+      <div
+        className="mb-4 rounded flex items-center gap-3 px-3 py-2 text-sm"
+        style={{ border: `1px solid ${toneBorder[statusLine.tone]}`, background: '#fff' }}
+      >
+        <span
+          style={{
+            display: 'inline-block',
+            width: 8,
+            height: 8,
+            borderRadius: 999,
+            background: toneDot[statusLine.tone],
+            flexShrink: 0,
+          }}
+        />
+        <span className="text-gray-700">{statusLine.title}</span>
       </div>
 
       {/* Workflow Progress - show when indent exists */}
@@ -665,303 +692,190 @@ export default function MaterialRequestDetailPage() {
         </Card>
       )}
 
-      {/* PROCUREMENT RELEASED ALERT — Items auto-issued by procurement */}
-      {hasProcurementRelease && (
-        <Alert
-          type="success"
-          showIcon
-          icon={<CheckCircleOutlined />}
-          className="mb-4"
-          style={{ border: '2px solid #52c41a', backgroundColor: '#f6ffed' }}
-          message={
-            <span style={{ fontSize: 16, fontWeight: 600 }}>
-              Procurement Released Stock — All Items Issued to Manufacturing!
-            </span>
-          }
-          description={
+      {/* Secondary actions — shown only for rejected/partially_approved states (restock recovery). */}
+      {(mr.status === 'rejected' || mr.status === 'partially_approved') && (
+        <div className="mb-4 flex flex-wrap gap-2">
+          <Button size="small" icon={<ReloadOutlined />} loading={recheckMutation.isPending} onClick={handleRecheck}>
+            Recheck Stock
+          </Button>
+          <Button size="small" icon={<ShopOutlined />} onClick={() => router.push('/inventory')}>
+            Visit Inventory
+          </Button>
+        </div>
+      )}
+
+      {/* Shortages strip — always show when items still need procurement */}
+      {allShortItems.length > 0 && (
+        <Card size="small" className="mb-4 border-gray-300">
+          <div className="flex items-center justify-between gap-3 flex-wrap mb-2">
             <div>
-              <p className="mb-2">
-                The procurement team has procured and released <strong>{procurementReleasedItems.length} item(s)</strong> directly to inventory.
-                Materials have been <strong>auto-approved and issued</strong> to manufacturing.
-              </p>
-              <div className="bg-white rounded p-3 mb-3">
-                {procurementReleasedItems.map(item => (
-                  <div key={item.id} className="flex justify-between items-center py-1 border-b last:border-0">
-                    <Text strong>{item.item_name}</Text>
-                    <Space>
-                      <Tag color="blue">Issued: {item.quantity_issued} {item.unit_of_measure || ''}</Tag>
-                      <Tag color="green" icon={<CheckCircleOutlined />}>Complete</Tag>
-                    </Space>
-                  </div>
-                ))}
-              </div>
-              <Space>
-                <Button
-                  icon={<SyncOutlined />}
-                  onClick={() => refreshStockMutation.mutate()}
-                  loading={refreshStockMutation.isPending}
-                >
-                  Refresh Stock Levels
-                </Button>
-                {indent && (
-                  <Button icon={<FileTextOutlined />} onClick={() => router.push(`/procurement/indents/${indent.id}`)}>
-                    View Indent Details
-                  </Button>
-                )}
-              </Space>
+              <Text strong className="text-sm block">Short of stock · {allShortItems.length} item(s)</Text>
+              <Text type="secondary" className="text-xs">
+                {openIndentExists
+                  ? `Open indent ${indent?.indent_number} · status: ${indent?.status}`
+                  : 'Raise an indent to procure the remaining quantity.'}
+              </Text>
             </div>
-          }
-        />
-      )}
-
-      {/* PROCUREMENT FULFILLED ALERT - Items pending re-approval */}
-      {hasProcurementFulfillment && (
-        <Alert
-          type="success"
-          showIcon
-          icon={<GiftOutlined />}
-          className="mb-4"
-          style={{ border: '2px solid #52c41a', backgroundColor: '#f6ffed' }}
-          message={
-            <span style={{ fontSize: 16, fontWeight: 600 }}>
-              Procurement Team Fulfilled Indent Requirements!
-            </span>
-          }
-          description={
-            <div>
-              <p className="mb-2">
-                <strong>{procurementFulfilledItems.length} item(s)</strong> have been procured and stock is now available.
-                These items were previously marked as insufficient and have been restocked via indent <strong>{indent?.indent_number}</strong>.
-              </p>
-              <div className="bg-white rounded p-3 mb-3">
-                {procurementFulfilledItems.map(item => (
-                  <div key={item.id} className="flex justify-between items-center py-1 border-b last:border-0">
-                    <Text strong>{item.item_name}</Text>
-                    <Space>
-                      <Tag color="green">Available: {item.available_stock}</Tag>
-                      <Tag color="blue">Needs: {item.quantity_requested}</Tag>
-                    </Space>
-                  </div>
-                ))}
-              </div>
-              <Space>
-                <Button
-                  icon={<SyncOutlined />}
-                  onClick={() => refreshStockMutation.mutate()}
-                  loading={refreshStockMutation.isPending}
-                >
-                  Refresh Stock Levels
-                </Button>
-                <Button type="primary" icon={<CheckCircleOutlined />} onClick={openApproveModal}>
-                  Approve Now & Issue to Manufacturing
-                </Button>
-                {indent && (
-                  <Button icon={<FileTextOutlined />} onClick={() => router.push(`/procurement/indents/${indent.id}`)}>
-                    View Indent Details
-                  </Button>
-                )}
-              </Space>
-            </div>
-          }
-        />
-      )}
-
-      {/* Alerts */}
-      {hasPendingItems && isManufacturingRequest && !hasProcurementFulfillment && !hasProcurementRelease && (
-        <Alert
-          type="warning"
-          showIcon
-          icon={<ExclamationCircleOutlined />}
-          className="mb-4"
-          message="Manufacturing Approval Required"
-          description="The manufacturing team is waiting for your approval. Check material availability for each item and approve or reject. The manufacturing team cannot proceed until you respond."
-        />
-      )}
-
-      {shortItems.length > 0 && hasPendingItems && !hasProcurementFulfillment && !hasProcurementRelease && (
-        <Alert
-          type="error"
-          showIcon
-          icon={<WarningOutlined />}
-          className="mb-4"
-          message={`${shortItems.length} item(s) have insufficient stock`}
-          description={
-            <div>
-              <div>{shortItems.map(i => `${i.item_name}: needs ${i.quantity_requested}, available ${i.available_stock}`).join(' | ')}</div>
-              <Button
-                icon={<SyncOutlined />}
-                size="small"
-                className="mt-2"
-                onClick={() => refreshStockMutation.mutate()}
-                loading={refreshStockMutation.isPending}
-              >
-                Refresh Stock
-              </Button>
-            </div>
-          }
-        />
-      )}
-
-      {mr.status === 'approved' && isManufacturingRequest && (
-        <Alert type="success" showIcon className="mb-4"
-          message="All materials approved — ready to issue to manufacturing" />
-      )}
-
-      {mr.status === 'rejected' && (
-        <Alert type="error" showIcon className="mb-4"
-          message="This request was rejected — the manufacturing team has been notified"
-          description="Click 'Recheck Stock' to check if inventory has been restocked. Items with available stock will be reset for re-approval."
-          action={
             <Space>
-              <Button size="small" icon={<SyncOutlined />} loading={refreshStockMutation.isPending} onClick={() => refreshStockMutation.mutate()}>
-                Refresh Stock
-              </Button>
-              <Button size="small" icon={<ReloadOutlined />} loading={recheckMutation.isPending} onClick={handleRecheck}>
-                Recheck Stock
-              </Button>
-              <Button size="small" icon={<ShopOutlined />} onClick={() => router.push('/inventory')} className="border-blue-400 text-blue-600">
-                Visit Inventory
-              </Button>
+              {canCreateIndent && (
+                <Button
+                  size="middle"
+                  icon={<FileTextOutlined />}
+                  loading={createIndentMutation.isPending}
+                  onClick={() => {
+                    Modal.confirm({
+                      title: 'Create indent for shortage items',
+                      content: (
+                        <div>
+                          <p className="mb-2">Indent will be raised for <strong>{allShortItems.length} item(s)</strong>:</p>
+                          <ul className="list-disc pl-5">
+                            {allShortItems.map(i => (
+                              <li key={i.id}>
+                                <strong>{i.item_name}</strong>: need {i.quantity_requested}, available {i.available_stock}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      ),
+                      okText: 'Create Indent',
+                      width: 500,
+                      onOk: () => createIndentMutation.mutateAsync(),
+                    });
+                  }}
+                  style={{ background: '#000', color: '#fff', borderColor: '#000' }}
+                >
+                  Create Indent ({allShortItems.length})
+                </Button>
+              )}
+              {indent && (
+                <Button size="middle" icon={<FileTextOutlined />} onClick={() => router.push(`/procurement/indents/${indent.id}`)}>
+                  View Indent ({indent.indent_number})
+                </Button>
+              )}
             </Space>
-          }
-        />
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {allShortItems.map((i) => {
+              const shortBy = Math.max(0, Number(i.quantity_requested) - Number(i.available_stock || 0) - Number(i.quantity_issued || 0));
+              return (
+                <div key={i.id} className="flex items-center gap-2 px-2 py-1 rounded border border-gray-200 bg-white text-xs">
+                  <span className="font-medium">{i.item_name}</span>
+                  <span className="text-gray-500">
+                    need {i.quantity_requested} {i.unit_of_measure || ''} · have {i.available_stock}
+                    {shortBy > 0 && <> · short {shortBy}</>}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </Card>
       )}
 
-      {mr.status === 'partially_approved' && isManufacturingRequest && !hasProcurementFulfillment && !hasProcurementRelease && (
-        <Alert type="info" showIcon className="mb-4"
-          message="Partially approved — some items were rejected or sent to procurement."
-          description="Click 'Refresh Stock' to check latest stock levels, or 'Recheck Stock' to reset rejected items for re-approval."
-          action={
-            <Space>
-              <Button size="small" icon={<SyncOutlined />} loading={refreshStockMutation.isPending} onClick={() => refreshStockMutation.mutate()}>
-                Refresh Stock
-              </Button>
-              <Button size="small" icon={<ReloadOutlined />} loading={recheckMutation.isPending} onClick={handleRecheck}>
-                Recheck Stock
-              </Button>
-              <Button size="small" icon={<ShopOutlined />} onClick={() => router.push('/inventory')} className="border-blue-400 text-blue-600">
-                Visit Inventory
-              </Button>
-            </Space>
-          }
-        />
-      )}
-
-      {hasApprovedItems && !hasProcurementFulfillment && !hasProcurementRelease && (
-        <Alert type="info" showIcon icon={<SendOutlined />} className="mb-4"
-          message={`${approvedNotIssuedCount} item(s) approved and ready to issue to manufacturing — use the "Issue" button on each row or "Issue All" at the top`}
-        />
-      )}
-
-      {issuedButRemainingItems.length > 0 && (
-        <Alert type="warning" showIcon icon={<ExclamationCircleOutlined />} className="mb-4"
-          message={`${issuedButRemainingItems.length} item(s) partially issued — remaining quantity not yet issued`}
-          description={issuedButRemainingItems.map(i => `${i.item_name}: issued ${i.quantity_issued} of ${i.quantity_requested} (${i.quantity_requested - i.quantity_issued} remaining)`).join(' | ')}
-        />
-      )}
-
-      {allItemsIssued && !hasProcurementRelease && (
-        <Alert type="success" showIcon icon={<CheckCircleOutlined />} className="mb-4"
-          message="All materials have been issued to manufacturing. Production can now begin!"
-        />
-      )}
-
-      {mr.status === 'fulfilled' && allItemsIssued && (
-        <Alert type="success" showIcon icon={<CheckCircleOutlined />} className="mb-4"
-          style={{ border: '2px solid #52c41a' }}
-          message={
-            <span style={{ fontSize: 15, fontWeight: 600 }}>
-              Material Request Fulfilled — All items issued to manufacturing. Production can proceed!
-            </span>
-          }
-        />
-      )}
-
-      {indent && !hasProcurementFulfillment && !hasProcurementRelease && indent.status !== 'closed' && (
-        <Alert
-          type="info"
-          showIcon
-          icon={<ShopOutlined />}
-          className="mb-4"
-          message={`Indent ${indent.indent_number} — ${indent.status === 'pending' ? 'Waiting for Purchase Order' : indent.status === 'partially_ordered' ? 'Partially Ordered' : indent.status === 'fully_ordered' ? 'Ordered, Waiting for Delivery' : indent.status}`}
-          description={
+      {/* Received & ready to issue — when procurement delivered, items are ready */}
+      {hasApprovedItems && approvedNotIssuedCount > 0 && (
+        <Card size="small" className="mb-4 border-gray-300">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
             <div>
-              <span>Items with insufficient stock have been sent to the Procurement team.</span>
-              <Button type="link" size="small" onClick={() => router.push(`/procurement/indents/${indent.id}`)}>
-                View Indent →
-              </Button>
+              <Text strong className="text-sm block">Ready to issue · {approvedNotIssuedCount} item(s)</Text>
+              <Text type="secondary" className="text-xs">
+                Approved materials are in stock. Issue from the row below or issue all at once.
+              </Text>
             </div>
-          }
-        />
+            <Button
+              size="middle"
+              icon={<SendOutlined />}
+              loading={issueAllMutation.isPending}
+              onClick={() => {
+                Modal.confirm({
+                  title: 'Issue All Approved Materials',
+                  content: `Issue all ${approvedNotIssuedCount} approved item(s) to manufacturing?`,
+                  okText: 'Issue All',
+                  onOk: () => issueAllMutation.mutateAsync(),
+                });
+              }}
+              style={{ background: '#000', color: '#fff', borderColor: '#000' }}
+            >
+              Issue All ({approvedNotIssuedCount})
+            </Button>
+          </div>
+        </Card>
       )}
 
-      {/* Request Details */}
-      <Card className="card-shadow mb-4" title="Request Details">
-        <Descriptions column={{ xs: 1, sm: 2, md: 3 }} size="small" labelStyle={{ fontWeight: 600, color: '#555' }}>
-          <Descriptions.Item label="Request Number">
-            <Text strong>{mr.request_number}</Text>
-          </Descriptions.Item>
-          <Descriptions.Item label="Request Date">
+      {/* Procurement released — inline summary */}
+      {(hasProcurementRelease || hasProcurementFulfillment) && (
+        <Card size="small" className="mb-4 border-gray-300">
+          <Text strong className="text-sm block mb-2">
+            {hasProcurementRelease ? 'Procurement released stock (auto-issued)' : 'Procurement fulfilled — ready to approve'}
+          </Text>
+          <div className="flex flex-wrap gap-2">
+            {(hasProcurementRelease ? procurementReleasedItems : procurementFulfilledItems).map((item) => (
+              <div key={item.id} className="flex items-center gap-2 px-2 py-1 rounded border border-gray-200 bg-white text-xs">
+                <span className="font-medium">{item.item_name}</span>
+                <span className="text-gray-500">
+                  {hasProcurementRelease
+                    ? `Issued ${item.quantity_issued} ${item.unit_of_measure || ''}`
+                    : `Stock ${item.available_stock} / need ${item.quantity_requested}`}
+                </span>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      {/* Request Details — compact monochrome */}
+      <Card size="small" className="mb-4 border-gray-300">
+        <Descriptions column={{ xs: 1, sm: 2, md: 4 }} size="small" colon={false}
+          labelStyle={{ color: '#8c8c8c', fontSize: 12 }}
+          contentStyle={{ color: '#262626', fontSize: 13 }}
+        >
+          <Descriptions.Item label="Request date">
             {mr.request_date ? new Date(mr.request_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '-'}
           </Descriptions.Item>
           <Descriptions.Item label="ETA">
-            <Space>
+            <Space size={4}>
               {mr.expected_delivery ? (
-                <Text type={dayjs(mr.expected_delivery).isBefore(dayjs(), 'day') ? 'danger' : undefined}>
+                <Text type={dayjs(mr.expected_delivery).isBefore(dayjs(), 'day') ? 'danger' : undefined} className="text-xs">
                   {dayjs(mr.expected_delivery).format('DD MMM YYYY')}
-                  {dayjs(mr.expected_delivery).isBefore(dayjs(), 'day') && ' (Overdue)'}
+                  {dayjs(mr.expected_delivery).isBefore(dayjs(), 'day') && ' · Overdue'}
                 </Text>
-              ) : <Text type="secondary">Not set</Text>}
-              <Button size="small" onClick={() => { setEtaValue(mr.expected_delivery ? dayjs(mr.expected_delivery) : null); setEtaModalOpen(true); }}>Set ETA</Button>
+              ) : <Text type="secondary" className="text-xs">Not set</Text>}
+              <Button size="small" type="link" className="!px-1 !py-0 !h-auto"
+                onClick={() => { setEtaValue(mr.expected_delivery ? dayjs(mr.expected_delivery) : null); setEtaModalOpen(true); }}>
+                edit
+              </Button>
             </Space>
           </Descriptions.Item>
-          <Descriptions.Item label="Status">
-            <Tag color={getStatusColor(mr.status)}>{getStatusLabel(mr.status)}</Tag>
-          </Descriptions.Item>
-          <Descriptions.Item label="Requested By">
+          <Descriptions.Item label="Requested by">
             {mr.requested_by_name || '-'}
           </Descriptions.Item>
-          {mr.job_card_name && (
-            <Descriptions.Item label="Job Card">
-              <Text strong className="text-purple-600">{mr.job_card_name}</Text>
-              {mr.job_card_number && <span className="text-xs text-gray-400 ml-1">({mr.job_card_number})</span>}
-            </Descriptions.Item>
-          )}
-          {mr.order_number && (
-            <Descriptions.Item label="Purchase Order">
-              <Text strong className="text-blue-600">{mr.order_number}</Text>
-            </Descriptions.Item>
-          )}
-          <Descriptions.Item label="Purpose">
-            {mr.purpose || '-'}
+          <Descriptions.Item label="Total items">
+            {mr.items?.length || 0}
           </Descriptions.Item>
+          {mr.job_card_name && (
+            <Descriptions.Item label="Job card">
+              {mr.job_card_name}{mr.job_card_number && ` · ${mr.job_card_number}`}
+            </Descriptions.Item>
+          )}
           {mr.approved_date && (
-            <Descriptions.Item label="Approved Date">
+            <Descriptions.Item label="Approved">
               {new Date(mr.approved_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
             </Descriptions.Item>
           )}
-          <Descriptions.Item label="Total Items">
-            <Text strong>{mr.items?.length || 0}</Text>
+          <Descriptions.Item label="Purpose" span={2}>
+            {mr.purpose || '-'}
           </Descriptions.Item>
           {mr.notes && (
-            <Descriptions.Item label="Notes" span={2}>{mr.notes}</Descriptions.Item>
+            <Descriptions.Item label="Notes" span={4}>
+              {mr.notes}
+            </Descriptions.Item>
           )}
         </Descriptions>
       </Card>
 
       {/* Items Table */}
-      <Card className="card-shadow" title={`Requested Items (${mr.items?.length || 0})`}
-        extra={
-          <Button
-            icon={<SyncOutlined spin={refreshStockMutation.isPending} />}
-            size="small"
-            onClick={() => refreshStockMutation.mutate()}
-            loading={refreshStockMutation.isPending}
-          >
-            Refresh Stock
-          </Button>
-        }
-      >
+      <Card size="small" className="border-gray-300" title={
+        <span className="text-sm">Requested materials · {mr.items?.length || 0}</span>
+      }>
         <Table
           columns={itemColumns}
           dataSource={mr.items || []}

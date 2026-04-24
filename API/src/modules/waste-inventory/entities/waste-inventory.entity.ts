@@ -1,8 +1,9 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn, OneToMany } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
 import { Enterprise } from '../../enterprises/entities/enterprise.entity';
 import { Employee } from '../../employees/entities/employee.entity';
 import { WasteCategory } from './waste-category.entity';
 import { WasteSource } from './waste-source.entity';
+import { RawMaterial } from '../../raw-materials/entities/raw-material.entity';
 
 @Entity('waste_inventory')
 export class WasteInventory {
@@ -71,6 +72,14 @@ export class WasteInventory {
 
   @Column({ name: 'production_job_id', type: 'int', nullable: true })
   productionJobId: number | null;
+
+  // Raw material this waste is tracked against (nullable: general waste may not map to a material).
+  @Column({ name: 'raw_material_id', type: 'int', nullable: true })
+  rawMaterialId: number | null;
+
+  @ManyToOne(() => RawMaterial, { nullable: true })
+  @JoinColumn({ name: 'raw_material_id' })
+  rawMaterial: RawMaterial;
 
   @Column({ name: 'entered_by', type: 'int', nullable: true })
   enteredBy: number | null;

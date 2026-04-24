@@ -249,9 +249,10 @@ export async function updateJobCard(
 export async function updateJobCardStatus(
   id: number,
   status: string,
-  _enterpriseId?: number
+  _enterpriseId?: number,
+  force?: boolean,
 ): Promise<ApiResponse> {
-  const response = await apiClient.put<ApiResponse>(`/manufacturing/jobs/${id}/status`, { status });
+  const response = await apiClient.put<ApiResponse>(`/manufacturing/jobs/${id}/status`, { status, force: !!force });
   return response.data;
 }
 

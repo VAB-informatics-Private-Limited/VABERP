@@ -4,7 +4,7 @@ import { Typography, message, Spin } from 'antd';
 import { useRouter, useParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ProductForm } from '@/components/products/ProductForm';
-import { getProductList, updateProduct } from '@/lib/api/products';
+import { getProductById, updateProduct } from '@/lib/api/products';
 import { useAuthStore } from '@/stores/authStore';
 import { ProductFormValues } from '@/lib/validations/product';
 
@@ -21,8 +21,8 @@ export default function EditProductPage() {
   const { data, isLoading } = useQuery({
     queryKey: ['product', productId],
     queryFn: async () => {
-      const response = await getProductList({ enterpriseId: enterpriseId! });
-      return response.data?.find((p) => p.id === productId);
+      const response = await getProductById(productId);
+      return response.data;
     },
     enabled: !!enterpriseId && !!productId,
   });
@@ -37,6 +37,8 @@ export default function EditProductPage() {
     onSuccess: () => {
       message.success('Product updated successfully');
       queryClient.invalidateQueries({ queryKey: ['products'] });
+      queryClient.invalidateQueries({ queryKey: ['products-dropdown'] });
+      queryClient.invalidateQueries({ queryKey: ['product', productId] });
       router.push('/products');
     },
     onError: () => {

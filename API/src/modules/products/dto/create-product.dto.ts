@@ -1,5 +1,7 @@
-import { IsString, IsOptional, IsNumber, IsArray } from 'class-validator';
+import { IsString, IsOptional, IsNumber, IsArray, ValidateNested } from 'class-validator';
+import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { UpsertProductBomDto } from './product-bom.dto';
 
 export class CreateProductDto {
   @ApiPropertyOptional({ example: 1 })
@@ -75,4 +77,10 @@ export class CreateProductDto {
   @IsOptional()
   @IsArray()
   discountTiers?: { minQty: number; discountPercent: number }[];
+
+  @ApiPropertyOptional({ type: UpsertProductBomDto })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => UpsertProductBomDto)
+  bom?: UpsertProductBomDto;
 }

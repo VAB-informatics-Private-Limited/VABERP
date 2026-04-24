@@ -104,8 +104,9 @@ export default function SubcategoriesPage() {
       message.success('Subcategory deleted successfully');
       queryClient.invalidateQueries({ queryKey: ['subcategories'] });
     },
-    onError: () => {
-      message.error('Failed to delete subcategory');
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    onError: (err: any) => {
+      message.error(err?.response?.data?.message || 'Failed to delete subcategory');
     },
   });
 

@@ -1,10 +1,11 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { Category } from './entities/category.entity';
 import { Subcategory } from './entities/subcategory.entity';
 import { Product } from './entities/product.entity';
 import { ProductAttribute } from './entities/product-attribute.entity';
+import { ProductBomService } from './product-bom.service';
 import {
   CreateCategoryDto,
   CreateSubcategoryDto,
@@ -23,6 +24,8 @@ export class ProductsService {
     private productRepository: Repository<Product>,
     @InjectRepository(ProductAttribute)
     private attributeRepository: Repository<ProductAttribute>,
+    private productBomService: ProductBomService,
+    private dataSource: DataSource,
   ) {}
 
   // ========== Categories ==========
@@ -104,6 +107,28 @@ export class ProductsService {
 
     if (!category) {
       throw new NotFoundException('Category not found');
+    }
+
+    // Block if products or subcategories still reference this category.
+    const subCount = await this.subcategoryRepository
+      .createQueryBuilder('s')
+      .where('s.categoryId = :id', { id })
+      .andWhere('s.enterpriseId = :enterpriseId', { enterpriseId })
+      .getCount();
+    if (subCount > 0) {
+      throw new BadRequestException(
+        `Cannot delete category "${category.categoryName}". It has ${subCount} subcategor${subCount === 1 ? 'y' : 'ies'}. Delete or reassign them first.`,
+      );
+    }
+    const prodCount = await this.productRepository
+      .createQueryBuilder('p')
+      .where('p.categoryId = :id', { id })
+      .andWhere('p.enterpriseId = :enterpriseId', { enterpriseId })
+      .getCount();
+    if (prodCount > 0) {
+      throw new BadRequestException(
+        `Cannot delete category "${category.categoryName}". It is used by ${prodCount} product(s). Reassign those products first.`,
+      );
     }
 
     await this.categoryRepository.delete(id);
@@ -201,6 +226,24 @@ export class ProductsService {
       throw new NotFoundException('Subcategory not found');
     }
 
+    // Block delete if any product still references this subcategory.
+    const usingProducts = await this.productRepository
+      .createQueryBuilder('p')
+      .where('p.subcategoryId = :id', { id })
+      .andWhere('p.enterpriseId = :enterpriseId', { enterpriseId })
+      .select(['p.id', 'p.productName', 'p.productCode'])
+      .limit(5)
+      .getMany();
+
+    if (usingProducts.length > 0) {
+      const sample = usingProducts
+        .map((p) => p.productName || p.productCode || `#${p.id}`)
+        .join(', ');
+      throw new BadRequestException(
+        `Cannot delete subcategory "${subcategory.subcategoryName}". It is used by ${usingProducts.length}${usingProducts.length === 5 ? '+' : ''} product(s): ${sample}. Reassign those products first.`,
+      );
+    }
+
     await this.subcategoryRepository.delete(id);
 
     return {
@@ -228,6 +271,7 @@ export class ProductsService {
       .createQueryBuilder('product')
       .leftJoinAndSelect('product.category', 'category')
       .leftJoinAndSelect('product.subcategory', 'subcategory')
+      .leftJoinAndSelect('product.productBom', 'productBom', "productBom.status = 'active'")
       .where('product.enterpriseId = :enterpriseId', { enterpriseId });
 
     if (categoryId) {
@@ -270,27 +314,42 @@ export class ProductsService {
       throw new NotFoundException('Product not found');
     }
 
+    // Attach master BOM (if any) so the edit form can pre-fill
+    const bomRes = await this.productBomService.getByProductId(id, enterpriseId);
+    const bom = bomRes.data;
+    if (bom && bom.items) {
+      bom.items.sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+    }
+
     return {
       message: 'Product fetched successfully',
-      data: product,
+      data: { ...product, productBom: bom ?? null },
     };
   }
 
   async create(enterpriseId: number, createDto: CreateProductDto) {
-    const product = this.productRepository.create({
-      ...createDto,
-      enterpriseId,
+    const { bom, ...productFields } = createDto;
+
+    const savedId = await this.dataSource.transaction(async (manager) => {
+      const product = manager.create(Product, {
+        ...productFields,
+        enterpriseId,
+      });
+      const saved = await manager.save(Product, product);
+
+      if (bom && bom.items && bom.items.length > 0) {
+        await this.productBomService.upsertForProduct(saved.id, enterpriseId, bom, manager);
+      }
+
+      return saved.id;
     });
 
-    const saved = await this.productRepository.save(product);
-
-    return {
-      message: 'Product created successfully',
-      data: saved,
-    };
+    return this.findOne(savedId, enterpriseId);
   }
 
   async update(id: number, enterpriseId: number, updateDto: Partial<CreateProductDto>) {
+    const { bom, ...productFields } = updateDto;
+
     const product = await this.productRepository.findOne({
       where: { id, enterpriseId },
     });
@@ -299,7 +358,20 @@ export class ProductsService {
       throw new NotFoundException('Product not found');
     }
 
-    await this.productRepository.update(id, updateDto);
+    await this.dataSource.transaction(async (manager) => {
+      if (Object.keys(productFields).length > 0) {
+        await manager.update(Product, id, productFields);
+      }
+
+      if (bom !== undefined) {
+        if (bom && bom.items && bom.items.length > 0) {
+          await this.productBomService.upsertForProduct(id, enterpriseId, bom, manager);
+        } else {
+          // Empty bom payload means: remove the master (archive if referenced)
+          await this.productBomService.archive(id, enterpriseId, manager);
+        }
+      }
+    });
 
     return this.findOne(id, enterpriseId);
   }
@@ -348,6 +420,9 @@ export class ProductsService {
         `Cannot delete product "${product.productName}". It is used in Purchase Order ${soi.sales_order_number || '(linked)'}.`,
       );
     }
+
+    // Archive master BOM (keeps historical PO-BOM provenance intact)
+    await this.productBomService.archive(id, enterpriseId);
 
     // Delete related attributes first
     await this.attributeRepository.delete({ productId: id });

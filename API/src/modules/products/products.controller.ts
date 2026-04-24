@@ -11,19 +11,24 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiQuery } from '@nestjs/swagger';
 import { ProductsService } from './products.service';
+import { ProductBomService } from './product-bom.service';
 import { EnterpriseId, RequirePermission } from '../../common/decorators';
 import {
   CreateCategoryDto,
   CreateSubcategoryDto,
   CreateProductDto,
   CreateProductAttributeDto,
+  UpsertProductBomDto,
 } from './dto';
 
 @ApiTags('Products')
 @Controller('products')
 @ApiBearerAuth('JWT-auth')
 export class ProductsController {
-  constructor(private readonly productsService: ProductsService) {}
+  constructor(
+    private readonly productsService: ProductsService,
+    private readonly productBomService: ProductBomService,
+  ) {}
 
   // ========== Categories ==========
 
@@ -211,6 +216,50 @@ export class ProductsController {
     @EnterpriseId() enterpriseId: number,
   ) {
     return this.productsService.delete(id, enterpriseId);
+  }
+
+  // ========== Product BOM (master) ==========
+
+  @Get(':id/bom')
+  @ApiOperation({ summary: 'Get master Bill of Materials for a product' })
+  @RequirePermission('catalog', 'products', 'view')
+  async getProductBom(
+    @Param('id', ParseIntPipe) id: number,
+    @EnterpriseId() enterpriseId: number,
+  ) {
+    return this.productBomService.getByProductId(id, enterpriseId);
+  }
+
+  @Post(':id/bom')
+  @ApiOperation({ summary: 'Create or replace the master BOM for a product' })
+  @RequirePermission('catalog', 'products', 'edit')
+  async upsertProductBom(
+    @Param('id', ParseIntPipe) id: number,
+    @EnterpriseId() enterpriseId: number,
+    @Body() dto: UpsertProductBomDto,
+  ) {
+    return this.productBomService.upsertForProduct(id, enterpriseId, dto);
+  }
+
+  @Put(':id/bom')
+  @ApiOperation({ summary: 'Update the master BOM for a product' })
+  @RequirePermission('catalog', 'products', 'edit')
+  async updateProductBom(
+    @Param('id', ParseIntPipe) id: number,
+    @EnterpriseId() enterpriseId: number,
+    @Body() dto: UpsertProductBomDto,
+  ) {
+    return this.productBomService.upsertForProduct(id, enterpriseId, dto);
+  }
+
+  @Delete(':id/bom')
+  @ApiOperation({ summary: 'Delete or archive the master BOM for a product' })
+  @RequirePermission('catalog', 'products', 'delete')
+  async deleteProductBom(
+    @Param('id', ParseIntPipe) id: number,
+    @EnterpriseId() enterpriseId: number,
+  ) {
+    return this.productBomService.delete(id, enterpriseId);
   }
 
   // ========== Product Attributes ==========
