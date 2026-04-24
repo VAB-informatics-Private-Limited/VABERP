@@ -41,16 +41,26 @@ export class AuthService {
   ) {}
 
   async employeeLogin(dto: EmployeeLoginDto) {
-    const employee = await this.employeeRepository
+    // Email uniqueness is scoped per-enterprise (two tenants may share the same
+    // employee email). When that happens we can't pick one on login alone —
+    // fail loud and tell the user to contact their admin. If only one matches
+    // (the common case) we proceed as before.
+    const matches = await this.employeeRepository
       .createQueryBuilder('employee')
       .leftJoinAndSelect('employee.enterprise', 'enterprise')
       .addSelect('employee.password')
       .where('employee.email = :email', { email: dto.email })
-      .getOne();
+      .getMany();
 
-    if (!employee) {
+    if (matches.length === 0) {
       throw new UnauthorizedException('Invalid email or password');
     }
+    if (matches.length > 1) {
+      throw new UnauthorizedException(
+        'This email is registered with more than one business. Please contact your admin.',
+      );
+    }
+    const employee = matches[0];
 
     if (employee.status !== 'active') {
       throw new UnauthorizedException('Your account is inactive');

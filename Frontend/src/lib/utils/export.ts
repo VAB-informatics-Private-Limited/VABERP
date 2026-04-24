@@ -4,9 +4,42 @@ export type ExportColumn<T> = { key: keyof T; title: string };
 
 export interface ExportTemplateConfig {
   primary_color?: string;
-  company_name?: string;
+  secondary_color?: string;
+  font_family?: string;
+  company_name?: string | null;
+  tagline?: string | null;
   logo_url?: string | null;
+  logo_width?: number;
+  address?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  gst_number?: string | null;
+  cin_number?: string | null;
+  header_alignment?: 'left' | 'center' | 'right';
   show_logo?: boolean;
+  show_tagline?: boolean;
+  show_phone?: boolean;
+  show_email?: boolean;
+  show_gst?: boolean;
+  show_footer?: boolean;
+  footer_text?: string | null;
+}
+
+function escHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function absoluteUrl(url: string): string {
+  if (!url) return url;
+  if (/^https?:\/\//i.test(url) || url.startsWith('data:')) return url;
+  if (typeof window === 'undefined') return url;
+  if (url.startsWith('/')) return window.location.origin + url;
+  return window.location.origin + '/' + url;
 }
 
 /**
@@ -64,61 +97,133 @@ function buildTableHTML<T extends object>(
   title: string,
   config?: ExportTemplateConfig,
 ): string {
-  const primary = config?.primary_color || '#f97316';
-  const dateStr = dayjs().format('DD MMM YYYY, hh:mm A');
-  const headerCells = columns.map((col) => `<th>${col.title}</th>`).join('');
+  const primary   = config?.primary_color   || '#f97316';
+  const alignment = config?.header_alignment || 'left';
+  const dateStr   = dayjs().format('DD MMM YYYY, hh:mm A');
+
+  const headerCells = columns.map((col) => `<th>${escHtml(col.title)}</th>`).join('');
   const bodyRows = data
     .map((item, idx) => {
       const cells = columns
         .map((col) => {
           const val = item[col.key];
-          return `<td>${val !== null && val !== undefined ? String(val) : '-'}</td>`;
+          const txt = val !== null && val !== undefined ? String(val) : '-';
+          return `<td>${escHtml(txt)}</td>`;
         })
         .join('');
       return `<tr class="${idx % 2 === 0 ? 'even' : 'odd'}">${cells}</tr>`;
     })
     .join('');
 
+  // ── Left block: logo + company + tagline ───────────────────────────────────
   const logoHtml = config?.show_logo && config?.logo_url
-    ? `<img src="${config.logo_url}" style="max-height:48px;max-width:120px;object-fit:contain;display:block;margin-bottom:6px;" />`
+    ? `<img src="${escHtml(absoluteUrl(config.logo_url))}" style="max-height:64px;max-width:${config.logo_width ?? 140}px;object-fit:contain;display:block;" />`
     : '';
   const companyHtml = config?.company_name
-    ? `<div style="font-size:15px;font-weight:700;color:#111;margin-bottom:2px;">${config.company_name}</div>`
+    ? `<div class="pdf-company">${escHtml(config.company_name)}</div>`
     : '';
+  const taglineHtml = config?.show_tagline && config?.tagline
+    ? `<div class="pdf-tagline">${escHtml(config.tagline)}</div>`
+    : '';
+
+  // ── Right block: address + phone + email + GST + CIN ───────────────────────
+  const addressHtml = config?.address
+    ? `<div class="pdf-addr">${escHtml(config.address)}</div>`
+    : '';
+  const contactRows: string[] = [];
+  if (config?.show_phone && config?.phone) contactRows.push(`Ph: ${escHtml(config.phone)}`);
+  if (config?.show_email && config?.email) contactRows.push(`Email: ${escHtml(config.email)}`);
+  const contactHtml = contactRows.length
+    ? `<div class="pdf-contact">${contactRows.join(' &nbsp;|&nbsp; ')}</div>`
+    : '';
+  const gstHtml = config?.show_gst && config?.gst_number
+    ? `<div class="pdf-ident"><strong>GSTIN:</strong> ${escHtml(config.gst_number)}</div>`
+    : '';
+  const cinHtml = config?.cin_number
+    ? `<div class="pdf-ident"><strong>CIN:</strong> ${escHtml(config.cin_number)}</div>`
+    : '';
+
+  const footerHtml = config?.show_footer && config?.footer_text
+    ? `<div class="pdf-footer">${escHtml(config.footer_text)}</div>`
+    : '';
+
+  // Header layout: two-column (left identity / right contact) when there's content on both sides,
+  // otherwise single column aligned per header_alignment.
+  const hasRight = addressHtml || contactHtml || gstHtml || cinHtml;
+  const leftHtml = `${logoHtml}${companyHtml}${taglineHtml}`;
+  const rightHtml = `${addressHtml}${contactHtml}${gstHtml}${cinHtml}`;
+
+  const headerBlock = hasRight
+    ? `
+      <div class="pdf-header-grid">
+        <div class="pdf-header-left">${leftHtml}</div>
+        <div class="pdf-header-right">${rightHtml}</div>
+      </div>
+    `
+    : `
+      <div class="pdf-header-single align-${alignment}">${leftHtml}</div>
+    `;
 
   return `
     <div class="pdf-container">
       <div class="pdf-header">
-        ${logoHtml}
-        ${companyHtml}
-        <h2 style="color:${primary}">${title}</h2>
-        <p class="date">Generated on ${dateStr} &bull; Total Records: ${data.length}</p>
+        ${headerBlock}
+        <div class="pdf-title-row">
+          <h2 style="color:${primary}">${escHtml(title)}</h2>
+          <p class="date">Generated on ${dateStr} &bull; Total Records: ${data.length}</p>
+        </div>
       </div>
       <table>
         <thead><tr>${headerCells}</tr></thead>
         <tbody>${bodyRows}</tbody>
       </table>
+      ${footerHtml}
     </div>
   `;
 }
 
-function buildPdfStyles(primary = '#f97316'): string {
+function buildPdfStyles(primary = '#f97316', fontFamily = 'Arial, Helvetica, sans-serif'): string {
   return `
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: Arial, Helvetica, sans-serif; color: #1a1a1a; }
+  body { font-family: ${fontFamily}; color: #1a1a1a; }
   .pdf-container { padding: 20px; }
-  .pdf-header { margin-bottom: 16px; border-bottom: 2px solid ${primary}; padding-bottom: 10px; }
-  .pdf-header h2 { font-size: 18px; font-weight: 700; margin-bottom: 2px; }
-  .pdf-header .date { font-size: 11px; color: #666; }
+  .pdf-header { margin-bottom: 14px; border-bottom: 2px solid ${primary}; padding-bottom: 10px; }
+  .pdf-header-grid {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 24px;
+    margin-bottom: 10px;
+  }
+  .pdf-header-left  { flex: 1; min-width: 0; }
+  .pdf-header-right { flex: 1; min-width: 0; text-align: right; }
+  .pdf-header-single { margin-bottom: 10px; }
+  .pdf-header-single.align-center { text-align: center; }
+  .pdf-header-single.align-right  { text-align: right; }
+  .pdf-company { font-size: 16px; font-weight: 700; color: #111; margin-top: 4px; }
+  .pdf-tagline { font-size: 11px; color: #555; margin-top: 2px; font-style: italic; }
+  .pdf-addr    { font-size: 11px; color: #444; white-space: pre-line; margin-bottom: 3px; }
+  .pdf-contact { font-size: 11px; color: #444; margin-bottom: 3px; }
+  .pdf-ident   { font-size: 11px; color: #333; }
+  .pdf-title-row { padding-top: 4px; }
+  .pdf-title-row h2 { font-size: 18px; font-weight: 700; margin-bottom: 2px; }
+  .pdf-title-row .date { font-size: 11px; color: #666; }
   table { width: 100%; border-collapse: collapse; font-size: 11px; }
   th { background-color: ${primary}; color: #fff; font-weight: 600; text-align: left; padding: 7px 8px; white-space: nowrap; }
   td { padding: 6px 8px; border-bottom: 1px solid #e0e0e0; word-break: break-word; }
   tr.odd td { background-color: #fafafa; }
   tr.even td { background-color: #fff; }
+  .pdf-footer {
+    margin-top: 14px; padding-top: 8px;
+    border-top: 1px solid #d1d5db;
+    text-align: center; font-size: 11px; color: #6b7280;
+    white-space: pre-line; line-height: 1.5;
+  }
   @media print {
     .pdf-container { padding: 0; }
     table { page-break-inside: auto; }
     tr { page-break-inside: avoid; }
+    thead { display: table-header-group; }
   }
 `;
 }
@@ -137,9 +242,10 @@ export async function exportToPDF<T extends object>(
 
   const html2pdf = (await import('html2pdf.js')).default;
   const primary = config?.primary_color || '#f97316';
+  const font    = config?.font_family   || 'Arial, Helvetica, sans-serif';
 
   const container = document.createElement('div');
-  container.innerHTML = `<style>${buildPdfStyles(primary)}</style>${buildTableHTML(data, columns, title, config)}`;
+  container.innerHTML = `<style>${buildPdfStyles(primary, font)}</style>${buildTableHTML(data, columns, title, config)}`;
   document.body.appendChild(container);
 
   const opt = {
@@ -167,6 +273,7 @@ export function printData<T extends object>(
   if (data.length === 0) return;
 
   const primary = config?.primary_color || '#f97316';
+  const font    = config?.font_family   || 'Arial, Helvetica, sans-serif';
   const orientation = columns.length > 6 ? 'landscape' : 'portrait';
   const printWindow = window.open('', '_blank', 'width=900,height=700');
   if (!printWindow) return;
@@ -175,10 +282,10 @@ export function printData<T extends object>(
     <!DOCTYPE html>
     <html>
     <head>
-      <title>${title}</title>
+      <title>${escHtml(title)}</title>
       <style>
         @page { size: A4 ${orientation}; margin: 12mm; }
-        ${buildPdfStyles(primary)}
+        ${buildPdfStyles(primary, font)}
       </style>
     </head>
     <body>

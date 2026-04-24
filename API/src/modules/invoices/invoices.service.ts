@@ -392,6 +392,12 @@ export class InvoicesService {
       const paymentCount = await manager.count(Payment, { where: { enterpriseId } });
       const paymentNumber = `PAY-${String(paymentCount + 1).padStart(6, '0')}`;
 
+      // Cash payments are auto-approved — there's no bank settlement to verify,
+      // so the money is considered in hand immediately. Other methods (UPI,
+      // Bank Transfer, Cheque, Card) still need a verification step.
+      const isCash = String(dto.paymentMethod || '').toLowerCase() === 'cash';
+      const paymentStatus: 'pending' | 'completed' = isCash ? 'completed' : 'pending';
+
       const payment = manager.create(Payment, {
         enterpriseId,
         invoiceId,
@@ -403,19 +409,22 @@ export class InvoicesService {
         notes: dto.notes,
         paymentProof: dto.paymentProof,
         receivedBy: userId,
-        status: 'pending',
-      });
+        status: paymentStatus,
+        verifiedBy: isCash ? userId : undefined,
+        verifiedAt: isCash ? new Date() : undefined,
+      } as any);
 
       await manager.save(Payment, payment);
 
+      const newCompletedPaid = completedPaid + (isCash ? dto.amount : 0);
       const newBalanceDue = effectiveBalanceDue - dto.amount;
-      const invoiceStatus = completedPaid >= Number(invoice.grandTotal) ? 'fully_paid'
-        : completedPaid > 0 ? 'partially_paid'
+      const invoiceStatus = newCompletedPaid >= Number(invoice.grandTotal) ? 'fully_paid'
+        : newCompletedPaid > 0 ? 'partially_paid'
         : invoice.status === 'cancelled' ? 'cancelled'
         : 'unpaid';
 
       await manager.update(Invoice, invoiceId, {
-        totalPaid: completedPaid,
+        totalPaid: newCompletedPaid,
         balanceDue: newBalanceDue,
         status: invoiceStatus,
       });
@@ -427,8 +436,10 @@ export class InvoicesService {
         entityType: 'invoice',
         entityId: invoiceId,
         action: 'payment',
-        description: `Recorded payment ${paymentNumber} of ${dto.amount} for invoice ${invoice.invoiceNumber} — under processing`,
-        newValues: { amount: dto.amount, paymentNumber, status: 'pending' },
+        description: isCash
+          ? `Recorded cash payment ${paymentNumber} of ${dto.amount} for invoice ${invoice.invoiceNumber} — auto-verified`
+          : `Recorded payment ${paymentNumber} of ${dto.amount} for invoice ${invoice.invoiceNumber} — under processing`,
+        newValues: { amount: dto.amount, paymentNumber, status: paymentStatus },
       }).catch((err) => console.error('[audit/bg failed]', err?.message || err));
 
       const freshInvoice = await this.findOne(invoiceId, enterpriseId);

@@ -276,6 +276,38 @@ export class SuperAdminService implements OnApplicationBootstrap {
     return { message: 'Expiry date updated successfully' };
   }
 
+  // Partial update of an enterprise's editable profile fields by super-admin.
+  // Kept tight — only the whitelisted column list can be changed through here.
+  async updateEnterpriseProfile(id: number, body: Record<string, any>) {
+    const enterprise = await this.enterpriseRepository.findOne({ where: { id } });
+    if (!enterprise) throw new NotFoundException('Enterprise not found');
+
+    const allowed = [
+      'businessName', 'email', 'mobile', 'contactPerson', 'address',
+      'city', 'state', 'pincode', 'gstNumber', 'cinNumber', 'website',
+    ];
+    const updates: Record<string, any> = {};
+    for (const key of allowed) {
+      if (body[key] !== undefined) updates[key] = body[key];
+    }
+
+    if (Object.keys(updates).length === 0) {
+      return { message: 'Nothing to update', data: enterprise };
+    }
+
+    // Guard against email collisions with another enterprise.
+    if (updates.email && updates.email !== enterprise.email) {
+      const clash = await this.enterpriseRepository.findOne({ where: { email: updates.email } });
+      if (clash && clash.id !== id) {
+        throw new ConflictException('Another enterprise already uses this email');
+      }
+    }
+
+    await this.enterpriseRepository.update(id, updates);
+    const updated = await this.enterpriseRepository.findOne({ where: { id } });
+    return { message: 'Enterprise updated successfully', data: updated };
+  }
+
   async updateTaskVisibility(id: number, unrestricted: boolean) {
     const enterprise = await this.enterpriseRepository.findOne({ where: { id } });
     if (!enterprise) throw new NotFoundException('Enterprise not found');
@@ -1032,8 +1064,10 @@ export class SuperAdminService implements OnApplicationBootstrap {
     cinNumber?: string;
     website?: string;
     planId: number;
-    paymentAmount: number;
-    paymentMethod: string;
+    // Payment fields are optional — defaulted to the plan price + "Other" so
+    // a platform_payments record still lands for bookkeeping.
+    paymentAmount?: number;
+    paymentMethod?: string;
     paymentReference?: string;
     paymentNotes?: string;
     resellerId?: number;
@@ -1048,11 +1082,18 @@ export class SuperAdminService implements OnApplicationBootstrap {
       Math.random().toString(36).slice(2, 8).toUpperCase();
     const hashedPassword = await bcrypt.hash(temporaryPassword, 10);
 
+    // Activate the enterprise immediately on creation — super admin is
+    // already a trusted actor, so there's no separate approval step. The
+    // legacy 'pending' → approveEnterprise flow still exists for any row
+    // that somehow lands in pending state.
+    const expiryDate = new Date();
+    expiryDate.setDate(expiryDate.getDate() + plan.durationDays);
+
     const rows: Array<{ id: number }> = await this.enterpriseRepository.manager.query(
       `INSERT INTO enterprises
          (business_name, email, mobile, contact_person, address, city, state, pincode,
-          gst_number, cin_number, website, password, status, reseller_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+          gst_number, cin_number, website, password, status, reseller_id, plan_id, expiry_date)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
        RETURNING id`,
       [
         dto.businessName,
@@ -1067,8 +1108,10 @@ export class SuperAdminService implements OnApplicationBootstrap {
         dto.cinNumber ?? null,
         dto.website ?? null,
         hashedPassword,
-        'pending',
+        'active',
         dto.resellerId ?? null,
+        dto.planId,
+        expiryDate,
       ],
     );
     const enterpriseId = rows[0].id;
@@ -1080,11 +1123,11 @@ export class SuperAdminService implements OnApplicationBootstrap {
       [
         enterpriseId,
         dto.planId,
-        dto.paymentAmount,
-        dto.paymentMethod,
+        dto.paymentAmount ?? plan.price ?? 0,
+        dto.paymentMethod ?? 'Other',
         dto.paymentReference ?? null,
         dto.paymentNotes ?? null,
-        'pending',
+        'verified',
       ],
     );
 

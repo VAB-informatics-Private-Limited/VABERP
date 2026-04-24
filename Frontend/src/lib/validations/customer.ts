@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { MOBILE_REGEX, PINCODE_REGEX, GSTIN_REGEX } from './shared';
 
 // Preprocess: convert null/undefined to empty string for optional string fields
 const optionalString = z.preprocess(
@@ -9,7 +10,9 @@ const optionalString = z.preprocess(
 export const customerSchema = z.object({
   customer_name: z.string().min(2, 'Customer name is required'),
   business_name: optionalString,
-  mobile: z.string().min(10, 'Mobile number must be 10 digits').max(10, 'Mobile number must be 10 digits'),
+  mobile: z
+    .string()
+    .regex(MOBILE_REGEX, 'Enter a valid 10-digit mobile number starting with 6, 7, 8, or 9'),
   email: z.preprocess(
     (val) => (val === null || val === undefined ? '' : val),
     z.string().email('Invalid email address').or(z.literal('')),
@@ -19,9 +22,12 @@ export const customerSchema = z.object({
   city: optionalString,
   pincode: z.preprocess(
     (val) => (val === null || val === undefined ? '' : val),
-    z.string().max(6, 'Pincode must be 6 digits').or(z.literal('')),
+    z.string().regex(PINCODE_REGEX, 'PIN code must be exactly 6 digits').or(z.literal('')),
   ),
-  gst_number: optionalString,
+  gst_number: z.preprocess(
+    (val) => (val === null || val === undefined ? '' : val),
+    z.string().regex(GSTIN_REGEX, 'Enter a valid GSTIN (e.g. 27AAPFU0939F1ZV)').or(z.literal('')),
+  ),
   contact_person: optionalString,
   status: z.enum(['active', 'inactive']).default('active'),
 });

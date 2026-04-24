@@ -43,14 +43,18 @@ export class OrganizerService {
 
   private async generateItemNumber(enterpriseId: number): Promise<string> {
     const year = new Date().getFullYear();
-    const prefix = `ORG-${year}-`;
+    // The legacy DB schema has a global UNIQUE on item_number. We can't rely
+    // on per-enterprise sequencing alone because tenants would race to the
+    // same ORG-{year}-00001. Embed the enterprise id in the prefix so tenants
+    // never collide, and pick the next sequence within *that* tenant.
+    const prefix = `ORG-${enterpriseId}-${year}-`;
     const last = await this.itemRepo
       .createQueryBuilder('i')
       .where('i.enterpriseId = :eid', { eid: enterpriseId })
       .andWhere('i.itemNumber LIKE :prefix', { prefix: `${prefix}%` })
       .orderBy('i.id', 'DESC')
       .getOne();
-    const seq = last ? parseInt(last.itemNumber.split('-')[2] || '0', 10) + 1 : 1;
+    const seq = last ? parseInt(last.itemNumber.split('-').slice(-1)[0] || '0', 10) + 1 : 1;
     return `${prefix}${String(seq).padStart(5, '0')}`;
   }
 

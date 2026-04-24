@@ -17,14 +17,17 @@ import {
   InputNumber,
   Divider,
 } from 'antd';
-import { SearchOutlined, EyeOutlined, StopOutlined, CheckOutlined, PlusOutlined } from '@ant-design/icons';
+import { SearchOutlined, EyeOutlined, StopOutlined, CheckOutlined, PlusOutlined, EditOutlined } from '@ant-design/icons';
 import { useRouter } from 'next/navigation';
 import {
   getAllEnterprises,
   updateEnterpriseStatus,
   createEnterprise,
   getSubscriptionPlans,
+  getEnterprise,
+  updateEnterpriseProfile,
 } from '@/lib/api/super-admin';
+import { MOBILE_RULE } from '@/lib/validations/shared';
 
 const { Title } = Typography;
 
@@ -82,6 +85,12 @@ export default function EnterprisesPage() {
   const [submitting, setSubmitting] = useState(false);
   const [form] = Form.useForm();
 
+  // Edit drawer state
+  const [editDrawerOpen, setEditDrawerOpen] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editSubmitting, setEditSubmitting] = useState(false);
+  const [editForm] = Form.useForm();
+
   useEffect(() => {
     loadEnterprises();
     getSubscriptionPlans()
@@ -121,6 +130,47 @@ export default function EnterprisesPage() {
       );
     } catch {
       message.error('Failed to update status');
+    }
+  }
+
+  async function openEdit(id: number) {
+    setEditingId(id);
+    setEditDrawerOpen(true);
+    try {
+      const res = await getEnterprise(id);
+      const e = res.data;
+      editForm.setFieldsValue({
+        businessName: e.businessName,
+        email: e.email,
+        mobile: e.mobile,
+        contactPerson: e.contactPerson,
+        address: e.address,
+        city: e.city,
+        state: e.state,
+        pincode: e.pincode,
+        gstNumber: e.gstNumber,
+        cinNumber: e.cinNumber,
+        website: e.website,
+      });
+    } catch {
+      message.error('Failed to load enterprise details');
+    }
+  }
+
+  async function handleUpdateEnterprise(values: Record<string, any>) {
+    if (!editingId) return;
+    setEditSubmitting(true);
+    try {
+      await updateEnterpriseProfile(editingId, values);
+      message.success('Enterprise updated successfully');
+      setEditDrawerOpen(false);
+      setEditingId(null);
+      editForm.resetFields();
+      loadEnterprises();
+    } catch (err: any) {
+      message.error(err?.response?.data?.message ?? 'Failed to update enterprise');
+    } finally {
+      setEditSubmitting(false);
     }
   }
 
@@ -211,6 +261,13 @@ export default function EnterprisesPage() {
           >
             View
           </Button>
+          <Button
+            size="small"
+            icon={<EditOutlined />}
+            onClick={() => openEdit(record.id)}
+          >
+            Edit
+          </Button>
           <Popconfirm
             title={`${record.status === 'blocked' ? 'Unblock' : 'Block'} this enterprise?`}
             onConfirm={() => handleToggleStatus(record)}
@@ -299,8 +356,8 @@ export default function EnterprisesPage() {
             <Form.Item name="email" label="Email" rules={[{ required: true, type: 'email' }]}>
               <Input />
             </Form.Item>
-            <Form.Item name="mobile" label="Mobile" rules={[{ required: true }]}>
-              <Input />
+            <Form.Item name="mobile" label="Mobile" rules={[{ required: true, message: 'Please enter mobile' }, MOBILE_RULE]}>
+              <Input placeholder="10-digit mobile" maxLength={10} />
             </Form.Item>
             <Form.Item name="contactPerson" label="Contact Person">
               <Input />
@@ -329,11 +386,11 @@ export default function EnterprisesPage() {
           </div>
 
           <Divider orientation="left" orientationMargin={0}>
-            Subscription &amp; Payment
+            Subscription
           </Divider>
 
           <div className="grid grid-cols-2 gap-x-4">
-            <Form.Item name="planId" label="Subscription Plan" rules={[{ required: true }]}>
+            <Form.Item name="planId" label="Subscription Plan" rules={[{ required: true }]} className="col-span-2">
               <Select placeholder="Select a plan">
                 {plans.map((p) => (
                   <Select.Option key={p.id} value={p.id}>
@@ -342,24 +399,68 @@ export default function EnterprisesPage() {
                 ))}
               </Select>
             </Form.Item>
-            <Form.Item name="paymentAmount" label="Payment Amount (₹)" rules={[{ required: true }]}>
-              <InputNumber min={0} className="w-full" />
-            </Form.Item>
-            <Form.Item name="paymentMethod" label="Payment Method" rules={[{ required: true }]}>
-              <Select placeholder="Select method">
-                <Select.Option value="UPI">UPI</Select.Option>
-                <Select.Option value="Bank Transfer">Bank Transfer</Select.Option>
-                <Select.Option value="Cheque">Cheque</Select.Option>
-                <Select.Option value="Card">Card</Select.Option>
-                <Select.Option value="Cash">Cash</Select.Option>
-                <Select.Option value="Other">Other</Select.Option>
-              </Select>
-            </Form.Item>
-            <Form.Item name="paymentReference" label="Reference Number">
+          </div>
+        </Form>
+      </Drawer>
+
+      {/* Edit Enterprise Drawer */}
+      <Drawer
+        title="Edit Enterprise"
+        width={720}
+        open={editDrawerOpen}
+        onClose={() => {
+          setEditDrawerOpen(false);
+          setEditingId(null);
+          editForm.resetFields();
+        }}
+        footer={
+          <div className="flex justify-end gap-2">
+            <Button onClick={() => { setEditDrawerOpen(false); setEditingId(null); editForm.resetFields(); }}>
+              Cancel
+            </Button>
+            <Button type="primary" loading={editSubmitting} onClick={() => editForm.submit()}>
+              Save Changes
+            </Button>
+          </div>
+        }
+      >
+        <Form form={editForm} layout="vertical" onFinish={handleUpdateEnterprise}>
+          <Divider orientation="left" orientationMargin={0}>
+            Business Information
+          </Divider>
+          <div className="grid grid-cols-2 gap-x-4">
+            <Form.Item name="businessName" label="Business Name" rules={[{ required: true }]}>
               <Input />
             </Form.Item>
-            <Form.Item name="paymentNotes" label="Notes" className="col-span-2">
-              <Input.TextArea rows={2} />
+            <Form.Item name="email" label="Email" rules={[{ required: true, type: 'email' }]}>
+              <Input />
+            </Form.Item>
+            <Form.Item name="mobile" label="Mobile" rules={[{ required: true, message: 'Please enter mobile' }, MOBILE_RULE]}>
+              <Input placeholder="10-digit mobile" maxLength={10} />
+            </Form.Item>
+            <Form.Item name="contactPerson" label="Contact Person">
+              <Input />
+            </Form.Item>
+            <Form.Item name="address" label="Address" className="col-span-2">
+              <Input />
+            </Form.Item>
+            <Form.Item name="city" label="City">
+              <Input />
+            </Form.Item>
+            <Form.Item name="state" label="State">
+              <Input />
+            </Form.Item>
+            <Form.Item name="pincode" label="Pincode">
+              <Input maxLength={6} />
+            </Form.Item>
+            <Form.Item name="gstNumber" label="GST Number">
+              <Input maxLength={15} style={{ textTransform: 'uppercase' }} />
+            </Form.Item>
+            <Form.Item name="cinNumber" label="CIN Number">
+              <Input maxLength={21} style={{ textTransform: 'uppercase' }} />
+            </Form.Item>
+            <Form.Item name="website" label="Website">
+              <Input />
             </Form.Item>
           </div>
         </Form>

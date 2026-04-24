@@ -6,12 +6,16 @@ import {
   UpdateDateColumn,
   ManyToOne,
   JoinColumn,
+  Index,
 } from 'typeorm';
 import { Enterprise } from '../../enterprises/entities/enterprise.entity';
 import { Department } from './department.entity';
 import { Designation } from './designation.entity';
 
+// Email must be unique within an enterprise, not globally — two different
+// tenants may legitimately employ people with the same address.
 @Entity('employees')
+@Index('UQ_employees_enterprise_email', ['enterpriseId', 'email'], { unique: true })
 export class Employee {
   @PrimaryGeneratedColumn()
   id: number;
@@ -43,7 +47,7 @@ export class Employee {
   @Column({ name: 'last_name' })
   lastName: string;
 
-  @Column({ unique: true })
+  @Column()
   email: string;
 
   @Column({ select: false })

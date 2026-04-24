@@ -108,8 +108,14 @@ export function JobCardForm({ initialData, onSubmit, loading, submitText, isEdit
               name="quantity"
               label="Quantity"
               rules={[{ required: true, message: 'Please enter quantity' }]}
+              tooltip={isEdit ? 'Quantity cannot be changed after a job card is created' : undefined}
             >
-              <InputNumber min={1} className="w-full" placeholder="Enter quantity" />
+              <InputNumber
+                min={1}
+                className="w-full"
+                placeholder="Enter quantity"
+                disabled={isEdit}
+              />
             </Form.Item>
           </Col>
         </Row>

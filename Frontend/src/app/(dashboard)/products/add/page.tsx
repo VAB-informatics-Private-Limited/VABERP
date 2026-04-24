@@ -22,6 +22,7 @@ export default function AddProductPage() {
     onSuccess: () => {
       message.success('Product added successfully');
       queryClient.invalidateQueries({ queryKey: ['products'] });
+      queryClient.invalidateQueries({ queryKey: ['products-dropdown'] });
       router.push('/products');
     },
     onError: () => {

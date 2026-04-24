@@ -6,7 +6,7 @@ import {
   Modal, Tooltip, DatePicker, Divider, Timeline, Badge, Statistic,
 } from 'antd';
 import {
-  ArrowLeftOutlined, CheckCircleOutlined, PrinterOutlined, MailOutlined,
+  ArrowLeftOutlined, CheckCircleOutlined,
   CarOutlined, ExclamationCircleOutlined,
   AuditOutlined, StopOutlined, SyncOutlined,
   HistoryOutlined, SendOutlined,
@@ -19,7 +19,6 @@ import { useRouter, useParams } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import dayjs from 'dayjs';
-import { SendEmailModal } from '@/components/common/SendEmailModal';
 import {
   getJobCardById,
   updateJobCardStatus,
@@ -65,7 +64,6 @@ export default function ViewJobCardPage() {
   const enterpriseId = getEnterpriseId();
 
   const [estimateValue, setEstimateValue] = useState<number | null>(null);
-  const [emailModalOpen, setEmailModalOpen] = useState(false);
   const [stageNotes, setStageNotes] = useState('');
   const [stageDescription, setStageDescription] = useState('');
   const [stageCompletedDate, setStageCompletedDate] = useState<dayjs.Dayjs | null>(null);
@@ -215,10 +213,6 @@ export default function ViewJobCardPage() {
             <Tag color="green" icon={<CheckCircleOutlined />}>Stage Job Card</Tag>
             <Tag color={getStatusColor(jobCard.status)}>{getStatusLabel(jobCard.status)}</Tag>
           </div>
-          <Space>
-            <Button icon={<PrinterOutlined />} onClick={() => window.print()}>Print</Button>
-            <Button icon={<MailOutlined />} onClick={() => setEmailModalOpen(true)}>Email</Button>
-          </Space>
         </div>
 
         <Alert
@@ -359,12 +353,6 @@ export default function ViewJobCardPage() {
           </Col>
         </Row>
 
-        <SendEmailModal
-          open={emailModalOpen}
-          onClose={() => setEmailModalOpen(false)}
-          defaultSubject={`Stage Job Card ${jobCard.job_card_number}`}
-          defaultBody={`Stage Job Card: ${jobCard.job_card_number}\nStage: ${jobCard.job_name || '-'}\nProduct: ${jobCard.product_name || '-'}\nStatus: ${getStatusLabel(jobCard.status)}`}
-        />
       </div>
     );
   }
@@ -382,10 +370,6 @@ export default function ViewJobCardPage() {
           {jobCard.dispatch_on_hold && <Tag color="red" icon={<StopOutlined />}>Dispatch On Hold</Tag>}
           {isOverdue && <Tag color="red" icon={<ExclamationCircleOutlined />}>Overdue</Tag>}
         </div>
-        <Space>
-          <Button icon={<PrinterOutlined />} onClick={() => window.print()}>Print</Button>
-          <Button icon={<MailOutlined />} onClick={() => setEmailModalOpen(true)}>Email</Button>
-        </Space>
       </div>
 
       {/* Summary Bar */}
@@ -1106,13 +1090,6 @@ export default function ViewJobCardPage() {
           </div>
         </div>
       </Modal>
-
-      <SendEmailModal
-        open={emailModalOpen}
-        onClose={() => setEmailModalOpen(false)}
-        defaultSubject={`Job Card ${jobCard.job_card_number}`}
-        defaultBody={`Job Card: ${jobCard.job_card_number}\nProduct: ${jobCard.product_name || '-'}\nQuantity: ${jobCard.quantity} ${jobCard.unit || 'units'}\nStatus: ${getStatusLabel(jobCard.status)}\nCustomer: ${jobCard.customer_name || '-'}`}
-      />
     </div>
   );
 }
