@@ -8,6 +8,8 @@ import { ProcessStage } from './entities/process-stage.entity';
 import { ProcessTemplate } from './entities/process-template.entity';
 import { Bom } from './entities/bom.entity';
 import { BomItem } from './entities/bom-item.entity';
+import { ProductBom } from '../products/entities/product-bom.entity';
+import { ProductBomItem } from '../products/entities/product-bom-item.entity';
 import { Inventory } from '../inventory/entities/inventory.entity';
 import { InventoryLedger } from '../inventory/entities/inventory-ledger.entity';
 import { SalesOrder } from '../sales-orders/entities/sales-order.entity';
@@ -64,6 +66,10 @@ export class ManufacturingService {
     private bomRepository: Repository<Bom>,
     @InjectRepository(BomItem)
     private bomItemRepository: Repository<BomItem>,
+    @InjectRepository(ProductBom)
+    private productBomRepository: Repository<ProductBom>,
+    @InjectRepository(ProductBomItem)
+    private productBomItemRepository: Repository<ProductBomItem>,
     @InjectRepository(SalesOrder)
     private salesOrderRepository: Repository<SalesOrder>,
     @InjectRepository(SalesOrderItem)
@@ -84,6 +90,89 @@ export class ManufacturingService {
     private serviceProductsService: ServiceProductsService,
     private notificationsService: NotificationsService,
   ) {}
+
+  // ========== Per-product materials availability helpers ==========
+
+  /**
+   * Compute which of a BOM's raw materials are under-issued against the MR.
+   * Used to allow production to start on one product even if another product's
+   * materials are still awaiting procurement.
+   */
+  private async computeUnissuedForBom(
+    bomId: number,
+    materialRequestId: number | null | undefined,
+    enterpriseId: number,
+  ): Promise<Array<{ itemName: string; needed: number; issued: number }>> {
+    if (!materialRequestId) return [];
+
+    const bomItems = await this.bomItemRepository.find({ where: { bomId } });
+    if (!bomItems || bomItems.length === 0) return [];
+
+    const mrItems = await this.materialRequestItemRepository.find({
+      where: { materialRequestId },
+    });
+
+    const byRawMatId = new Map<number, typeof mrItems[number]>();
+    for (const mi of mrItems) {
+      if (mi.rawMaterialId) byRawMatId.set(mi.rawMaterialId, mi);
+    }
+
+    const unissued: Array<{ itemName: string; needed: number; issued: number }> = [];
+
+    for (const bi of bomItems) {
+      const needed = Number(bi.requiredQuantity || 0);
+      if (needed <= 0) continue;
+
+      if (bi.rawMaterialId) {
+        const mi = byRawMatId.get(bi.rawMaterialId);
+        if (!mi) {
+          unissued.push({ itemName: bi.itemName, needed, issued: 0 });
+          continue;
+        }
+        if (mi.status === 'rejected') {
+          unissued.push({ itemName: bi.itemName, needed, issued: Number(mi.quantityIssued || 0) });
+          continue;
+        }
+        const issued = Number(mi.quantityIssued || 0);
+        if (issued < needed) {
+          unissued.push({ itemName: mi.itemName || bi.itemName, needed, issued });
+        }
+      } else {
+        // Custom / non-inventory item — match MR item by name.
+        const mi = mrItems.find((m) => !m.rawMaterialId && m.itemName === bi.itemName);
+        const issued = mi ? Number(mi.quantityIssued || 0) : 0;
+        if (!mi || (mi.status !== 'rejected' && issued < needed)) {
+          unissued.push({ itemName: bi.itemName, needed, issued });
+        }
+      }
+    }
+
+    return unissued;
+  }
+
+  /**
+   * Resolve the MR covering a job card (direct or via its PO) and return its
+   * under-issued items for the job card's BOM only.
+   */
+  private async getUnissuedMaterialsForJobCard(
+    jobCard: JobCard,
+    enterpriseId: number,
+  ): Promise<Array<{ itemName: string; needed: number; issued: number }>> {
+    let materialRequestId: number | null | undefined;
+    const directMR = await this.materialRequestRepository.findOne({
+      where: { jobCardId: jobCard.id, enterpriseId },
+    });
+    if (directMR) {
+      materialRequestId = directMR.id;
+    } else if (jobCard.purchaseOrderId) {
+      const po = await this.salesOrderRepository.findOne({
+        where: { id: jobCard.purchaseOrderId, enterpriseId },
+      });
+      materialRequestId = po?.materialRequestId;
+    }
+    if (!materialRequestId || !jobCard.bomId) return [];
+    return this.computeUnissuedForBom(jobCard.bomId, materialRequestId, enterpriseId);
+  }
 
   // ========== Notifications ==========
 
@@ -479,7 +568,7 @@ export class ManufacturingService {
     return this.findOne(id, enterpriseId);
   }
 
-  async updateStatus(id: number, enterpriseId: number, status: string, userId?: number) {
+  async updateStatus(id: number, enterpriseId: number, status: string, userId?: number, force = false) {
     const jobCard = await this.jobCardRepository.findOne({
       where: { id, enterpriseId },
     });
@@ -509,56 +598,17 @@ export class ManufacturingService {
       );
     }
 
-    // When starting production (pending → in_process), verify all materials are fully issued
-    if (jobCard.status === 'pending' && status === 'in_process') {
-      // Check material requests linked directly to this job card
-      const directMR = await this.materialRequestRepository.findOne({
-        where: { jobCardId: jobCard.id, enterpriseId },
-      });
-
-      if (directMR) {
-        const mrItems = await this.materialRequestItemRepository.find({
-          where: { materialRequestId: directMR.id },
-        });
-
-        const unissuedItems = mrItems.filter(
-          (item) =>
-            item.status !== 'rejected' &&
-            Number(item.quantityIssued) < Number(item.quantityRequested),
+    // When starting production (pending → in_process), verify the materials THIS
+    // job card's BOM needs are available. With multi-product POs we have one MR
+    // aggregated across all BOMs — we only block on shortages that actually impact
+    // this job card's own BOM. `force` lets the user override (partial materials).
+    if (jobCard.status === 'pending' && status === 'in_process' && !force) {
+      const unissued = await this.getUnissuedMaterialsForJobCard(jobCard, enterpriseId);
+      if (unissued.length > 0) {
+        const itemNames = unissued.map((i) => `${i.itemName} (need ${i.needed}, issued ${i.issued})`).join(', ');
+        throw new BadRequestException(
+          `Cannot start production. Materials not fully issued for this product: ${itemNames}. Issue the remaining quantities before starting.`,
         );
-
-        if (unissuedItems.length > 0) {
-          const itemNames = unissuedItems.map((i) => i.itemName).join(', ');
-          throw new BadRequestException(
-            `Cannot start production. Materials not fully issued by Inventory: ${itemNames}. Production requires ALL materials to be approved and issued first.`,
-          );
-        }
-      }
-
-      // Also check via sales order (PO flow)
-      if (!directMR && jobCard.purchaseOrderId) {
-        const salesOrder = await this.salesOrderRepository.findOne({
-          where: { id: jobCard.purchaseOrderId, enterpriseId },
-        });
-
-        if (salesOrder?.materialRequestId) {
-          const mrItems = await this.materialRequestItemRepository.find({
-            where: { materialRequestId: salesOrder.materialRequestId },
-          });
-
-          const unissuedItems = mrItems.filter(
-            (item) =>
-              item.status !== 'rejected' &&
-              Number(item.quantityIssued) < Number(item.quantityRequested),
-          );
-
-          if (unissuedItems.length > 0) {
-            const itemNames = unissuedItems.map((i) => i.itemName).join(', ');
-            throw new BadRequestException(
-              `Cannot start production. Materials not fully issued by Inventory: ${itemNames}. Production requires ALL materials to be issued.`,
-            );
-          }
-        }
       }
     }
 
@@ -1755,10 +1805,6 @@ export class ManufacturingService {
       throw new NotFoundException('Purchase order not found');
     }
 
-    if (!createDto.items || createDto.items.length === 0) {
-      throw new BadRequestException('BOM requires raw material items. Add the raw materials needed to manufacture this product.');
-    }
-
     // Fetch PO items separately
     const poItems = await this.salesOrderItemRepository.find({
       where: { salesOrderId: po.id },
@@ -1766,9 +1812,73 @@ export class ManufacturingService {
       order: { sortOrder: 'ASC' },
     });
 
-    // Check if BOM already exists for this PO (including empty/orphaned ones)
+    // Resolve the product this BOM is being built for.
+    // A PO with multiple products must get one BOM per product — callers
+    // must pass productId explicitly; we only fall back to items[0] when the
+    // PO has a single distinct product.
+    const distinctProductIds = Array.from(
+      new Set(poItems.map((i) => i.productId).filter(Boolean)),
+    );
+    let productId = createDto.productId;
+    if (!productId) {
+      if (distinctProductIds.length === 1) {
+        productId = distinctProductIds[0];
+      } else if (distinctProductIds.length > 1) {
+        throw new BadRequestException(
+          'This purchase order has multiple products. Specify which product this BOM is for (productId).',
+        );
+      }
+    }
+    if (!productId) {
+      throw new BadRequestException('Cannot create BOM: no product resolved from the purchase order');
+    }
+    if (!distinctProductIds.includes(productId)) {
+      throw new BadRequestException('The specified product is not in this purchase order');
+    }
+
+    // Fetch the product's master BOM (required going forward; each product owns its master)
+    const productBom = await this.productBomRepository.findOne({
+      where: { productId, enterpriseId, status: 'active' },
+    });
+
+    const masterItems = productBom
+      ? await this.productBomItemRepository.find({
+          where: { productBomId: productBom.id },
+          relations: ['rawMaterial'],
+          order: { sortOrder: 'ASC' },
+        })
+      : [];
+
+    // Merge master items + any additional items in the payload (payload takes precedence for same raw_material_id)
+    const payloadItems = createDto.items ?? [];
+    const payloadRawMatIds = new Set(payloadItems.filter((i) => i.rawMaterialId).map((i) => i.rawMaterialId));
+
+    const mergedItems = [
+      ...masterItems
+        .filter((m) => !m.rawMaterialId || !payloadRawMatIds.has(m.rawMaterialId))
+        .map((m, idx) => ({
+          rawMaterialId: m.rawMaterialId,
+          itemName: m.itemName,
+          requiredQuantity: Number(m.requiredQuantity),
+          unitOfMeasure: m.unitOfMeasure,
+          notes: m.notes,
+          sortOrder: m.sortOrder ?? idx,
+        })),
+      ...payloadItems,
+    ];
+
+    if (mergedItems.length === 0) {
+      throw new BadRequestException(
+        productBom
+          ? "Product's master BOM has no items. Add materials on the product before creating a PO BOM."
+          : "Product has no master BOM. Create one on the product (Products → Edit) before creating a PO BOM.",
+      );
+    }
+
+    // Check if a BOM already exists for this (PO, product) pair.
+    // Different products in the same PO each get their own BOM.
     const existingBom = await this.bomRepository.findOne({
-      where: { purchaseOrderId: po.id, enterpriseId },
+      where: { purchaseOrderId: po.id, productId, enterpriseId },
     });
     if (existingBom) {
       // If orphaned (no items), delete and recreate
@@ -1776,7 +1886,7 @@ export class ManufacturingService {
       if (existingItems.length === 0) {
         await this.bomRepository.delete(existingBom.id);
       } else {
-        throw new BadRequestException('BOM already exists for this purchase order');
+        throw new BadRequestException('A BOM already exists for this product on this purchase order');
       }
     }
 
@@ -1784,15 +1894,20 @@ export class ManufacturingService {
     const count = await this.bomRepository.count({ where: { enterpriseId } });
     const bomNumber = `BOM-${String(count + 1).padStart(6, '0')}`;
 
+    // Default quantity is the sum of this product's rows in the PO (not the whole PO)
+    const poItemsForProduct = poItems.filter((i) => i.productId === productId);
     const bomQty = parseFloat(
       Math.min(
-        Number(createDto.quantity || poItems.reduce((sum: number, i: SalesOrderItem) => sum + Number(i.quantity), 0)),
+        Number(
+          createDto.quantity ||
+            poItemsForProduct.reduce((sum: number, i: SalesOrderItem) => sum + Number(i.quantity), 0),
+        ),
         99999999,
       ).toFixed(2),
     );
 
     // Pre-fetch all raw material stocks needed
-    const rawMaterialIds = createDto.items.map((i) => i.rawMaterialId).filter(Boolean) as number[];
+    const rawMaterialIds = mergedItems.map((i) => i.rawMaterialId).filter(Boolean) as number[];
     const rawMaterials = rawMaterialIds.length
       ? await this.rawMaterialRepository.findByIds(rawMaterialIds)
       : [];
@@ -1802,7 +1917,9 @@ export class ManufacturingService {
       const bom = manager.create(Bom, {
         enterpriseId,
         purchaseOrderId: po.id,
-        productId: createDto.productId || poItems[0]?.productId,
+        productId,
+        productBomId: productBom?.id ?? undefined,
+        sourceVersion: productBom?.version ?? undefined,
         bomNumber,
         quantity: bomQty,
         status: 'pending',
@@ -1811,7 +1928,7 @@ export class ManufacturingService {
 
       const savedBom = await manager.save(Bom, bom);
 
-      const bomItems: Partial<BomItem>[] = createDto.items!.map((item, index) => {
+      const bomItems: Partial<BomItem>[] = mergedItems.map((item, index) => {
         const rawMat = item.rawMaterialId ? rawMatMap.get(item.rawMaterialId) : undefined;
         const availableQuantity = parseFloat(Math.min(Number(rawMat?.availableStock ?? 0), 9999999999999).toFixed(2));
         const requiredQuantity = parseFloat(Math.min(Number(item.requiredQuantity), 9999999999999).toFixed(2));
@@ -1864,8 +1981,11 @@ export class ManufacturingService {
   }
 
   async getBomByPurchaseOrder(purchaseOrderId: number, enterpriseId: number) {
+    // Back-compat: return the first BOM for the PO (used where the caller expects
+    // a single BOM). New callers should prefer getBomsByPurchaseOrder.
     const bom = await this.bomRepository.findOne({
       where: { purchaseOrderId, enterpriseId },
+      order: { createdDate: 'ASC' },
     });
 
     if (!bom) {
@@ -1873,6 +1993,31 @@ export class ManufacturingService {
     }
 
     return this.getBomById(bom.id, enterpriseId);
+  }
+
+  async getBomsByPurchaseOrder(purchaseOrderId: number, enterpriseId: number) {
+    const boms = await this.bomRepository.find({
+      where: { purchaseOrderId, enterpriseId },
+      relations: ['product', 'items', 'items.rawMaterial', 'productBom'],
+      order: { createdDate: 'ASC' },
+    });
+
+    // Attach job cards per BOM (same shape getBomById produces)
+    const enriched = await Promise.all(
+      boms.map(async (b) => {
+        const jobCards = await this.jobCardRepository.find({
+          where: { bomId: b.id, enterpriseId },
+          relations: ['stageMaster', 'assignedEmployee'],
+          order: { createdDate: 'ASC' },
+        });
+        return { ...b, jobCards };
+      }),
+    );
+
+    return {
+      message: 'BOMs fetched successfully',
+      data: enriched,
+    };
   }
 
   // DEPRECATED: Stock checking is now handled by the Inventory module.
@@ -2067,23 +2212,21 @@ export class ManufacturingService {
       throw new BadRequestException('No material request found. Send for approval first.');
     }
 
-    // Check ALL MR items are fully issued before allowing ANY production
-    const allMrItems = await this.materialRequestItemRepository.find({
-      where: { materialRequestId: po.materialRequestId },
-    });
-
-    const allFullyIssued = allMrItems.every(
-      (mi) => Number(mi.quantityIssued) >= Number(mi.quantityRequested) && Number(mi.quantityRequested) > 0,
-    );
-
-    if (!allFullyIssued && !force) {
-      const notIssued = allMrItems.filter(
-        (mi) => Number(mi.quantityIssued) < Number(mi.quantityRequested),
-      );
-      const names = notIssued.map(mi => mi.itemName).join(', ');
-      throw new BadRequestException(
-        `Cannot start production. Materials not fully issued by Inventory: ${names}. Production requires ALL materials to be issued.`,
-      );
+    // Check only the materials needed for THIS product (its BOM), not the whole
+    // aggregated MR. Other products on the PO may still be awaiting procurement.
+    if (!force) {
+      const productBom = await this.bomRepository.findOne({
+        where: { purchaseOrderId: poId, productId: poItem.productId, enterpriseId },
+      });
+      if (productBom) {
+        const unissued = await this.computeUnissuedForBom(productBom.id, po.materialRequestId, enterpriseId);
+        if (unissued.length > 0) {
+          const names = unissued.map((u) => `${u.itemName} (need ${u.needed}, issued ${u.issued})`).join(', ');
+          throw new BadRequestException(
+            `Cannot start production for "${poItem.itemName}". Materials not fully issued: ${names}.`,
+          );
+        }
+      }
     }
 
     // Check if job card already exists for this product in this PO
@@ -2340,6 +2483,68 @@ export class ManufacturingService {
     };
   }
 
+  // Replace the items of an existing BOM (add / remove / edit materials).
+  // Blocked if any job cards already exist for this BOM (to preserve audit).
+  async updateBomItems(
+    id: number,
+    enterpriseId: number,
+    items: Array<{
+      rawMaterialId?: number;
+      itemName: string;
+      requiredQuantity: number;
+      unitOfMeasure?: string;
+      notes?: string;
+      sortOrder?: number;
+    }>,
+  ) {
+    const bom = await this.bomRepository.findOne({ where: { id, enterpriseId } });
+    if (!bom) throw new NotFoundException('BOM not found');
+
+    const jobCardCount = await this.jobCardRepository.count({ where: { bomId: id, enterpriseId } });
+    if (jobCardCount > 0) {
+      throw new BadRequestException('Cannot edit BOM after job cards have been created');
+    }
+
+    if (!items || items.length === 0) {
+      throw new BadRequestException('BOM requires at least one material');
+    }
+
+    const rawMaterialIds = items.map((i) => i.rawMaterialId).filter(Boolean) as number[];
+    const rawMaterials = rawMaterialIds.length
+      ? await this.rawMaterialRepository.findByIds(rawMaterialIds)
+      : [];
+    const rawMatMap = new Map(rawMaterials.map((r) => [r.id, r]));
+
+    await this.dataSource.transaction(async (manager) => {
+      await manager.delete(BomItem, { bomId: id });
+
+      const bomItems: Partial<BomItem>[] = items.map((item, index) => {
+        const rawMat = item.rawMaterialId ? rawMatMap.get(item.rawMaterialId) : undefined;
+        const availableQuantity = parseFloat(
+          Math.min(Number(rawMat?.availableStock ?? 0), 9999999999999).toFixed(2),
+        );
+        const requiredQuantity = parseFloat(
+          Math.min(Number(item.requiredQuantity), 9999999999999).toFixed(2),
+        );
+        return {
+          bomId: id,
+          rawMaterialId: item.rawMaterialId,
+          itemName: item.itemName,
+          requiredQuantity,
+          availableQuantity,
+          unitOfMeasure: item.unitOfMeasure,
+          status: availableQuantity >= requiredQuantity ? 'available' : 'shortage',
+          notes: item.notes,
+          sortOrder: item.sortOrder ?? index,
+        };
+      });
+
+      await manager.save(BomItem, bomItems);
+    });
+
+    return this.getBomById(id, enterpriseId);
+  }
+
   // ========== Manufacturing Workflow: Send for Approval & Edit Details ==========
 
   async sendForApproval(
@@ -2356,13 +2561,30 @@ export class ManufacturingService {
       throw new BadRequestException('This PO is already approved');
     }
 
-    // BOM must exist before sending for approval
-    const bom = await this.bomRepository.findOne({
+    // At least one BOM must exist before sending for approval.
+    // With per-product BOMs we aggregate all of them (one BOM per product).
+    const boms = await this.bomRepository.find({
       where: { purchaseOrderId: poId, enterpriseId },
-      relations: ['items', 'items.rawMaterial'],
+      relations: ['items', 'items.rawMaterial', 'product'],
+      order: { createdDate: 'ASC' },
     });
-    if (!bom || !bom.items || bom.items.length === 0) {
+    if (!boms || boms.length === 0) {
       throw new BadRequestException('Create a Bill of Materials (BOM) with raw materials before sending for approval');
+    }
+    const bomsWithItems = boms.filter((b) => b.items && b.items.length > 0);
+    if (bomsWithItems.length === 0) {
+      throw new BadRequestException('Add raw materials to the BOM before sending for approval');
+    }
+
+    // Warn if not every distinct product in the PO has a BOM.
+    const poItems = await this.salesOrderItemRepository.find({ where: { salesOrderId: poId } });
+    const distinctProductIds = Array.from(new Set(poItems.map((i) => i.productId).filter(Boolean) as number[]));
+    const productsWithBom = new Set(bomsWithItems.map((b) => b.productId).filter(Boolean) as number[]);
+    const missingProductIds = distinctProductIds.filter((pid) => !productsWithBom.has(pid));
+    if (missingProductIds.length > 0) {
+      throw new BadRequestException(
+        `Create a BOM for every product in this order before sending for approval (${missingProductIds.length} product(s) still missing a BOM).`,
+      );
     }
 
     // Update PO details
@@ -2370,41 +2592,83 @@ export class ManufacturingService {
     if (dto.notes !== undefined) po.manufacturingNotes = dto.notes;
     if (dto.expectedDelivery) po.expectedDelivery = new Date(dto.expectedDelivery);
 
-    // Create a material request from BOM items (raw materials)
-    const count = await this.materialRequestRepository.count({ where: { enterpriseId } });
-    const requestNumber = `MR-${String(count + 1).padStart(6, '0')}`;
+    // Reuse existing MR if there's one still pending for this PO; otherwise create a new one.
+    const bomNumbersLabel = bomsWithItems.map((b) => b.bomNumber).join(', ');
+    const existingMR = po.materialRequestId
+      ? await this.materialRequestRepository.findOne({ where: { id: po.materialRequestId, enterpriseId } })
+      : null;
 
-    const materialRequest = this.materialRequestRepository.create({
-      enterpriseId,
-      requestNumber,
-      requestDate: new Date(),
-      salesOrderId: poId,
-      purpose: `Manufacturing approval request for PO: ${po.orderNumber} (BOM: ${bom.bomNumber})`,
-      status: 'pending',
-      notes: dto.notes || `Material approval request for manufacturing. Priority: ${dto.priority === 2 ? 'Urgent' : dto.priority === 1 ? 'High' : 'Normal'}`,
-    });
-
-    const savedMR = await this.materialRequestRepository.save(materialRequest);
-
-    // Create MR items from BOM raw materials only (never finished products)
-    const rawMaterialItems = bom.items.filter(item => item.rawMaterialId);
-    if (rawMaterialItems.length === 0) {
-      throw new BadRequestException('BOM has no raw materials. Add raw materials to the BOM before sending for approval.');
+    let savedMR;
+    if (existingMR && existingMR.status === 'pending') {
+      // Inventory hasn't acted on it yet — safe to refresh its items with the latest BOM aggregation.
+      await this.materialRequestItemRepository.delete({ materialRequestId: existingMR.id });
+      existingMR.purpose = `Manufacturing approval request for PO: ${po.orderNumber} (BOMs: ${bomNumbersLabel})`;
+      if (dto.notes) existingMR.notes = dto.notes;
+      savedMR = await this.materialRequestRepository.save(existingMR);
+    } else {
+      const count = await this.materialRequestRepository.count({ where: { enterpriseId } });
+      const requestNumber = `MR-${String(count + 1).padStart(6, '0')}`;
+      const materialRequest = this.materialRequestRepository.create({
+        enterpriseId,
+        requestNumber,
+        requestDate: new Date(),
+        salesOrderId: poId,
+        purpose: `Manufacturing approval request for PO: ${po.orderNumber} (BOMs: ${bomNumbersLabel})`,
+        status: 'pending',
+        notes: dto.notes || `Material approval request for manufacturing. Priority: ${dto.priority === 2 ? 'Urgent' : dto.priority === 1 ? 'High' : 'Normal'}`,
+      });
+      savedMR = await this.materialRequestRepository.save(materialRequest);
     }
 
-    for (const bomItem of rawMaterialItems) {
-      const rawMat = await this.rawMaterialRepository.findOne({
-        where: { id: bomItem.rawMaterialId, enterpriseId },
-      });
+    // Aggregate raw-material items across every BOM:
+    // same rawMaterialId → sum quantities; custom rows are kept as-is.
+    type Agg = { rawMaterialId?: number; itemName: string; unitOfMeasure?: string; qty: number };
+    const aggByRaw = new Map<number, Agg>();
+    const customRows: Agg[] = [];
+
+    for (const bom of bomsWithItems) {
+      for (const item of bom.items) {
+        if (item.rawMaterialId) {
+          const existing = aggByRaw.get(item.rawMaterialId);
+          const qty = Number(item.requiredQuantity);
+          if (existing) {
+            existing.qty += qty;
+          } else {
+            aggByRaw.set(item.rawMaterialId, {
+              rawMaterialId: item.rawMaterialId,
+              itemName: item.itemName,
+              unitOfMeasure: item.unitOfMeasure,
+              qty,
+            });
+          }
+        } else if (item.itemName && item.itemName.trim()) {
+          customRows.push({
+            itemName: item.itemName,
+            unitOfMeasure: item.unitOfMeasure,
+            qty: Number(item.requiredQuantity),
+          });
+        }
+      }
+    }
+
+    const aggregatedRows = [...aggByRaw.values(), ...customRows];
+    if (aggregatedRows.length === 0) {
+      throw new BadRequestException('BOMs have no materials. Add materials before sending for approval.');
+    }
+
+    for (const row of aggregatedRows) {
+      const rawMat = row.rawMaterialId
+        ? await this.rawMaterialRepository.findOne({ where: { id: row.rawMaterialId, enterpriseId } })
+        : null;
       const availableStock = rawMat ? Number(rawMat.availableStock) : 0;
 
       const mrItem = this.materialRequestItemRepository.create({
         materialRequestId: savedMR.id,
-        rawMaterialId: bomItem.rawMaterialId,
-        itemName: bomItem.itemName,
-        quantityRequested: Number(bomItem.requiredQuantity),
+        rawMaterialId: row.rawMaterialId,
+        itemName: row.itemName,
+        quantityRequested: row.qty,
         availableStock,
-        unitOfMeasure: bomItem.unitOfMeasure,
+        unitOfMeasure: row.unitOfMeasure,
         status: 'pending',
       });
       await this.materialRequestItemRepository.save(mrItem);
@@ -2415,8 +2679,10 @@ export class ManufacturingService {
     po.materialRequestId = savedMR.id;
     await this.salesOrderRepository.save(po);
 
-    // Update BOM status
-    await this.bomRepository.update(bom.id, { status: 'pending' });
+    // Update BOM status for every BOM on this PO
+    for (const bom of bomsWithItems) {
+      await this.bomRepository.update(bom.id, { status: 'pending' });
+    }
 
     return {
       message: 'Sent for inventory approval successfully',

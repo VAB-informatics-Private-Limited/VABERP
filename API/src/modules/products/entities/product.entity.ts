@@ -5,11 +5,13 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   ManyToOne,
+  OneToOne,
   JoinColumn,
 } from 'typeorm';
 import { Enterprise } from '../../enterprises/entities/enterprise.entity';
 import { Category } from './category.entity';
 import { Subcategory } from './subcategory.entity';
+import { ProductBom } from './product-bom.entity';
 
 @Entity('products')
 export class Product {
@@ -75,6 +77,9 @@ export class Product {
 
   @Column({ default: 'active' })
   status: string;
+
+  @OneToOne(() => ProductBom, (pb) => pb.product)
+  productBom?: ProductBom;
 
   @CreateDateColumn({ name: 'created_date' })
   createdDate: Date;

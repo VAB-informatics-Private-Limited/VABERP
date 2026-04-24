@@ -43,6 +43,7 @@ export default function WasteInventoryPage() {
   const [statusFilter, setStatusFilter] = useState<string>();
   const [categoryFilter, setCategoryFilter] = useState<number>();
   const [classFilter, setClassFilter] = useState<string>();
+  const [logsModal, setLogsModal] = useState<{ open: boolean; item: WasteInventoryItem | null }>({ open: false, item: null });
 
   // Debounce search input so typing doesn't fire a request every keystroke
   const searchDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -142,43 +143,56 @@ export default function WasteInventoryPage() {
   };
 
   const columns = [
-    { title: 'Batch No', dataIndex: 'batch_no', render: (v: string) => <span className="font-mono text-xs font-medium">{v}</span> },
+    {
+      title: 'Material',
+      render: (_: any, r: WasteInventoryItem) => (
+        <Button
+          type="link"
+          className="!p-0 !h-auto text-left"
+          onClick={() => setLogsModal({ open: true, item: r })}
+        >
+          <div>
+            <div className="font-medium">{r.raw_material_name || '—'}</div>
+            {r.raw_material_code && <div className="text-xs text-gray-400 font-mono">{r.raw_material_code}</div>}
+          </div>
+        </Button>
+      ),
+    },
     {
       title: 'Category',
       render: (_: any, r: WasteInventoryItem) => (
         <div>
-          <div className="font-medium">{r.category?.name ?? '—'}</div>
-          <Tag color={CLASS_COLOR[r.category?.classification ?? '']} className="text-xs">{r.category?.classification}</Tag>
+          <div>{r.category?.name ?? '—'}</div>
+          {r.category?.classification && (
+            <Tag color={CLASS_COLOR[r.category.classification]} className="text-xs !m-0 mt-1">
+              {r.category.classification}
+            </Tag>
+          )}
         </div>
       ),
     },
-    { title: 'Source', render: (_: any, r: WasteInventoryItem) => r.source?.name ?? '—' },
     {
-      title: 'Quantity',
+      title: 'Total Waste',
       render: (_: any, r: WasteInventoryItem) => (
         <div>
           <div className="font-medium">{Number(r.quantity_available).toLocaleString()} {r.unit}</div>
-          <div className="text-xs text-gray-400">of {Number(r.quantity_generated).toLocaleString()} generated</div>
+          <div className="text-xs text-gray-400">generated {Number(r.quantity_generated).toLocaleString()} {r.unit}</div>
         </div>
       ),
     },
-    { title: 'Location', dataIndex: 'storage_location', render: (v?: string) => v ?? '—' },
-    { title: 'Stored On', dataIndex: 'storage_date', render: (v: string) => dayjs(v).format('DD MMM YYYY') },
     {
-      title: 'Expiry', dataIndex: 'expiry_alert_date',
-      render: (v?: string) => {
-        if (!v) return '—';
-        const d = dayjs(v);
-        const isNear = d.isBefore(dayjs().add(7, 'day'));
-        return <span className={isNear ? 'text-red-500 font-medium' : ''}>{d.format('DD MMM YYYY')}{isNear && <WarningOutlined className="ml-1" />}</span>;
+      title: 'Entries',
+      render: (_: any, r: WasteInventoryItem) => {
+        const count = (r.logs || []).filter((l) => l.action === 'generated').length;
+        return <Tag className="!m-0">{count} log{count === 1 ? '' : 's'}</Tag>;
       },
     },
-    { title: 'Status', dataIndex: 'status', render: (v: string) => <Tag color={STATUS_COLOR[v]}>{v?.replace(/_/g, ' ').toUpperCase()}</Tag> },
+    { title: 'Batch', dataIndex: 'batch_no', render: (v: string) => <span className="font-mono text-xs text-gray-500">{v}</span> },
+    { title: 'Status', dataIndex: 'status', render: (v: string) => <Tag color={STATUS_COLOR[v]} className="!m-0">{v?.replace(/_/g, ' ').toUpperCase()}</Tag> },
     {
-      title: 'Actions', width: 120,
+      title: 'Actions', width: 110,
       render: (_: any, r: WasteInventoryItem) => (
         <Space size="small">
-          <Tooltip title="Edit"><Button size="small" icon={<EditOutlined />} onClick={() => openEdit(r)} /></Tooltip>
           {r.status !== 'quarantined' && r.status !== 'fully_disposed' && (
             <Tooltip title="Quarantine">
               <Button size="small" icon={<StopOutlined />} onClick={() => Modal.confirm({
@@ -209,29 +223,17 @@ export default function WasteInventoryPage() {
   return (
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Waste Inventory</h1>
+        <div>
+          <h1 className="text-2xl font-bold">Waste Inventory</h1>
+          <div className="text-xs text-gray-500">
+            Only waste generated during production is stored here. Expand a row to see the per-job-card log.
+          </div>
+        </div>
         <Space>
           <Button onClick={() => setSourceModal(true)}>+ Source</Button>
           <Button onClick={() => setCategoryModal(true)}>+ Category</Button>
-          <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>Log Waste</Button>
         </Space>
       </div>
-
-      {/* Stats */}
-      <Row gutter={16} className="mb-6">
-        {[
-          { title: 'Available Batches', value: stats?.available ?? 0, color: '#52c41a' },
-          { title: 'Total Available Qty', value: `${(stats?.totalAvailableQty ?? 0).toLocaleString()} kg`, color: '#1677ff' },
-          { title: 'Reserved', value: stats?.reserved ?? 0, color: '#fa8c16' },
-          { title: 'Expiring Soon', value: stats?.expiringSoon ?? 0, color: '#ff4d4f' },
-          { title: 'Quarantined', value: stats?.quarantined ?? 0, color: '#722ed1' },
-          { title: 'Expired', value: stats?.expired ?? 0, color: '#8c8c8c' },
-        ].map(s => (
-          <Col key={s.title} xs={12} md={4}>
-            <Card size="small"><Statistic title={s.title} value={s.value} valueStyle={{ color: s.color, fontSize: 18 }} /></Card>
-          </Col>
-        ))}
-      </Row>
 
       {/* Filters */}
       <div className="flex gap-3 mb-4 flex-wrap items-center">
@@ -257,8 +259,13 @@ export default function WasteInventoryPage() {
         <Button icon={<ClearOutlined />} onClick={handleClearAll}>Clear</Button>
       </div>
 
-      <Table dataSource={data?.data ?? []} columns={columns} rowKey="id" loading={isFetching}
-        pagination={{ total: data?.total ?? 0, current: page, pageSize: 20, onChange: setPage, showTotal: t => `${t} batches` }} />
+      <Table
+        dataSource={data?.data ?? []}
+        columns={columns}
+        rowKey="id"
+        loading={isFetching}
+        pagination={{ total: data?.total ?? 0, current: page, pageSize: 20, onChange: setPage, showTotal: t => `${t} entries` }}
+      />
 
       {/* Inventory Modal */}
       <Modal title={editingItem ? 'Edit Waste Entry' : 'Log Waste Entry'} open={inventoryModal} width={640}
@@ -354,6 +361,68 @@ export default function WasteInventoryPage() {
             <Col span={24}><Form.Item name="location" label="Location"><Input /></Form.Item></Col>
           </Row>
         </Form>
+      </Modal>
+
+      {/* Logs modal — shows how the waste total was built up per job card */}
+      <Modal
+        title={
+          <div>
+            <div className="text-base font-semibold">
+              {logsModal.item?.raw_material_name || '—'} · Waste log
+            </div>
+            <div className="text-xs text-gray-500 font-normal">
+              {logsModal.item && (
+                <>
+                  Total {Number(logsModal.item.quantity_available).toLocaleString()} {logsModal.item.unit}
+                  {' · '}
+                  {logsModal.item.category?.name}
+                  {logsModal.item.batch_no && <> · batch {logsModal.item.batch_no}</>}
+                </>
+              )}
+            </div>
+          </div>
+        }
+        open={logsModal.open}
+        onCancel={() => setLogsModal({ open: false, item: null })}
+        footer={<Button onClick={() => setLogsModal({ open: false, item: null })}>Close</Button>}
+        width={760}
+      >
+        {logsModal.item && (() => {
+          const logs = (logsModal.item.logs || []).filter((l) => l.action === 'generated');
+          if (logs.length === 0) {
+            return <div className="text-sm text-gray-400 text-center py-6">No log entries yet.</div>;
+          }
+          return (
+            <table className="w-full text-sm">
+              <thead className="text-gray-500 border-b border-gray-200">
+                <tr>
+                  <th className="text-left py-2">Date &amp; Time</th>
+                  <th className="text-left py-2">Job Card</th>
+                  <th className="text-right py-2">Qty</th>
+                  <th className="text-right py-2">Running total</th>
+                  <th className="text-left py-2 pl-3">User</th>
+                  <th className="text-left py-2 pl-3">Notes</th>
+                </tr>
+              </thead>
+              <tbody>
+                {logs.map((l) => (
+                  <tr key={l.id} className="border-b border-gray-100">
+                    <td className="py-2">{dayjs(l.created_date).format('DD MMM YYYY, HH:mm')}</td>
+                    <td className="py-2">
+                      {l.reference_type === 'job_card' && l.reference_id ? (
+                        <span className="font-medium">JC #{l.reference_id}</span>
+                      ) : '—'}
+                    </td>
+                    <td className="py-2 text-right">+{Number(l.quantity_delta)} {logsModal.item?.unit}</td>
+                    <td className="py-2 text-right text-gray-500">{Number(l.quantity_after)} {logsModal.item?.unit}</td>
+                    <td className="py-2 pl-3 text-gray-500">{l.performed_by_name || '—'}</td>
+                    <td className="py-2 pl-3 text-gray-500">{l.notes || ''}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          );
+        })()}
       </Modal>
     </div>
   );

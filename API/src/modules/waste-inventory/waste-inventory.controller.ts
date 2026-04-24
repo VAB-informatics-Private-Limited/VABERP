@@ -71,10 +71,12 @@ export class WasteInventoryController {
     @Query('sourceId') sourceId?: string,
     @Query('search') search?: string,
     @Query('classification') classification?: string,
+    @Query('productionOnly') productionOnly?: string,
   ) {
     return this.svc.getInventory(enterpriseId, page ? +page : 1, limit ? +limit : 20, {
       status, categoryId: categoryId ? +categoryId : undefined,
       sourceId: sourceId ? +sourceId : undefined, search, classification,
+      productionOnly: productionOnly === undefined ? true : productionOnly !== 'false',
     });
   }
 
@@ -112,5 +114,33 @@ export class WasteInventoryController {
   @RequirePermission('waste_management', 'waste_inventory', 'edit')
   writeOff(@Param('id', ParseIntPipe) id: number, @EnterpriseId() enterpriseId: number, @CurrentUser() user: any, @Body() dto: WriteOffDto) {
     return this.svc.writeOff(id, enterpriseId, dto, user?.sub ?? user?.id);
+  }
+
+  // Record waste generated during production. Aggregates by raw material and logs per job card.
+  @Post('production-waste')
+  @RequirePermission('waste_management', 'waste_inventory', 'create')
+  recordProductionWaste(
+    @EnterpriseId() enterpriseId: number,
+    @CurrentUser() user: any,
+    @Body() dto: {
+      jobCardId: number;
+      rawMaterialId: number;
+      categoryId: number;
+      quantity: number;
+      unit?: string;
+      consumedQuantity?: number;
+      notes?: string;
+    },
+  ) {
+    return this.svc.recordProductionWaste(enterpriseId, dto, user?.sub ?? user?.id);
+  }
+
+  @Get('production-waste/by-material/:rawMaterialId')
+  @RequirePermission('waste_management', 'waste_inventory', 'view')
+  getProductionWasteByMaterial(
+    @Param('rawMaterialId', ParseIntPipe) rawMaterialId: number,
+    @EnterpriseId() enterpriseId: number,
+  ) {
+    return this.svc.getProductionWasteByMaterial(enterpriseId, rawMaterialId);
   }
 }

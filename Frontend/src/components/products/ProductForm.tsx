@@ -121,14 +121,21 @@ export function ProductForm({ initialData, onSubmit, loading, submitText = 'Save
           <Col xs={24} md={12}>
             <Form.Item
               label="SKU ID"
+              required
               validateStatus={errors.product_code ? 'error' : ''}
-              help={errors.product_code?.message}
+              help={errors.product_code?.message || 'Letters, digits, _ and - only (no spaces)'}
             >
               <Controller
                 name="product_code"
                 control={control}
                 render={({ field }) => (
-                  <Input {...field} placeholder="Enter SKU ID" size="large" />
+                  <Input
+                    {...field}
+                    placeholder="e.g. GI-DB-4W"
+                    size="large"
+                    maxLength={40}
+                    style={{ textTransform: 'uppercase' }}
+                  />
                 )}
               />
             </Form.Item>
@@ -200,13 +207,23 @@ export function ProductForm({ initialData, onSubmit, loading, submitText = 'Save
             <Form.Item
               label="HSN Code"
               validateStatus={errors.hsn_code ? 'error' : ''}
-              help={errors.hsn_code?.message}
+              help={errors.hsn_code?.message || '4, 6, or 8 digits (numbers only)'}
             >
               <Controller
                 name="hsn_code"
                 control={control}
                 render={({ field }) => (
-                  <Input {...field} placeholder="Enter HSN code" size="large" />
+                  <Input
+                    {...field}
+                    placeholder="e.g. 73089090"
+                    size="large"
+                    maxLength={8}
+                    onChange={(e) => {
+                      // Keep only digits as the user types.
+                      const digits = e.target.value.replace(/\D/g, '');
+                      field.onChange(digits);
+                    }}
+                  />
                 )}
               />
             </Form.Item>
@@ -214,6 +231,7 @@ export function ProductForm({ initialData, onSubmit, loading, submitText = 'Save
           <Col xs={24} md={8}>
             <Form.Item
               label="Unit"
+              required
               validateStatus={errors.unit ? 'error' : ''}
               help={errors.unit?.message}
             >
@@ -235,6 +253,7 @@ export function ProductForm({ initialData, onSubmit, loading, submitText = 'Save
           <Col xs={24} md={8}>
             <Form.Item
               label="Price (₹)"
+              required
               validateStatus={errors.price ? 'error' : ''}
               help={errors.price?.message}
             >

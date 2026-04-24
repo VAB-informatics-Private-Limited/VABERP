@@ -130,13 +130,23 @@ export class ManufacturingController {
   }
 
   @Get('purchase-orders/:poId/bom')
-  @ApiOperation({ summary: 'Get BOM for a purchase order' })
+  @ApiOperation({ summary: 'Get first BOM for a purchase order (back-compat)' })
   @RequirePermission('orders', 'bom', 'view')
   async getBomByPo(
     @Param('poId', ParseIntPipe) poId: number,
     @EnterpriseId() enterpriseId: number,
   ) {
     return this.manufacturingService.getBomByPurchaseOrder(poId, enterpriseId);
+  }
+
+  @Get('purchase-orders/:poId/boms')
+  @ApiOperation({ summary: 'Get all BOMs for a purchase order (one per product)' })
+  @RequirePermission('orders', 'bom', 'view')
+  async getBomsByPo(
+    @Param('poId', ParseIntPipe) poId: number,
+    @EnterpriseId() enterpriseId: number,
+  ) {
+    return this.manufacturingService.getBomsByPurchaseOrder(poId, enterpriseId);
   }
 
   @Post('bom/:id/check-stock')
@@ -147,6 +157,17 @@ export class ManufacturingController {
     @EnterpriseId() enterpriseId: number,
   ) {
     return this.manufacturingService.checkBomStock(id, enterpriseId);
+  }
+
+  @Put('bom/:id/items')
+  @ApiOperation({ summary: 'Replace materials on an existing BOM (blocked once job cards exist)' })
+  @RequirePermission('orders', 'bom', 'edit')
+  async updateBomItems(
+    @Param('id', ParseIntPipe) id: number,
+    @EnterpriseId() enterpriseId: number,
+    @Body() body: { items: Array<{ rawMaterialId?: number; itemName: string; requiredQuantity: number; unitOfMeasure?: string; notes?: string; sortOrder?: number }> },
+  ) {
+    return this.manufacturingService.updateBomItems(id, enterpriseId, body.items);
   }
 
   @Post('bom/:bomId/job-cards')
@@ -298,8 +319,9 @@ export class ManufacturingController {
     @EnterpriseId() enterpriseId: number,
     @CurrentUser() user: any,
     @Body('status') status: string,
+    @Body('force') force?: boolean,
   ) {
-    return this.manufacturingService.updateStatus(id, enterpriseId, status, user?.id);
+    return this.manufacturingService.updateStatus(id, enterpriseId, status, user?.id, !!force);
   }
 
   @Put('jobs/:id/estimate')

@@ -31,6 +31,10 @@ export interface WasteInventoryItem {
   category?: WasteCategory;
   source_id?: number;
   source?: WasteSource;
+  raw_material_id?: number | null;
+  raw_material_name?: string;
+  raw_material_code?: string;
+  production_job_id?: number | null;
   quantity_generated: number;
   quantity_available: number;
   quantity_reserved: number;
@@ -55,6 +59,8 @@ export interface WasteInventoryLog {
   quantity_after: number;
   reference_type?: string;
   reference_id?: number;
+  performed_by?: number | null;
+  performed_by_name?: string;
   notes?: string;
   created_date: string;
 }
@@ -158,6 +164,11 @@ const mapLog = (l: any): WasteInventoryLog => ({
   quantity_after: parseFloat(l.quantityAfter ?? l.quantity_after ?? '0'),
   reference_type: l.referenceType ?? l.reference_type,
   reference_id: l.referenceId ?? l.reference_id,
+  performed_by: l.performedBy ?? l.performed_by ?? null,
+  performed_by_name:
+    l.performedByEmployee?.name ??
+    l.performedByEmployee?.fullName ??
+    l.performed_by_name,
   notes: l.notes,
   created_date: l.createdDate ?? l.created_date,
 });
@@ -169,6 +180,10 @@ const mapInventory = (i: any): WasteInventoryItem => ({
   category: i.category ? mapCategory(i.category) : undefined,
   source_id: i.sourceId ?? i.source_id,
   source: i.source ? mapSource(i.source) : undefined,
+  raw_material_id: i.rawMaterialId ?? i.raw_material_id ?? null,
+  raw_material_name: i.rawMaterial?.materialName ?? i.raw_material_name,
+  raw_material_code: i.rawMaterial?.materialCode ?? i.raw_material_code,
+  production_job_id: i.productionJobId ?? i.production_job_id ?? null,
   quantity_generated: parseFloat(i.quantityGenerated ?? i.quantity_generated ?? '0'),
   quantity_available: parseFloat(i.quantityAvailable ?? i.quantity_available ?? '0'),
   quantity_reserved: parseFloat(i.quantityReserved ?? i.quantity_reserved ?? '0'),
@@ -296,6 +311,28 @@ export const getWasteInventoryItem = async (id: number) => {
 export const createWasteInventory = async (dto: any) => {
   const res = await apiClient.post('/waste-inventory', dto);
   return res.data;
+};
+
+/**
+ * Record waste generated during production.
+ * Aggregates by raw material + category and writes a per-job-card log.
+ */
+export const recordProductionWaste = async (dto: {
+  jobCardId: number;
+  rawMaterialId: number;
+  categoryId?: number; // optional — backend auto-resolves/creates a default if missing
+  quantity: number;
+  unit?: string;
+  consumedQuantity?: number;
+  notes?: string;
+}) => {
+  const res = await apiClient.post('/waste-inventory/production-waste', dto);
+  return res.data;
+};
+
+export const getProductionWasteByMaterial = async (rawMaterialId: number) => {
+  const res = await apiClient.get(`/waste-inventory/production-waste/by-material/${rawMaterialId}`);
+  return res.data.data;
 };
 
 export const updateWasteInventory = async (id: number, dto: any) => {

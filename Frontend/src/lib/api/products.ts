@@ -9,6 +9,8 @@ import {
   SubCategoryFormData,
   ProductFormData,
 } from '@/types/product';
+import { ProductBom } from '@/types/product-bom';
+import { mapProductBomFromBackend, toProductBomBackendPayload } from './product-bom';
 
 // Helper functions to map backend camelCase to frontend snake_case
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -58,9 +60,11 @@ function mapProductFromBackend(data: any): Product {
     price: data.sellingPrice != null ? Number(data.sellingPrice) : undefined,
     gst_rate: data.gstRate != null ? Number(data.gstRate) : undefined,
     max_discount_percent: data.maxDiscountPercent != null ? Number(data.maxDiscountPercent) : undefined,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     discount_tiers: (data.discountTiers || []).map((t: any) => ({ minQty: Number(t.minQty), discountPercent: Number(t.discountPercent) })),
     image: data.image,
     status: data.status || 'active',
+    has_bom: !!data.productBom && data.productBom.status !== 'archived',
     created_date: data.createdDate,
   };
 }
@@ -212,6 +216,22 @@ export async function getDropdownProductsList(_enterpriseId?: number, _subcatego
   return { message: backendData.message, data: (backendData.data || []).map(mapProductFromBackend) };
 }
 
+export async function getProductById(
+  id: number,
+): Promise<ApiResponse<Product & { product_bom?: ProductBom | null }>> {
+  const response = await apiClient.get<ApiResponse>(`/products/${id}`);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const backendData = response.data as any;
+  const product = mapProductFromBackend(backendData.data || {});
+  return {
+    message: backendData.message,
+    data: {
+      ...product,
+      product_bom: mapProductBomFromBackend(backendData.data?.productBom),
+    },
+  };
+}
+
 export async function addProduct(data: ProductFormData & { enterprise_id?: number }): Promise<ApiResponse> {
   const payload = {
     categoryId: data.category_id,
@@ -226,6 +246,9 @@ export async function addProduct(data: ProductFormData & { enterprise_id?: numbe
     maxDiscountPercent: data.max_discount_percent,
     discountTiers: data.discount_tiers || [],
     status: data.status,
+    bom: data.bom && data.bom.items && data.bom.items.length > 0
+      ? toProductBomBackendPayload(data.bom)
+      : undefined,
   };
   const response = await apiClient.post<ApiResponse>('/products', payload);
   return response.data;
@@ -246,6 +269,13 @@ export async function updateProduct(data: ProductFormData & { id: number; enterp
     maxDiscountPercent: data.max_discount_percent,
     discountTiers: data.discount_tiers || [],
     status: data.status,
+    // Only send bom on update if the caller explicitly included it, otherwise
+    // leave the master BOM untouched.
+    bom: data.bom !== undefined
+      ? (data.bom.items && data.bom.items.length > 0
+          ? toProductBomBackendPayload(data.bom)
+          : { items: [] })
+      : undefined,
   };
   const response = await apiClient.put<ApiResponse>(`/products/${id}`, payload);
   return response.data;

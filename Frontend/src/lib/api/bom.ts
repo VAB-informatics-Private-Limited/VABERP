@@ -157,6 +157,26 @@ export async function getBomByPurchaseOrder(poId: number): Promise<ApiResponse<B
   return { message: d.message, data: d.data ? mapBomFromBackend(d.data) : undefined };
 }
 
+export async function getBomsByPurchaseOrder(poId: number): Promise<ApiResponse<Bom[]>> {
+  const response = await apiClient.get(`/manufacturing/purchase-orders/${poId}/boms`);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const d = response.data as any;
+  return { message: d.message, data: (d.data || []).map(mapBomFromBackend) };
+}
+
+export async function updateBomItems(bomId: number, items: Array<{
+  rawMaterialId?: number;
+  itemName: string;
+  requiredQuantity: number;
+  unitOfMeasure?: string;
+  notes?: string;
+}>): Promise<ApiResponse<Bom>> {
+  const response = await apiClient.put(`/manufacturing/bom/${bomId}/items`, { items });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const d = response.data as any;
+  return { message: d.message, data: d.data ? mapBomFromBackend(d.data) : undefined };
+}
+
 export async function checkBomStock(bomId: number): Promise<ApiResponse<Bom>> {
   const response = await apiClient.post(`/manufacturing/bom/${bomId}/check-stock`);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

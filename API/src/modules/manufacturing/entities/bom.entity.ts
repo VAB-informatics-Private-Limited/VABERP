@@ -11,6 +11,7 @@ import {
 import { Enterprise } from '../../enterprises/entities/enterprise.entity';
 import { SalesOrder } from '../../sales-orders/entities/sales-order.entity';
 import { Product } from '../../products/entities/product.entity';
+import { ProductBom } from '../../products/entities/product-bom.entity';
 import { BomItem } from './bom-item.entity';
 
 @Entity('bill_of_materials')
@@ -38,6 +39,16 @@ export class Bom {
   @ManyToOne(() => Product)
   @JoinColumn({ name: 'product_id' })
   product: Product;
+
+  @Column({ name: 'product_bom_id', nullable: true })
+  productBomId: number;
+
+  @ManyToOne(() => ProductBom, { nullable: true })
+  @JoinColumn({ name: 'product_bom_id' })
+  productBom: ProductBom;
+
+  @Column({ name: 'source_version', nullable: true })
+  sourceVersion: number;
 
   @Column({ name: 'bom_number' })
   bomNumber: string;
