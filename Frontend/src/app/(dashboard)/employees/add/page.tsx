@@ -30,8 +30,9 @@ export default function AddEmployeePage() {
       queryClient.invalidateQueries({ queryKey: ['employees'] });
       router.push('/employees');
     },
-    onError: () => {
-      message.error('Failed to add employee');
+    onError: (err: any) => {
+      const msg = err?.response?.data?.message;
+      message.error(Array.isArray(msg) ? msg[0] : msg || 'Failed to add employee');
     },
   });
 

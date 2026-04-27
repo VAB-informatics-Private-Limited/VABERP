@@ -18,6 +18,7 @@ import { createServiceProduct } from '@/lib/api/service-products';
 import { getProductTypes } from '@/lib/api/product-types';
 import { useAuthStore } from '@/stores/authStore';
 import api from '@/lib/api/client';
+import { MOBILE_RULE } from '@/lib/validations/shared';
 import dayjs from 'dayjs';
 
 const { Title } = Typography;
@@ -55,7 +56,10 @@ export default function AddServiceProductPage() {
       message.success('Product registered successfully');
       router.push(`/service-products/${res.data.id}`);
     },
-    onError: () => message.error('Failed to register product'),
+    onError: (err: any) => {
+      const msg = err?.response?.data?.message;
+      message.error(Array.isArray(msg) ? msg[0] : msg || 'Failed to register product');
+    },
   });
 
   const onFinish = (values: any) => {
@@ -109,19 +113,42 @@ export default function AddServiceProductPage() {
             />
           </Form.Item>
 
-          <Form.Item label="Customer Name" name="customerName">
-            <Input placeholder="Customer name" />
+          <Form.Item
+            label="Customer Name"
+            name="customerName"
+            rules={[
+              { required: true, message: 'Customer name is required' },
+              { min: 2, message: 'Name must be at least 2 characters' },
+              { max: 100, message: 'Name is too long' },
+            ]}
+          >
+            <Input placeholder="Customer name" maxLength={100} />
           </Form.Item>
 
-          <Form.Item label="Customer Mobile" name="customerMobile">
-            <Input placeholder="Mobile number" />
+          <Form.Item
+            label="Customer Mobile"
+            name="customerMobile"
+            rules={[
+              { required: true, message: 'Mobile number is required' },
+              MOBILE_RULE,
+            ]}
+          >
+            <Input placeholder="10-digit mobile" maxLength={10} />
           </Form.Item>
 
-          <Form.Item label="Customer Address" name="customerAddress">
-            <Input.TextArea rows={2} placeholder="Address" />
+          <Form.Item
+            label="Customer Address"
+            name="customerAddress"
+            rules={[{ max: 500, message: 'Address is too long' }]}
+          >
+            <Input.TextArea rows={2} placeholder="Address" maxLength={500} />
           </Form.Item>
 
-          <Form.Item label="Product Type" name="productTypeId">
+          <Form.Item
+            label="Product Type"
+            name="productTypeId"
+            rules={[{ required: true, message: 'Please select a product type' }]}
+          >
             <Select
               placeholder="Select product type (e.g. AC, RO)"
               allowClear
@@ -138,12 +165,23 @@ export default function AddServiceProductPage() {
             />
           </Form.Item>
 
-          <Form.Item label="Serial Number" name="serialNumber">
-            <Input placeholder="Serial / IMEI number" />
+          <Form.Item
+            label="Serial Number"
+            name="serialNumber"
+            rules={[
+              { required: true, message: 'Serial number is required' },
+              { pattern: /^[A-Za-z0-9_-]{3,50}$/, message: 'Use 3–50 chars: letters, digits, - or _' },
+            ]}
+          >
+            <Input placeholder="Serial / IMEI number" maxLength={50} style={{ textTransform: 'uppercase' }} />
           </Form.Item>
 
-          <Form.Item label="Model Number" name="modelNumber">
-            <Input placeholder="Model" />
+          <Form.Item
+            label="Model Number"
+            name="modelNumber"
+            rules={[{ max: 50, message: 'Model number is too long' }]}
+          >
+            <Input placeholder="Model" maxLength={50} />
           </Form.Item>
 
           <Form.Item
@@ -152,15 +190,38 @@ export default function AddServiceProductPage() {
             rules={[{ required: true, message: 'Dispatch date is required' }]}
             initialValue={dayjs()}
           >
-            <DatePicker style={{ width: '100%' }} />
+            <DatePicker
+              style={{ width: '100%' }}
+              disabledDate={(d) => !!d && d.isAfter(dayjs().endOf('day'))}
+            />
           </Form.Item>
 
-          <Form.Item label="Warranty Start Date" name="warrantyStartDate">
+          <Form.Item
+            label="Warranty Start Date"
+            name="warrantyStartDate"
+            dependencies={['dispatchDate']}
+            rules={[
+              ({ getFieldValue }) => ({
+                validator(_, value) {
+                  if (!value) return Promise.resolve();
+                  const dispatch = getFieldValue('dispatchDate');
+                  if (dispatch && value.isBefore(dispatch, 'day')) {
+                    return Promise.reject(new Error('Warranty start cannot be before dispatch date'));
+                  }
+                  return Promise.resolve();
+                },
+              }),
+            ]}
+          >
             <DatePicker style={{ width: '100%' }} placeholder="Auto-filled from dispatch date if blank" />
           </Form.Item>
 
-          <Form.Item label="Notes" name="notes">
-            <Input.TextArea rows={2} placeholder="Any notes" />
+          <Form.Item
+            label="Notes"
+            name="notes"
+            rules={[{ max: 500, message: 'Notes are too long' }]}
+          >
+            <Input.TextArea rows={2} placeholder="Any notes" maxLength={500} showCount />
           </Form.Item>
 
           <Form.Item>

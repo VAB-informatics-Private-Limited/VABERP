@@ -2,6 +2,7 @@
 
 import { Form, Input, Select, InputNumber, DatePicker, Row, Col } from 'antd';
 import { CrmLead, CRM_STATUS_OPTIONS } from '@/types/crm';
+import { MOBILE_RULE, PINCODE_RULE, GSTIN_RULE } from '@/lib/validations/shared';
 import dayjs from 'dayjs';
 
 const LEAD_SOURCE_OPTIONS = [
@@ -44,8 +45,8 @@ export function LeadForm({ form, initial }: Props) {
           </Form.Item>
         </Col>
         <Col xs={24} sm={12}>
-          <Form.Item name="mobile" label="Mobile">
-            <Input placeholder="+91 XXXXXXXX" />
+          <Form.Item name="mobile" label="Mobile" rules={[MOBILE_RULE]}>
+            <Input placeholder="10-digit mobile" maxLength={10} />
           </Form.Item>
         </Col>
         <Col xs={24} sm={12}>
@@ -70,12 +71,15 @@ export function LeadForm({ form, initial }: Props) {
         </Col>
         <Col xs={24} sm={12}>
           <Form.Item name="nextFollowupDate" label="Next Follow-up Date">
-            <DatePicker style={{ width: '100%' }} />
+            <DatePicker
+              style={{ width: '100%' }}
+              disabledDate={(d) => !!d && d.isBefore(dayjs().startOf('day'))}
+            />
           </Form.Item>
         </Col>
         <Col xs={24} sm={12}>
-          <Form.Item name="gstNumber" label="GST Number">
-            <Input />
+          <Form.Item name="gstNumber" label="GST Number" rules={[GSTIN_RULE]}>
+            <Input placeholder="e.g. 27AAPFU0939F1ZV" maxLength={15} style={{ textTransform: 'uppercase' }} />
           </Form.Item>
         </Col>
         <Col xs={24}>
@@ -90,7 +94,9 @@ export function LeadForm({ form, initial }: Props) {
           <Form.Item name="state" label="State"><Input /></Form.Item>
         </Col>
         <Col xs={24} sm={8}>
-          <Form.Item name="pincode" label="Pincode"><Input /></Form.Item>
+          <Form.Item name="pincode" label="Pincode" rules={[PINCODE_RULE]}>
+            <Input maxLength={6} placeholder="6-digit PIN" />
+          </Form.Item>
         </Col>
         <Col xs={24}>
           <Form.Item name="requirements" label="Requirements">

@@ -196,6 +196,8 @@ export default function MaintenanceVendorsPage() {
         onOk={() => vendorForm.submit()}
         confirmLoading={createVendorMut.isPending || updateVendorMut.isPending}
         width={580}
+        maskClosable={false}
+        keyboard={false}
       >
         <Form form={vendorForm} layout="vertical" onFinish={onVendorSubmit}>
           <Row gutter={12}>
@@ -230,6 +232,8 @@ export default function MaintenanceVendorsPage() {
         onOk={() => amcForm.submit()}
         confirmLoading={createAmcMut.isPending}
         width={580}
+        maskClosable={false}
+        keyboard={false}
       >
         <Form form={amcForm} layout="vertical" onFinish={onAmcSubmit}>
           <Row gutter={12}>

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { MOBILE_REGEX, PINCODE_REGEX, GSTIN_REGEX } from './shared';
 
 export const loginSchema = z.object({
   email: z.string().email('Please enter a valid email address'),
@@ -27,12 +28,17 @@ export const mobileOtpSchema = z.object({
 export const registrationSchema = z.object({
   businessName: z.string().min(2, 'Business name is required'),
   businessEmail: z.string().email('Please enter a valid email address'),
-  businessMobile: z.string().min(10, 'Please enter a valid mobile number'),
+  businessMobile: z
+    .string()
+    .regex(MOBILE_REGEX, 'Enter a valid 10-digit mobile number starting with 6, 7, 8, or 9'),
   businessAddress: z.string().min(5, 'Address is required'),
   businessState: z.string().min(2, 'State is required'),
   businessCity: z.string().min(2, 'City is required'),
-  pincode: z.string().min(6, 'Pincode must be 6 digits').max(6, 'Pincode must be 6 digits'),
-  gstNumber: z.string().optional(),
+  pincode: z.string().regex(PINCODE_REGEX, 'PIN code must be exactly 6 digits'),
+  gstNumber: z
+    .string()
+    .optional()
+    .refine((v) => !v || GSTIN_REGEX.test(v), 'Enter a valid GSTIN (e.g. 27AAPFU0939F1ZV)'),
   cinNumber: z.string().optional(),
 });
 

@@ -29,10 +29,26 @@ export default function ExportDropdown<T extends object>({
 
   const config = templateConfig
     ? {
-        primary_color: templateConfig.primary_color,
-        company_name:  templateConfig.company_name ?? undefined,
-        logo_url:      templateConfig.logo_url ?? null,
-        show_logo:     templateConfig.show_logo,
+        primary_color:    templateConfig.primary_color,
+        secondary_color:  templateConfig.secondary_color,
+        font_family:      templateConfig.font_family,
+        company_name:     templateConfig.company_name ?? undefined,
+        tagline:          templateConfig.tagline ?? undefined,
+        logo_url:         templateConfig.logo_url ?? null,
+        logo_width:       templateConfig.logo_width,
+        address:          templateConfig.address ?? undefined,
+        phone:            templateConfig.phone ?? undefined,
+        email:            templateConfig.email ?? undefined,
+        gst_number:       templateConfig.gst_number ?? undefined,
+        cin_number:       templateConfig.cin_number ?? undefined,
+        header_alignment: templateConfig.header_alignment,
+        show_logo:        templateConfig.show_logo,
+        show_tagline:     templateConfig.show_tagline,
+        show_phone:       templateConfig.show_phone,
+        show_email:       templateConfig.show_email,
+        show_gst:         templateConfig.show_gst,
+        show_footer:      templateConfig.show_footer,
+        footer_text:      templateConfig.footer_text ?? undefined,
       }
     : undefined;
 

@@ -25,10 +25,7 @@ import {
 } from '@ant-design/icons';
 import { useRouter, usePathname } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { useEffect } from 'react';
 import { useAuthStore } from '@/stores/authStore';
-import { getPermissions } from '@/lib/api/auth';
-import { normalizePermissions } from '@/lib/api/employees';
 import { getMaterialRequestList } from '@/lib/api/material-requests';
 import { getNotificationCounts } from '@/lib/api/notifications';
 import { getServiceEventsPendingCount } from '@/lib/api/service-events';
@@ -63,33 +60,15 @@ function buildHasPermission(permissions: MenuPermissions | null, userType: strin
 export function Sidebar({ collapsed, inDrawer, onMenuClick }: SidebarProps) {
   const router = useRouter();
   const pathname = usePathname();
-  const { userType, permissions: cachedPermissions, setPermissions, user } = useAuthStore();
+  const { userType, permissions: cachedPermissions, user } = useAuthStore();
   const isReportingHead = userType === 'employee' && !!(user as any)?.is_reporting_head;
   const hasManager = userType === 'employee' && !!(user as any)?.reporting_to;
 
-  // Always fetch live permissions from server for employees so that
-  // admin-granted permissions are reflected without requiring re-login
-  const { data: serverPermsRes } = useQuery({
-    queryKey: ['my-permissions'],
-    queryFn: () => getPermissions(),
-    enabled: userType === 'employee',
-    staleTime: 0,
-    refetchOnWindowFocus: true,
-    refetchInterval: 30000,
-  });
-
-  // Sync server permissions into the store (in useEffect to avoid render-time setState)
-  useEffect(() => {
-    if (userType === 'employee' && serverPermsRes?.data) {
-      setPermissions(normalizePermissions(serverPermsRes.data));
-    }
-  }, [serverPermsRes, userType, setPermissions]);
-
-  // For rendering: use fresh server permissions for employees, cached for enterprise
-  const activePermissions: MenuPermissions | null =
-    userType === 'employee' && serverPermsRes?.data
-      ? normalizePermissions(serverPermsRes.data)
-      : cachedPermissions;
+  // Read permissions directly from the zustand store. ProtectedRoute is the
+  // single source that polls /auth/permissions and keeps the store fresh —
+  // duplicating the poll here used to trip the API rate limiter, blocking
+  // admin-granted role changes from reflecting until logout/login.
+  const activePermissions: MenuPermissions | null = cachedPermissions;
 
   const canView = buildHasPermission(activePermissions, userType);
 

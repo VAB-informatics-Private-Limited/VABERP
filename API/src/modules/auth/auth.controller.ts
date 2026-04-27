@@ -1,6 +1,6 @@
 import { Controller, Post, Body, Get, UseGuards, Request, Res } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
-import { Throttle } from '@nestjs/throttler';
+import { Throttle, SkipThrottle } from '@nestjs/throttler';
 import { Response } from 'express';
 import { AuthService } from './auth.service';
 import {
@@ -103,7 +103,12 @@ export class AuthController {
     return this.authService.resetPassword(dto);
   }
 
+  // Permission polling from the client runs on a short interval to pick up
+  // admin-granted role changes without forcing a re-login. It's an
+  // authenticated, read-only DB lookup — safe to exempt from the default
+  // throttler (otherwise active users trip the 100/min limit).
   @Get('permissions')
+  @SkipThrottle({ default: true, auth: true })
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Get current user permissions' })
@@ -112,6 +117,7 @@ export class AuthController {
   }
 
   @Get('me')
+  @SkipThrottle({ default: true, auth: true })
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Get current user info' })

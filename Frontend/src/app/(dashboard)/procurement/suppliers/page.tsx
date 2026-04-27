@@ -205,6 +205,13 @@ export default function VendorsPage() {
   const handleSubmit = async () => {
     const values = await form.validateFields();
 
+    // Require at least one category when creating a vendor — procurement flows
+    // depend on category mapping for filtering/suggesting suppliers.
+    if (!editingSupplier && pendingCategories.length === 0) {
+      message.error('Please add at least one category before saving the vendor');
+      return;
+    }
+
     // Before creating a NEW vendor with a mobile number, check if it is already in use.
     if (!editingSupplier && values.phone) {
       try {
@@ -441,11 +448,13 @@ export default function VendorsPage() {
 
           {/* ── Supply Categories ── */}
           <Divider orientation="left" orientationMargin={0}>
-            <span className="text-sm font-semibold text-gray-700">Supply Categories</span>
+            <span className="text-sm font-semibold text-gray-700">
+              Supply Categories <span className="text-red-500">*</span>
+            </span>
           </Divider>
 
           <div className="text-xs text-gray-400 mb-3">
-            Map this vendor to the material categories they supply. These mappings control which vendors appear when creating a Purchase Order.
+            Map this vendor to the material categories they supply. At least one category is required — these mappings control which vendors appear when creating a Purchase Order.
           </div>
 
           {/* Existing / queued category rows */}
@@ -518,26 +527,26 @@ export default function VendorsPage() {
             </div>
             <div className="flex-1">
               <div className="text-xs text-gray-500 mb-1 font-medium">Subcategory <span className="text-gray-400">(optional)</span></div>
-              {subcategoryOptions.length > 0 ? (
-                <Select
-                  placeholder="Select subcategory"
-                  options={subcategoryOptions}
-                  value={pickerSubcategory || undefined}
-                  onChange={(v) => setPickerSubcategory(v || '')}
-                  showSearch
-                  allowClear
-                  disabled={!pickerCategory}
-                  style={{ width: '100%' }}
-                />
-              ) : (
-                <Input
-                  placeholder="Type subcategory"
-                  value={pickerSubcategory}
-                  onChange={(e) => setPickerSubcategory(e.target.value)}
-                  disabled={!pickerCategory}
-                  onPressEnter={handleAddCategoryRow}
-                />
-              )}
+              {/* Combined Select that lets the user pick an existing subcategory or type a new one.
+                  Existing ones come from raw_materials; typing is always available so the form
+                  doesn't feel broken when no data is there yet. */}
+              <Select
+                mode="tags"
+                placeholder={pickerCategory ? 'Select or type subcategory' : 'Select category first'}
+                options={subcategoryOptions}
+                value={pickerSubcategory ? [pickerSubcategory] : []}
+                onChange={(values) => {
+                  // mode="tags" returns an array; keep only the last entered value as the picker is single-select.
+                  const latest = Array.isArray(values) && values.length ? values[values.length - 1] : '';
+                  setPickerSubcategory(latest || '');
+                }}
+                showSearch
+                allowClear
+                disabled={!pickerCategory}
+                style={{ width: '100%' }}
+                maxTagCount={1}
+                notFoundContent={<span className="text-xs text-gray-400">Type to add a new subcategory</span>}
+              />
             </div>
             <Button
               type="primary"

@@ -12,6 +12,7 @@ import {
   getCountries, getStates, getCities, getPincodes, createPincode,
   Country, State, City, Pincode,
 } from '@/lib/api/locations';
+import { MOBILE_RULE, PINCODE_RULE, GSTIN_REGEX } from '@/lib/validations/shared';
 import dayjs from 'dayjs';
 
 interface EnquiryFormProps {
@@ -215,7 +216,7 @@ export function EnquiryForm({ initialData, onSubmit, loading, submitText, isEdit
               label="Mobile Number"
               rules={[
                 { required: true, message: 'Please enter mobile number' },
-                { pattern: /^[0-9]{10}$/, message: 'Please enter valid 10-digit mobile number' },
+                MOBILE_RULE,
               ]}
               help={mobileWarning ? <span style={{ color: '#faad14' }}>⚠ {mobileWarning}</span> : undefined}
               validateStatus={mobileWarning ? 'warning' : undefined}
@@ -248,16 +249,20 @@ export function EnquiryForm({ initialData, onSubmit, loading, submitText, isEdit
               name="gst_number"
               label="GST Number"
               validateTrigger={['onBlur', 'onSubmit']}
+              dependencies={['business_name']}
               rules={[
-                {
-                  validator: (_, value) => {
+                ({ getFieldValue }) => ({
+                  validator(_, value) {
+                    const biz = getFieldValue('business_name');
+                    if (biz && !value) {
+                      return Promise.reject(new Error('GST number is required for business enquiries'));
+                    }
                     if (!value) return Promise.resolve();
-                    const gstPattern = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
-                    return gstPattern.test(value)
+                    return GSTIN_REGEX.test(value)
                       ? Promise.resolve()
                       : Promise.reject(new Error('Enter a valid GST number (e.g. 27AAPFU0939F1ZV)'));
                   },
-                },
+                }),
               ]}
             >
               <Input
@@ -307,7 +312,11 @@ export function EnquiryForm({ initialData, onSubmit, loading, submitText, isEdit
         <Row gutter={16}>
           <Col xs={24} md={12}>
             <Form.Item name="next_followup_date" label="Next Follow-up Date">
-              <DatePicker className="w-full" format="DD-MM-YYYY" />
+              <DatePicker
+                className="w-full"
+                format="DD-MM-YYYY"
+                disabledDate={(d) => !!d && d.isBefore(dayjs().startOf('day'))}
+              />
             </Form.Item>
           </Col>
           <Col xs={24} md={12}>
@@ -371,7 +380,11 @@ export function EnquiryForm({ initialData, onSubmit, loading, submitText, isEdit
             </Form.Item>
           </Col>
           <Col xs={24} md={12}>
-            <Form.Item name="pincode" label="Pincode">
+            <Form.Item
+              name="pincode"
+              label="Pincode"
+              rules={[PINCODE_RULE]}
+            >
               <AutoComplete
                 placeholder={
                   selectedCityId

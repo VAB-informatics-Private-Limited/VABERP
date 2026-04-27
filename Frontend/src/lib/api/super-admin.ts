@@ -114,6 +114,26 @@ export async function updateEnterpriseExpiry(id: number, expiryDate: string) {
   return res.data;
 }
 
+export async function updateEnterpriseProfile(
+  id: number,
+  body: Partial<{
+    businessName: string;
+    email: string;
+    mobile: string;
+    contactPerson: string;
+    address: string;
+    city: string;
+    state: string;
+    pincode: string;
+    gstNumber: string;
+    cinNumber: string;
+    website: string;
+  }>,
+) {
+  const res = await superAdminClient.patch(`/super-admin/enterprises/${id}`, body);
+  return res.data;
+}
+
 export async function getEnterpriseFinancials(id: number, period: string = '30d') {
   const res = await superAdminClient.get(`/super-admin/enterprises/${id}/financials?period=${period}`);
   return res.data;

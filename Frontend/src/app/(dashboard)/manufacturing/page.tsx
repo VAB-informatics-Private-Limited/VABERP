@@ -688,7 +688,7 @@ export default function ManufacturingPage() {
         <Form form={approvalForm} layout="vertical" onFinish={handleSendForApproval}>
           <Row gutter={16}>
             <Col span={8}><Form.Item name="priority" label="Priority"><Select options={[{ value: 0, label: 'Normal' }, { value: 1, label: 'High' }, { value: 2, label: 'Urgent' }]} /></Form.Item></Col>
-            <Col span={16}><Form.Item name="expectedDelivery" label="Expected Delivery"><DatePicker className="w-full" format="DD MMM YYYY" /></Form.Item></Col>
+            <Col span={16}><Form.Item name="expectedDelivery" label="Expected Delivery"><DatePicker className="w-full" format="DD MMM YYYY" disabledDate={(d) => !!d && d.isBefore(dayjs().startOf('day'))} /></Form.Item></Col>
           </Row>
           <Form.Item name="notes" label="Notes for Inventory Team"><TextArea rows={2} placeholder="Any special instructions for the inventory team..." /></Form.Item>
         </Form>
@@ -743,7 +743,8 @@ export default function ManufacturingPage() {
             <tbody>{editItems.map((item, idx) => (
               <tr key={item.id} className="border-t">
                 <td className="p-2"><Input size="small" value={item.itemName} onChange={e => { const u = [...editItems]; u[idx] = { ...u[idx], itemName: e.target.value }; setEditItems(u); }} /></td>
-                <td className="p-2"><InputNumber size="small" min={1} value={item.quantity} className="w-full" onChange={v => { const u = [...editItems]; u[idx] = { ...u[idx], quantity: Number(v) || 1 }; setEditItems(u); }} /></td>
+                {/* Manufacture quantity is locked once a PO exists — it's authoritative in the sales order. */}
+                <td className="p-2"><InputNumber size="small" min={1} value={item.quantity} disabled className="w-full" /></td>
                 <td className="p-2"><Input size="small" value={item.unitOfMeasure} onChange={e => { const u = [...editItems]; u[idx] = { ...u[idx], unitOfMeasure: e.target.value }; setEditItems(u); }} /></td>
                 <td className="p-2"><Input size="small" value={item.description} placeholder="Specs..." onChange={e => { const u = [...editItems]; u[idx] = { ...u[idx], description: e.target.value }; setEditItems(u); }} /></td>
               </tr>

@@ -7,6 +7,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { getBusinessProfile, updateBusinessProfile } from '@/lib/api/settings';
 import { useAuthStore } from '@/stores/authStore';
+import { MOBILE_RULE, PINCODE_RULE, GSTIN_RULE } from '@/lib/validations/shared';
+import { SubscriptionCard } from '@/components/settings/SubscriptionCard';
 
 const { Title } = Typography;
 
@@ -105,6 +107,8 @@ export default function SettingsPage() {
         Settings
       </Title>
 
+      <SubscriptionCard />
+
       <Card
         title="Business Profile"
         className="card-shadow mb-6"
@@ -149,9 +153,12 @@ export default function SettingsPage() {
                 <Form.Item
                   name="mobile"
                   label="Mobile"
-                  rules={[{ required: true, message: 'Please enter mobile' }]}
+                  rules={[
+                    { required: true, message: 'Please enter mobile' },
+                    MOBILE_RULE,
+                  ]}
                 >
-                  <Input placeholder="Enter mobile number" />
+                  <Input placeholder="10-digit mobile" maxLength={10} />
                 </Form.Item>
               </Col>
               <Col xs={24} md={12}>
@@ -181,21 +188,29 @@ export default function SettingsPage() {
                 </Form.Item>
               </Col>
               <Col xs={24} md={8}>
-                <Form.Item name="pincode" label="Pincode">
-                  <Input placeholder="Enter pincode" />
+                <Form.Item name="pincode" label="Pincode" rules={[PINCODE_RULE]}>
+                  <Input placeholder="6-digit PIN" maxLength={6} />
                 </Form.Item>
               </Col>
             </Row>
 
             <Row gutter={16}>
               <Col xs={24} md={12}>
-                <Form.Item name="gst_number" label="GST Number">
-                  <Input placeholder="Enter GST number" />
+                <Form.Item name="gst_number" label="GST Number" rules={[GSTIN_RULE]}>
+                  <Input
+                    placeholder="e.g. 27AAPFU0939F1ZV"
+                    maxLength={15}
+                    style={{ textTransform: 'uppercase' }}
+                  />
                 </Form.Item>
               </Col>
               <Col xs={24} md={12}>
                 <Form.Item name="cin_number" label="CIN Number">
-                  <Input placeholder="Enter CIN number" />
+                  <Input
+                    placeholder="Enter CIN number"
+                    maxLength={21}
+                    style={{ textTransform: 'uppercase' }}
+                  />
                 </Form.Item>
               </Col>
             </Row>

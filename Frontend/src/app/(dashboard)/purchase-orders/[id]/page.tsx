@@ -1428,26 +1428,12 @@ export default function PurchaseOrderDetailPage() {
         width={720}
         extra={
           invoice ? (
-            <Space>
-              <Button
-                icon={<PrinterOutlined />}
-                onClick={() => window.open(`/print/invoice/${invoice.id}?pdf=1`, '_blank')}
-              >
-                Download Invoice
-              </Button>
-              {Number(invoice.balance_due) > 0 && invoice.status !== 'cancelled' && (
-                <Button
-                  type="primary"
-                  icon={<DollarOutlined />}
-                  onClick={() => {
-                    paymentForm.setFieldsValue({ payment_date: dayjs() });
-                    setPaymentModalOpen(true);
-                  }}
-                >
-                  Record Payment
-                </Button>
-              )}
-            </Space>
+            <Button
+              icon={<PrinterOutlined />}
+              onClick={() => window.open(`/print/invoice/${invoice.id}?pdf=1`, '_blank')}
+            >
+              Download Invoice
+            </Button>
           ) : null
         }
       >
@@ -1722,7 +1708,7 @@ export default function PurchaseOrderDetailPage() {
         onCancel={() => { setAddInvoiceOpen(false); addInvoiceForm.resetFields(); setInvoiceAmountInput(0); }}
         footer={null}
         maskClosable={false}
-        width={440}
+        width={640}
       >
         {/* PO balance reference — read-only */}
         <div className="mb-5">
@@ -1763,6 +1749,7 @@ export default function PurchaseOrderDetailPage() {
           >
             <InputNumber
               className="w-full"
+              size="large"
               prefix="₹"
               precision={2}
               min={0.01}

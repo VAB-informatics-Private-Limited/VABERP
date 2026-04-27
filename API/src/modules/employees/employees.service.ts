@@ -431,12 +431,14 @@ export class EmployeesService {
   }
 
   async create(enterpriseId: number, createDto: any, user?: { id: number; type: string; name?: string }) {
+    // Email uniqueness is scoped per-enterprise — two different tenants can legitimately
+    // have an employee with the same email address.
     const existingEmail = await this.employeeRepository.findOne({
-      where: { email: createDto.email },
+      where: { email: createDto.email, enterpriseId },
     });
 
     if (existingEmail) {
-      throw new ConflictException('Email already exists');
+      throw new ConflictException('An employee with this email already exists in your enterprise');
     }
 
     const hashedPassword = await bcrypt.hash(createDto.password, 10);
@@ -447,7 +449,19 @@ export class EmployeesService {
       enterpriseId,
     });
 
-    const savedResult = await this.employeeRepository.save(employee);
+    // Catch the PG unique-violation (code 23505) so we return a friendly message
+    // if a legacy global-unique index is still in place. Once the schema is
+    // migrated to a composite (enterprise_id, email) this branch only trips
+    // when the same tenant races to insert the same email twice.
+    let savedResult;
+    try {
+      savedResult = await this.employeeRepository.save(employee);
+    } catch (err: any) {
+      if (err?.code === '23505' && String(err?.detail || '').includes('email')) {
+        throw new ConflictException('An employee with this email already exists');
+      }
+      throw err;
+    }
     const savedEmployee = Array.isArray(savedResult) ? savedResult[0] : savedResult;
 
     // Create permissions with empty or provided initial values

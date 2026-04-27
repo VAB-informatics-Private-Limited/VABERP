@@ -122,6 +122,18 @@ export class SuperAdminController {
     return this.superAdminService.updateExpiry(id, expiryDate);
   }
 
+  // Generic partial update for enterprise profile fields (business name,
+  // contact, address, GST/CIN, website, etc.). Used by the Edit drawer on
+  // the super-admin enterprises list.
+  @UseGuards(SuperAdminGuard)
+  @Patch('enterprises/:id')
+  updateEnterprise(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: Record<string, any>,
+  ) {
+    return this.superAdminService.updateEnterpriseProfile(id, body);
+  }
+
   // ─── Module 1: Employees ─────────────────────────────────────────────────
 
   @UseGuards(SuperAdminGuard)

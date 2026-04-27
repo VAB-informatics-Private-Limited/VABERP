@@ -15,8 +15,10 @@ import { EnterpriseId, CurrentUser, RequirePermission, RequireEnterprise } from 
 import {
   CreateNameDto,
   UpdateNameDto,
-  CreateDesignationDto,
-  UpdateDesignationDto,
+  CreateDepartmentDto,
+  UpdateDepartmentDto,
+  CreateDesignationDtoV2,
+  UpdateDesignationDtoV2,
   CreateEmployeeDto,
   UpdateEmployeeDto,
 } from './dto/masters.dto';
@@ -52,7 +54,7 @@ export class EmployeesController {
   @RequirePermission('employees', 'departments', 'create')
   async createDepartment(
     @EnterpriseId() enterpriseId: number,
-    @Body() body: CreateNameDto,
+    @Body() body: CreateDepartmentDto,
   ) {
     return this.employeesService.createDepartment(enterpriseId, body);
   }
@@ -63,7 +65,7 @@ export class EmployeesController {
   async updateDepartment(
     @Param('id', ParseIntPipe) id: number,
     @EnterpriseId() enterpriseId: number,
-    @Body() body: UpdateNameDto,
+    @Body() body: UpdateDepartmentDto,
   ) {
     return this.employeesService.updateDepartment(id, enterpriseId, body);
   }
@@ -98,7 +100,7 @@ export class EmployeesController {
   @RequirePermission('employees', 'designations', 'create')
   async createDesignation(
     @EnterpriseId() enterpriseId: number,
-    @Body() body: CreateDesignationDto,
+    @Body() body: CreateDesignationDtoV2,
   ) {
     return this.employeesService.createDesignation(enterpriseId, body);
   }
@@ -109,7 +111,7 @@ export class EmployeesController {
   async updateDesignation(
     @Param('id', ParseIntPipe) id: number,
     @EnterpriseId() enterpriseId: number,
-    @Body() body: UpdateDesignationDto,
+    @Body() body: UpdateDesignationDtoV2,
   ) {
     return this.employeesService.updateDesignation(id, enterpriseId, body);
   }

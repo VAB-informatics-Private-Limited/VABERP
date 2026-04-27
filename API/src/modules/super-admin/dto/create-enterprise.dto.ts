@@ -47,12 +47,16 @@ export class CreateEnterpriseDto {
   @IsNumber()
   planId: number;
 
+  // Payment fields are optional — super-admin creation flow no longer collects
+  // them on the UI (the enterprise is activated immediately). Kept in the DTO
+  // so external callers can still pass them if they need to record a payment.
   @IsNumber()
-  paymentAmount: number;
+  @IsOptional()
+  paymentAmount?: number;
 
   @IsString()
-  @IsNotEmpty()
-  paymentMethod: string;
+  @IsOptional()
+  paymentMethod?: string;
 
   @IsString()
   @IsOptional()

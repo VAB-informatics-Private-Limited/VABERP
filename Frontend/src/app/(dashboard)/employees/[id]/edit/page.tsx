@@ -44,8 +44,9 @@ export default function EditEmployeePage() {
       queryClient.invalidateQueries({ queryKey: ['employees'] });
       router.push('/employees');
     },
-    onError: () => {
-      message.error('Failed to update employee');
+    onError: (err: any) => {
+      const msg = err?.response?.data?.message;
+      message.error(Array.isArray(msg) ? msg[0] : msg || 'Failed to update employee');
     },
   });
 

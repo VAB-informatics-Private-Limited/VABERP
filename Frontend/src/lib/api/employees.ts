@@ -349,6 +349,16 @@ export async function updateEmployeePermissions(
     body,
     { transformRequest: [(d) => JSON.stringify(d)] },
   );
+  // Notify any open tab in the same browser (e.g. the employee's session)
+  // that permissions changed, so their sidebar/pages resync immediately
+  // instead of waiting for the next poll.
+  if (typeof BroadcastChannel !== 'undefined') {
+    try {
+      const bc = new BroadcastChannel('vab-permissions-sync');
+      bc.postMessage({ type: 'updated', employeeId: employee_id, at: Date.now() });
+      bc.close();
+    } catch { /* ignore */ }
+  }
   return response.data;
 }
 
