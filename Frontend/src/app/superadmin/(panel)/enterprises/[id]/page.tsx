@@ -6,7 +6,6 @@ import {
   Descriptions,
   Tag,
   Button,
-  DatePicker,
   Popconfirm,
   message,
   Typography,
@@ -36,12 +35,10 @@ import {
 } from '@ant-design/icons';
 import { Modal, Select as AntSelect } from 'antd';
 import { useRouter, useParams } from 'next/navigation';
-import dayjs, { Dayjs } from 'dayjs';
 import dynamic from 'next/dynamic';
 import {
   getEnterprise,
   updateEnterpriseStatus,
-  updateEnterpriseExpiry,
   getEnterpriseFinancials,
   getEnterprisePayment,
   approveEnterprise,
@@ -491,8 +488,6 @@ export default function EnterpriseDetailPage() {
   const [enterprise, setEnterprise] = useState<Enterprise | null>(null);
   const [payment, setPayment] = useState<PlatformPayment | null>(null);
   const [loading, setLoading] = useState(true);
-  const [expiryDate, setExpiryDate] = useState<Dayjs | null>(null);
-  const [savingExpiry, setSavingExpiry] = useState(false);
   const [savingStatus, setSavingStatus] = useState(false);
   const [approvingOrRejecting, setApprovingOrRejecting] = useState(false);
   const [lockingProfile, setLockingProfile] = useState(false);
@@ -514,9 +509,6 @@ export default function EnterpriseDetailPage() {
       setEnterprise(entRes.data);
       setCurrentResellerId((entRes.data as any).resellerId ?? null);
       setCurrentResellerName((entRes.data as any).resellerName ?? null);
-      if (entRes.data.expiryDate) {
-        setExpiryDate(dayjs(entRes.data.expiryDate));
-      }
       setPayment(payRes?.data ?? null);
     } finally {
       setLoading(false);
@@ -578,22 +570,6 @@ export default function EnterpriseDetailPage() {
       message.error(err?.response?.data?.message ?? 'Failed to reject');
     } finally {
       setApprovingOrRejecting(false);
-    }
-  }
-
-  async function handleSaveExpiry() {
-    if (!expiryDate) return;
-    setSavingExpiry(true);
-    try {
-      await updateEnterpriseExpiry(id, expiryDate.format('YYYY-MM-DD'));
-      message.success('Expiry date updated');
-      setEnterprise((prev) =>
-        prev ? { ...prev, expiryDate: expiryDate.format('YYYY-MM-DD') } : prev
-      );
-    } catch {
-      message.error('Failed to update expiry date');
-    } finally {
-      setSavingExpiry(false);
     }
   }
 
@@ -673,32 +649,28 @@ export default function EnterpriseDetailPage() {
       </div>
 
       <div className="flex flex-col gap-4">
-        <Card title="Subscription Expiry">
-          <p className="text-sm text-gray-500 mb-3">
-            Current:{' '}
-            <strong>
-              {enterprise.expiryDate
-                ? new Date(enterprise.expiryDate).toLocaleDateString()
-                : 'Not set'}
-            </strong>
+        <Card title="Subscription Expiry" size="small">
+          <Descriptions column={1} size="small">
+            <Descriptions.Item label="Current Expiry">
+              <strong>
+                {enterprise.expiryDate
+                  ? new Date(enterprise.expiryDate).toLocaleDateString()
+                  : 'Not set'}
+              </strong>
+            </Descriptions.Item>
+            {payment?.planName && (
+              <Descriptions.Item label="Plan">{payment.planName}</Descriptions.Item>
+            )}
+            {payment?.planDurationDays && (
+              <Descriptions.Item label="Plan Duration">
+                {payment.planDurationDays} days
+              </Descriptions.Item>
+            )}
+          </Descriptions>
+          <p className="text-xs text-gray-500 mt-3 mb-0">
+            Expiry is determined by the plan's fixed duration and cannot be edited
+            manually. To change the expiry, assign a new plan.
           </p>
-          <Space direction="vertical" className="w-full">
-            <DatePicker
-              value={expiryDate}
-              onChange={setExpiryDate}
-              format="YYYY-MM-DD"
-              className="w-full"
-            />
-            <Button
-              type="primary"
-              onClick={handleSaveExpiry}
-              loading={savingExpiry}
-              disabled={!expiryDate}
-              block
-            >
-              Save Expiry Date
-            </Button>
-          </Space>
         </Card>
 
         <Card title="Account Status">

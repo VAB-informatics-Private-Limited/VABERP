@@ -26,3 +26,8 @@ Thumbs.db
 
 # TypeScript build info
 *.tsbuildinfo
+
+# Generated Office docs (kept locally only)
+*.docx
+*.xlsx
+~$*

@@ -15,6 +15,7 @@ import { SupportTicket } from './entities/support-ticket.entity';
 import { SubscriptionPlan } from './entities/subscription-plan.entity';
 import { PlatformPayment } from './entities/platform-payment.entity';
 import { Coupon } from '../coupons/entities/coupon.entity';
+import { ResellersModule } from '../resellers/resellers.module';
 
 @Module({
   imports: [
@@ -31,6 +32,7 @@ import { Coupon } from '../coupons/entities/coupon.entity';
       PlatformPayment,
       Coupon,
     ]),
+    ResellersModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],

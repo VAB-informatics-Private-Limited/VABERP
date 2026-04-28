@@ -1055,6 +1055,7 @@ export class SuperAdminService implements OnApplicationBootstrap {
     businessName: string;
     email: string;
     mobile: string;
+    password?: string;
     contactPerson?: string;
     address?: string;
     city?: string;
@@ -1078,9 +1079,11 @@ export class SuperAdminService implements OnApplicationBootstrap {
     const plan = await this.subscriptionPlanRepository.findOne({ where: { id: dto.planId } });
     if (!plan) throw new NotFoundException('Subscription plan not found');
 
-    const temporaryPassword = Math.random().toString(36).slice(2, 8).toUpperCase() +
-      Math.random().toString(36).slice(2, 8).toUpperCase();
-    const hashedPassword = await bcrypt.hash(temporaryPassword, 10);
+    const passwordToUse = dto.password ?? (
+      Math.random().toString(36).slice(2, 8).toUpperCase() +
+      Math.random().toString(36).slice(2, 8).toUpperCase()
+    );
+    const hashedPassword = await bcrypt.hash(passwordToUse, 10);
 
     // Activate the enterprise immediately on creation — super admin is
     // already a trusted actor, so there's no separate approval step. The
@@ -1135,7 +1138,13 @@ export class SuperAdminService implements OnApplicationBootstrap {
 
     return {
       message: 'Enterprise created successfully',
-      data: { enterprise, temporaryPassword },
+      data: {
+        enterprise,
+        // Echo the password back. If the admin supplied one, this confirms what
+        // was set; if it was auto-generated, this is the only way to recover it.
+        temporaryPassword: passwordToUse,
+        passwordWasGenerated: !dto.password,
+      },
     };
   }
 
