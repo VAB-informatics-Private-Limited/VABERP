@@ -7,13 +7,20 @@ import stat
 import paramiko
 from pathlib import Path
 
-HOST = "64.235.43.187"
-PORT = 22
-USER = "root"
-PASSWORD = "6BH07w0xB48?~kW-F"
+HOST = os.getenv("DEPLOY_HOST", "64.235.43.187")
+PORT = int(os.getenv("DEPLOY_PORT", "22"))
+USER = os.getenv("DEPLOY_USER", "root")
+PASSWORD = os.getenv("DEPLOY_PASSWORD", "6BH07w0xB48?~kW-F")
 
-REMOTE_API = "/var/www/html/enterprise-qa/api"
-REMOTE_FE  = "/var/www/html/enterprise-qa/frontend"
+# SMTP credentials — set these in GitHub Secrets (same keys as API .env.example)
+SMTP_HOST = os.getenv("SMTP_HOST", "")
+SMTP_PORT = os.getenv("SMTP_PORT", "587")
+SMTP_USER = os.getenv("SMTP_USER", "")
+SMTP_PASS = os.getenv("SMTP_PASS", "")
+SMTP_FROM = os.getenv("SMTP_FROM", "")
+
+REMOTE_API = "/var/www/html/enterprise-qa/API"
+REMOTE_FE  = "/var/www/html/enterprise-qa/Frontend"
 
 LOCAL_API = Path(__file__).parent / "API"
 LOCAL_FE  = Path(__file__).parent / "Frontend"
@@ -59,6 +66,41 @@ def run_cmd(ssh: paramiko.SSHClient, cmd: str):
             print(f"STDERR: {err}")
     return exit_code
 
+def update_env_smtp(ssh: paramiko.SSHClient, remote_env_path: str):
+    """Read existing .env on server, patch SMTP lines, write back."""
+    sftp = ssh.open_sftp()
+
+    # Read existing .env (tolerate missing file)
+    try:
+        with sftp.open(remote_env_path, "r") as f:
+            lines = f.read().decode().splitlines()
+    except FileNotFoundError:
+        lines = []
+
+    smtp_keys = {"SMTP_HOST": SMTP_HOST, "SMTP_PORT": SMTP_PORT,
+                 "SMTP_USER": SMTP_USER, "SMTP_PASS": SMTP_PASS, "SMTP_FROM": SMTP_FROM}
+    updated = set()
+    new_lines = []
+    for line in lines:
+        key = line.split("=", 1)[0].strip()
+        if key in smtp_keys:
+            new_lines.append(f"{key}={smtp_keys[key]}")
+            updated.add(key)
+        else:
+            new_lines.append(line)
+
+    # Append any SMTP keys not already present
+    for key, val in smtp_keys.items():
+        if key not in updated:
+            new_lines.append(f"{key}={val}")
+
+    with sftp.open(remote_env_path, "w") as f:
+        f.write("\n".join(new_lines) + "\n")
+
+    sftp.close()
+    print(f"  .env updated with SMTP config at {remote_env_path}")
+
+
 def main():
     print("=== QA Environment Deployment ===")
     print("Connecting to server...")
@@ -81,6 +123,10 @@ def main():
     upload_dir(sftp, LOCAL_FE, REMOTE_FE)
 
     sftp.close()
+
+    print("\n=== Writing SMTP config to QA .env ===")
+    update_env_smtp(ssh, f"{REMOTE_API}/.env")
+
     print("\n=== Files uploaded. Building on QA server... ===")
 
     # Install API dependencies and build

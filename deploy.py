@@ -7,17 +7,17 @@ import stat
 import paramiko
 from pathlib import Path
 
-HOST = "64.235.43.187"
-PORT = 22
-USER = "root"
-PASSWORD = "6BH07w0xB48?~kW-F"
-PASSWORD2 = "6BH07w0xB48?~kW-F"
+HOST = os.getenv("DEPLOY_HOST", "64.235.43.187")
+PORT = int(os.getenv("DEPLOY_PORT", "22"))
+USER = os.getenv("DEPLOY_USER", "root")
+PASSWORD = os.getenv("DEPLOY_PASSWORD", "6BH07w0xB48?~kW-F")
+PASSWORD2 = os.getenv("DEPLOY_PASSWORD", "6BH07w0xB48?~kW-F")
 
 REMOTE_API = "/var/www/html/enterprise/api"
 REMOTE_FE  = "/var/www/html/enterprise/frontend"
 
-LOCAL_API = Path("C:/Users/UNITECH2/Desktop/enterprise/API")
-LOCAL_FE  = Path("C:/Users/UNITECH2/Desktop/enterprise/Frontend")
+LOCAL_API = Path(__file__).parent / "API"
+LOCAL_FE  = Path(__file__).parent / "Frontend"
 
 EXCLUDE = {
     "node_modules", ".git", ".next", "dist", ".angular",
