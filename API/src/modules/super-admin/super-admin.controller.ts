@@ -15,10 +15,16 @@ import { SuperAdminLoginDto } from './dto/super-admin-login.dto';
 import { CreateEnterpriseDto } from './dto/create-enterprise.dto';
 import { SuperAdminGuard } from '../../common/guards/super-admin.guard';
 import { Public } from '../../common/decorators/public.decorator';
+import { ResellersService } from '../resellers/resellers.service';
+import { CreateResellerDto } from '../resellers/dto/create-reseller.dto';
+import { SetPlanPricingDto } from '../resellers/dto/set-plan-pricing.dto';
 
 @Controller('super-admin')
 export class SuperAdminController {
-  constructor(private readonly superAdminService: SuperAdminService) {}
+  constructor(
+    private readonly superAdminService: SuperAdminService,
+    private readonly resellersService: ResellersService,
+  ) {}
 
   @Public()
   @Post('login')
@@ -279,6 +285,93 @@ export class SuperAdminController {
     @Body('resellerId') resellerId: number | null,
   ) {
     return this.superAdminService.reassignReseller(id, resellerId ?? null);
+  }
+
+  // ─── Resellers (super admin views/manages) ────────────────────────────────
+
+  @UseGuards(SuperAdminGuard)
+  @Get('resellers')
+  listResellers() {
+    return this.resellersService.findAll();
+  }
+
+  @UseGuards(SuperAdminGuard)
+  @Post('resellers')
+  createReseller(@Body() body: CreateResellerDto) {
+    return this.resellersService.create(body);
+  }
+
+  @UseGuards(SuperAdminGuard)
+  @Get('resellers/:id')
+  getResellerDetail(@Param('id', ParseIntPipe) id: number) {
+    return this.resellersService.findOne(id);
+  }
+
+  @UseGuards(SuperAdminGuard)
+  @Patch('resellers/:id/status')
+  updateResellerStatus(
+    @Param('id', ParseIntPipe) id: number,
+    @Body('status') status: string,
+  ) {
+    return this.resellersService.updateStatus(id, status);
+  }
+
+  @UseGuards(SuperAdminGuard)
+  @Get('resellers/:id/wallet')
+  getResellerWallet(@Param('id', ParseIntPipe) id: number) {
+    return this.resellersService.getWalletByResellerId(id);
+  }
+
+  @UseGuards(SuperAdminGuard)
+  @Post('resellers/:id/wallet/credit')
+  creditResellerWallet(
+    @Param('id', ParseIntPipe) id: number,
+    @Body('amount') amount: number,
+    @Body('description') description?: string,
+  ) {
+    return this.resellersService.creditWallet(id, amount, description);
+  }
+
+  @UseGuards(SuperAdminGuard)
+  @Get('resellers/:id/tenants')
+  getResellerTenants(@Param('id', ParseIntPipe) id: number) {
+    return this.resellersService.getMyTenants(id);
+  }
+
+  @UseGuards(SuperAdminGuard)
+  @Get('resellers/:id/earnings')
+  getResellerEarnings(@Param('id', ParseIntPipe) id: number) {
+    return this.resellersService.getMyCommissions(id);
+  }
+
+  @UseGuards(SuperAdminGuard)
+  @Get('resellers/:id/plan-pricing')
+  getResellerPlanPricing(@Param('id', ParseIntPipe) id: number) {
+    return this.resellersService.getPlanPricing(id);
+  }
+
+  @UseGuards(SuperAdminGuard)
+  @Post('resellers/:id/plan-pricing')
+  setResellerPlanPricing(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: SetPlanPricingDto,
+  ) {
+    return this.resellersService.setPlanPricing(id, body);
+  }
+
+  @UseGuards(SuperAdminGuard)
+  @Get('resellers/:id/report')
+  getResellerReport(@Param('id', ParseIntPipe) id: number) {
+    return this.resellersService.getReport(id);
+  }
+
+  @UseGuards(SuperAdminGuard)
+  @Post('resellers/:id/assign-plan')
+  assignPlanToReseller(
+    @Param('id', ParseIntPipe) id: number,
+    @Body('planId', ParseIntPipe) planId: number,
+  ) {
+    return this.resellersService.assignPlanToReseller(id, planId);
   }
 
   @UseGuards(SuperAdminGuard)

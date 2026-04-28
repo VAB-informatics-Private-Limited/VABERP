@@ -181,6 +181,7 @@ export default function EnterprisesPage() {
         businessName: values.businessName,
         email: values.email,
         mobile: values.mobile,
+        password: values.password,
         contactPerson: values.contactPerson,
         address: values.address,
         city: values.city,
@@ -195,9 +196,12 @@ export default function EnterprisesPage() {
         paymentReference: values.paymentReference,
         paymentNotes: values.paymentNotes,
       });
+      const wasGenerated = res.data?.passwordWasGenerated;
       message.success(
-        `Enterprise created. Temporary password: ${res.data.temporaryPassword}`,
-        10
+        wasGenerated
+          ? `Enterprise created. Auto-generated password: ${res.data.temporaryPassword}`
+          : 'Enterprise created with the password you provided.',
+        10,
       );
       setDrawerOpen(false);
       form.resetFields();
@@ -291,43 +295,45 @@ export default function EnterprisesPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col gap-3 mb-6 sm:flex-row sm:items-center sm:justify-between">
         <Title level={4} className="!mb-0">
           Enterprises
         </Title>
-        <Space>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           <Input
             placeholder="Search by name or email"
             prefix={<SearchOutlined />}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            style={{ width: 280 }}
             allowClear
+            className="w-full sm:w-72"
           />
           <Button
             type="primary"
             icon={<PlusOutlined />}
             onClick={() => setDrawerOpen(true)}
+            className="w-full sm:w-auto"
           >
             Add Enterprise
           </Button>
-        </Space>
+        </div>
       </div>
 
-      <Card>
+      <Card bodyStyle={{ padding: 12 }}>
         <Table
           columns={columns}
           dataSource={filtered}
           rowKey="id"
           loading={loading}
           size="small"
-          pagination={{ pageSize: 20, showSizeChanger: true }}
+          pagination={{ pageSize: 20, showSizeChanger: true, responsive: true }}
+          scroll={{ x: 'max-content' }}
         />
       </Card>
 
       <Drawer
         title="Add New Enterprise"
-        width={720}
+        width="min(720px, 100vw)"
         open={drawerOpen}
         onClose={() => {
           setDrawerOpen(false);
@@ -349,7 +355,7 @@ export default function EnterprisesPage() {
             Business Information
           </Divider>
 
-          <div className="grid grid-cols-2 gap-x-4">
+          <div className="grid grid-cols-1 gap-x-4 sm:grid-cols-2">
             <Form.Item name="businessName" label="Business Name" rules={[{ required: true }]}>
               <Input />
             </Form.Item>
@@ -361,6 +367,18 @@ export default function EnterprisesPage() {
             </Form.Item>
             <Form.Item name="contactPerson" label="Contact Person">
               <Input />
+            </Form.Item>
+            <Form.Item
+              name="password"
+              label="Login Password"
+              rules={[
+                { required: true, message: 'Please choose a password for the enterprise' },
+                { min: 8, message: 'Password must be at least 8 characters' },
+              ]}
+              extra="The enterprise will use this password to log in."
+              className="col-span-2"
+            >
+              <Input.Password placeholder="Enter a password (min 8 characters)" autoComplete="new-password" />
             </Form.Item>
             <Form.Item name="address" label="Address" className="col-span-2">
               <Input />
@@ -389,7 +407,7 @@ export default function EnterprisesPage() {
             Subscription
           </Divider>
 
-          <div className="grid grid-cols-2 gap-x-4">
+          <div className="grid grid-cols-1 gap-x-4 sm:grid-cols-2">
             <Form.Item name="planId" label="Subscription Plan" rules={[{ required: true }]} className="col-span-2">
               <Select placeholder="Select a plan">
                 {plans.map((p) => (
@@ -406,7 +424,7 @@ export default function EnterprisesPage() {
       {/* Edit Enterprise Drawer */}
       <Drawer
         title="Edit Enterprise"
-        width={720}
+        width="min(720px, 100vw)"
         open={editDrawerOpen}
         onClose={() => {
           setEditDrawerOpen(false);
@@ -428,7 +446,7 @@ export default function EnterprisesPage() {
           <Divider orientation="left" orientationMargin={0}>
             Business Information
           </Divider>
-          <div className="grid grid-cols-2 gap-x-4">
+          <div className="grid grid-cols-1 gap-x-4 sm:grid-cols-2">
             <Form.Item name="businessName" label="Business Name" rules={[{ required: true }]}>
               <Input />
             </Form.Item>

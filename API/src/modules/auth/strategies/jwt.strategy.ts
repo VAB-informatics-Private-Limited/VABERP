@@ -18,12 +18,17 @@ export interface JwtPayload {
   name?: string;
 }
 
-// Extract JWT from httpOnly cookie (preferred) or Authorization: Bearer header (backward compat).
+// Prefer Authorization: Bearer header when explicitly set by the client, then
+// fall back to the httpOnly access_token cookie. This avoids a stale main-app
+// cookie shadowing a freshly issued super-admin / reseller bearer token when
+// both auth surfaces are used in the same browser.
 const extractJwtFromRequest = (req: Request): string | null => {
+  const bearer = ExtractJwt.fromAuthHeaderAsBearerToken()(req);
+  if (bearer) return bearer;
   if (req?.cookies && req.cookies.access_token) {
     return req.cookies.access_token;
   }
-  return ExtractJwt.fromAuthHeaderAsBearerToken()(req);
+  return null;
 };
 
 @Injectable()

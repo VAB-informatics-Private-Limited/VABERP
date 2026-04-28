@@ -26,6 +26,11 @@ Thumbs.db
 
 # TypeScript build info
 *.tsbuildinfo
+
+# Generated Office docs (kept locally only)
+*.docx
+*.xlsx
+~$*
 check_qa_contents.py
 check_server_dirs.py
 compare_dev_qa.py

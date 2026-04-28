@@ -1,4 +1,4 @@
-import { IsString, IsEmail, IsOptional, IsNumber, IsNotEmpty } from 'class-validator';
+import { IsString, IsEmail, IsOptional, IsNumber, IsNotEmpty, MinLength } from 'class-validator';
 
 export class CreateEnterpriseDto {
   @IsString()
@@ -11,6 +11,12 @@ export class CreateEnterpriseDto {
   @IsString()
   @IsNotEmpty()
   mobile: string;
+
+  // Optional. If omitted, backend auto-generates a random temporary password.
+  @IsString()
+  @IsOptional()
+  @MinLength(8)
+  password?: string;
 
   @IsString()
   @IsOptional()
