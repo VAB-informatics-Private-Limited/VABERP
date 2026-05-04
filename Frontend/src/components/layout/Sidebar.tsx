@@ -430,6 +430,21 @@ export function Sidebar({ collapsed, inDrawer, onMenuClick }: SidebarProps) {
     setOpenKeys(latest ? [latest] : []);
   };
 
+  // After a submenu opens, scroll its expanded children into view so the user
+  // doesn't have to manually scroll when the menu is near the bottom of the sidebar.
+  // The 320ms delay matches AntD's inline submenu open animation.
+  useEffect(() => {
+    if (openKeys.length === 0) return;
+    const timer = setTimeout(() => {
+      const openSubmenus = document.querySelectorAll<HTMLElement>(
+        '.sidebar-menu .ant-menu-submenu-open > .ant-menu-sub',
+      );
+      const lastOpen = openSubmenus[openSubmenus.length - 1];
+      lastOpen?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }, 320);
+    return () => clearTimeout(timer);
+  }, [openKeys]);
+
   const brandingData = useBrandingStore((s) => s.branding);
   const brandLogo = brandingData?.logo_url || '/logo-icon.png';
   const brandLogoSmall = brandingData?.logo_small_url || brandingData?.logo_url || '/logo-icon.png';

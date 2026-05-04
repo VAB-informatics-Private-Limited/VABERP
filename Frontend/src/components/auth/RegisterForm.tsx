@@ -214,7 +214,7 @@ export function RegisterForm() {
 
       <Form.Item className="mb-0 mt-3">
         <Button type="primary" htmlType="submit" loading={loading} block size="large">
-          Register Business
+          Business Enquiry
         </Button>
       </Form.Item>
 

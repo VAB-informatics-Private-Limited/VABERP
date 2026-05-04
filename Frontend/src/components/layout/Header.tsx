@@ -9,6 +9,7 @@ import {
   SettingOutlined,
   BellOutlined,
   CheckOutlined,
+  UserOutlined,
 } from '@ant-design/icons';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/stores/authStore';
@@ -257,6 +258,12 @@ export function Header({ collapsed, onToggle }: HeaderProps) {
       disabled: true,
     },
     { type: 'divider' },
+    {
+      key: 'profile',
+      icon: <UserOutlined />,
+      label: 'My Profile',
+      onClick: () => router.push('/profile'),
+    },
     {
       key: 'settings',
       icon: <SettingOutlined />,

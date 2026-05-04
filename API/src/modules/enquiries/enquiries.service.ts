@@ -35,6 +35,7 @@ export class EnquiriesService {
     dataStartDate?: Date | null,
     ownDataOnly = false,
     currentUserId?: number,
+    source?: string,
   ) {
     const pageNum = Number(page) || 1;
     const limitNum = Number(limit) || 20;
@@ -58,6 +59,10 @@ export class EnquiriesService {
 
     if (interestStatus) {
       query.andWhere('enquiry.interestStatus = :interestStatus', { interestStatus });
+    }
+
+    if (source) {
+      query.andWhere('enquiry.source = :source', { source });
     }
 
     if (assignedTo) {

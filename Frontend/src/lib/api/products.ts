@@ -113,7 +113,7 @@ export async function addCategory(data: CategoryFormData & { enterprise_id?: num
     categoryName: data.category_name,
     hsnCode: data.hsn_code || '',
     description: data.description,
-    status: data.status,
+    status: data.status || 'active',
   };
   const response = await apiClient.post<ApiResponse>('/products/categories', payload);
   return response.data;

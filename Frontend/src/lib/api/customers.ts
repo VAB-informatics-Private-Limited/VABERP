@@ -56,10 +56,21 @@ export async function getCustomerById(id: number, _enterpriseId?: number): Promi
   };
 }
 
+// Strip empty strings from optional fields so backend's class-validator
+// (e.g. @IsEmail on email, @IsOptional on others) doesn't choke on "".
+function clean<T extends Record<string, unknown>>(payload: T): T {
+  const out = {} as T;
+  for (const [k, v] of Object.entries(payload)) {
+    if (typeof v === 'string' && v.trim() === '') continue;
+    (out as Record<string, unknown>)[k] = v;
+  }
+  return out;
+}
+
 // Add New Customer (enterprise_id extracted from JWT)
 export async function addCustomer(data: CustomerFormData & { enterprise_id?: number }): Promise<ApiResponse> {
   // Map frontend field names to backend entity field names
-  const payload = {
+  const payload = clean({
     customerName: data.customer_name,
     businessName: data.business_name,
     mobile: data.mobile,
@@ -70,8 +81,8 @@ export async function addCustomer(data: CustomerFormData & { enterprise_id?: num
     pincode: data.pincode,
     gstNumber: data.gst_number,
     contactPerson: data.contact_person,
-    status: data.status,
-  };
+    status: data.status || 'active',
+  });
   const response = await apiClient.post<ApiResponse>('/customers', payload);
   return response.data;
 }
@@ -80,20 +91,19 @@ export async function addCustomer(data: CustomerFormData & { enterprise_id?: num
 export async function updateCustomer(data: CustomerFormData & { id: number; enterprise_id?: number }): Promise<ApiResponse> {
   const { id, enterprise_id, ...formData } = data;
   // Map frontend field names to backend entity field names
-  const payload = {
+  const payload = clean({
     customerName: formData.customer_name,
-    businessName: formData.business_name || '',
+    businessName: formData.business_name,
     mobile: formData.mobile,
-    email: formData.email || '',
-    address: formData.address || '',
-    city: formData.city || '',
-    state: formData.state || '',
-    pincode: formData.pincode || '',
-    gstNumber: formData.gst_number || '',
-    contactPerson: formData.contact_person || '',
+    email: formData.email,
+    address: formData.address,
+    city: formData.city,
+    state: formData.state,
+    pincode: formData.pincode,
+    gstNumber: formData.gst_number,
+    contactPerson: formData.contact_person,
     status: formData.status || 'active',
-  };
-  console.log('API updateCustomer - sending PATCH /customers/' + id, payload);
+  });
   const response = await apiClient.patch<ApiResponse>(`/customers/${id}`, payload);
   return response.data;
 }

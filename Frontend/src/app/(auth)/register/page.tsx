@@ -31,7 +31,7 @@ export default function RegisterPage() {
           </div>
         </div>
         <Title level={5} className="!mb-0.5 !text-gray-900 !text-[17px] !font-semibold">
-          Register Your Business
+          Business Enquiry
         </Title>
         <Text type="secondary" className="!text-[12px]">
           Create an account to get started

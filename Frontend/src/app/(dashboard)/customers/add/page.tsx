@@ -24,8 +24,9 @@ export default function AddCustomerPage() {
       queryClient.invalidateQueries({ queryKey: ['customers'] });
       router.push('/customers');
     },
-    onError: () => {
-      message.error('Failed to add customer');
+    onError: (error: any) => {
+      const msg = error?.response?.data?.message;
+      message.error(Array.isArray(msg) ? msg[0] : msg || 'Failed to add customer');
     },
   });
 

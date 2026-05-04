@@ -4,6 +4,7 @@ import { Table, Button, Tag, Space, Popconfirm, message } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import dayjs from 'dayjs';
 import { Customer } from '@/types/customer';
 import { deleteCustomer } from '@/lib/api/customers';
 import { useAuthStore, usePermissions } from '@/stores/authStore';
@@ -98,6 +99,22 @@ export function CustomerTable({ data, loading, pagination }: CustomerTableProps)
           {status?.toUpperCase()}
         </Tag>
       ),
+    },
+    {
+      title: 'Created Date',
+      dataIndex: 'created_date',
+      key: 'created_date',
+      sorter: (a, b) => {
+        const da = a.created_date ? dayjs(a.created_date).valueOf() : 0;
+        const db = b.created_date ? dayjs(b.created_date).valueOf() : 0;
+        return da - db;
+      },
+      defaultSortOrder: 'descend',
+      render: (val) => {
+        if (!val) return '-';
+        const dj = dayjs(val);
+        return dj.isValid() ? dj.format('DD MMM YYYY') : '-';
+      },
     },
     {
       title: 'Actions',

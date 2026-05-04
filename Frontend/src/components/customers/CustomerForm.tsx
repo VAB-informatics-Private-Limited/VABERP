@@ -113,7 +113,17 @@ export function CustomerForm({ initialData, onSubmit, loading, submitText = 'Sav
                 name="mobile"
                 control={control}
                 render={({ field }) => (
-                  <Input {...field} placeholder="10-digit mobile" size="large" maxLength={10} />
+                  <Input
+                    {...field}
+                    placeholder="10-digit mobile starting with 6/7/8/9"
+                    size="large"
+                    maxLength={10}
+                    inputMode="numeric"
+                    onChange={(e) => {
+                      const digitsOnly = e.target.value.replace(/\D/g, '').slice(0, 10);
+                      field.onChange(digitsOnly);
+                    }}
+                  />
                 )}
               />
             </Form.Item>

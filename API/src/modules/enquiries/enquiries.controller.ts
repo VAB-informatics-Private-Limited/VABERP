@@ -30,6 +30,7 @@ export class EnquiriesController {
   @ApiQuery({ name: 'assignedTo', required: false })
   @ApiQuery({ name: 'fromDate', required: false })
   @ApiQuery({ name: 'toDate', required: false })
+  @ApiQuery({ name: 'source', required: false })
   @RequirePermission('enquiry', 'enquiries', 'view')
   async findAll(
     @EnterpriseId() enterpriseId: number,
@@ -43,6 +44,7 @@ export class EnquiriesController {
     @Query('assignedTo') assignedTo?: number,
     @Query('fromDate') fromDate?: string,
     @Query('toDate') toDate?: string,
+    @Query('source') source?: string,
   ) {
     return this.enquiriesService.findAll(
       enterpriseId,
@@ -56,6 +58,7 @@ export class EnquiriesController {
       dataStartDate,
       ownDataOnly,
       currentUserId,
+      source,
     );
   }
 

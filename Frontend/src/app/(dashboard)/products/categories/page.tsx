@@ -72,6 +72,7 @@ export default function CategoriesPage() {
     } else {
       setEditingCategory(null);
       form.resetFields();
+      form.setFieldsValue({ status: 'active' });
     }
     setModalOpen(true);
   };

@@ -150,14 +150,6 @@ export default function ModulePage({ params }: { params: { slug: string } }) {
               transition={{ duration: 0.4, delay: 0.2 }}
               className="mt-6 flex flex-wrap gap-2.5"
             >
-              <Link href="/register" style={{ textDecoration: 'none' }}>
-                <button
-                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full text-[13px] font-semibold text-white transition-all hover:-translate-y-0.5"
-                  style={{ background: NAVY }}
-                >
-                  Get started <IconArrowRight size={13} />
-                </button>
-              </Link>
               <Link href="/landing#system-components" style={{ textDecoration: 'none' }}>
                 <button
                   className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-full text-[13px] font-semibold transition-all hover:bg-white"
