@@ -42,6 +42,9 @@ export class Enterprise {
   @Column({ name: 'cin_number', nullable: true })
   cinNumber: string;
 
+  @Column({ nullable: true })
+  industry: string;
+
   @Column({ name: 'contact_person', nullable: true })
   contactPerson: string;
 

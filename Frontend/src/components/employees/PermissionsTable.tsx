@@ -352,7 +352,7 @@ export function PermissionsTable({ permissions, onChange }: PermissionsTableProp
                   key={action.key}
                   className={`flex items-center gap-2 px-3 py-2 rounded-lg border cursor-pointer transition-all select-none ${
                     checked
-                      ? 'border-blue-300 bg-blue-50'
+                      ? 'border-brand bg-brand-soft'
                       : 'border-gray-200 bg-white hover:border-gray-300'
                   }`}
                   onClick={() => handleActionToggle(mod.key, sub.key, sub.actions, action.key, !checked)}

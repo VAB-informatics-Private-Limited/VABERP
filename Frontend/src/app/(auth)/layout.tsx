@@ -8,14 +8,19 @@ export default function AuthLayout({
   children: React.ReactNode;
 }) {
   const branding = useBrandingStore((s) => s.branding);
-
-  const bgStyle: React.CSSProperties = branding?.login_bg_image_url
-    ? { backgroundImage: `url(${branding.login_bg_image_url})`, backgroundSize: 'cover', backgroundPosition: 'center' }
-    : {};
+  const bgUrl = branding?.login_bg_image_url || '/login-bg.jpg';
 
   return (
-    <div className="login-container" style={bgStyle}>
-      {children}
+    <div className="auth-shell">
+      <div
+        className="auth-bg"
+        style={{ backgroundImage: `url(${bgUrl})` }}
+        aria-hidden
+      />
+      <div className="auth-bg-veil" aria-hidden />
+      <div className="auth-content">
+        {children}
+      </div>
     </div>
   );
 }

@@ -15,6 +15,7 @@ import { MenuPermission } from '../employees/entities/menu-permission.entity';
 import {
   EmployeeLoginDto,
   EnterpriseLoginDto,
+  QuickSignupDto,
   RegisterEnterpriseDto,
   ResetPasswordDto,
   VerifyEnterpriseEmailDto,
@@ -186,7 +187,22 @@ export class AuthService {
       emailVerified: true,
     });
 
-    // Activate pending enterprises on successful OTP login
+    // New signup flow: post-OTP we mark email verified and move to pending_review.
+    // We deliberately do NOT issue a JWT here — the user has no account until
+    // super-admin approval, at which point credentials are emailed.
+    if (enterprise.status === 'pending_email_verification') {
+      await this.enterpriseRepository.update(enterprise.id, { status: 'pending_review' });
+      return {
+        status: 'success',
+        message: 'Email verified. Our partners will contact you shortly.',
+        data: {
+          verified: true,
+          requiresApproval: true,
+        },
+      };
+    }
+
+    // Legacy payment flow: auto-promote pending → active and issue JWT below.
     if (enterprise.status === 'pending') {
       await this.enterpriseRepository.update(enterprise.id, { status: 'active' });
       enterprise.status = 'active';
@@ -237,6 +253,22 @@ export class AuthService {
 
     if (enterprise.status === 'blocked') {
       throw new UnauthorizedException('Your enterprise account is blocked');
+    }
+
+    // Signup-flow statuses don't have credentials yet — deny login with a
+    // clear message rather than a generic "invalid password".
+    if (enterprise.status === 'pending_email_verification') {
+      throw new UnauthorizedException('Please verify your email first.');
+    }
+    if (enterprise.status === 'pending_review') {
+      throw new UnauthorizedException('Your registration is awaiting approval. Our partners will contact you shortly.');
+    }
+    if (enterprise.status === 'rejected') {
+      throw new UnauthorizedException('Your registration was not approved. Please contact support.');
+    }
+
+    if (!enterprise.password) {
+      throw new UnauthorizedException('No login credentials issued yet.');
     }
 
     const isPasswordValid = await bcrypt.compare(dto.password, enterprise.password);
@@ -301,6 +333,74 @@ export class AuthService {
         expiryDate: enterprise.expiryDate,
         planId: enterprise.planId,
         status: enterprise.status,
+      },
+    };
+  }
+
+  // Lightweight signup. Collects only business name + contact info — no password.
+  // Enterprise lands in 'pending_email_verification' until OTP is verified;
+  // OTP verify moves them to 'pending_review'. Super-admin approval generates
+  // login credentials and emails them.
+  async quickSignup(dto: QuickSignupDto) {
+    const existingEmail = await this.enterpriseRepository.findOne({
+      where: { email: dto.businessEmail },
+    });
+
+    if (existingEmail) {
+      throw new ConflictException('Email already registered');
+    }
+
+    const emailOtp = Math.floor(100000 + Math.random() * 900000).toString();
+
+    const enterprise = this.enterpriseRepository.create({
+      businessName: dto.businessName,
+      email: dto.businessEmail,
+      mobile: dto.businessMobile,
+      industry: dto.industry,
+      // password intentionally not set — generated on super-admin approval
+      status: 'pending_email_verification',
+      emailOtp,
+    });
+
+    await this.enterpriseRepository.save(enterprise);
+
+    if (this.emailService.isConfigured()) {
+      // OTP to user
+      await this.emailService.sendEmail({
+        to: dto.businessEmail,
+        subject: 'VAB Enterprise — Verify Your Email',
+        body:
+          `Welcome to VAB Enterprise!\n\n` +
+          `Your email verification code is: ${emailOtp}\n\n` +
+          `Enter this code to continue.\n\n` +
+          `Regards,\nVAB Enterprise Team`,
+      });
+
+      // Notify super admin (uses SUPER_ADMIN_EMAIL env var; silently skipped if not set)
+      const superAdminEmail = process.env.SUPER_ADMIN_EMAIL;
+      if (superAdminEmail) {
+        const reviewUrl = (process.env.APP_URL || 'https://vaberp.com') + '/superadmin/enterprises';
+        await this.emailService.sendEmail({
+          to: superAdminEmail,
+          subject: `New signup pending review — ${dto.businessName}`,
+          body:
+            `A new business has signed up and is awaiting review.\n\n` +
+            `Business Name: ${dto.businessName}\n` +
+            `Industry: ${dto.industry}\n` +
+            `Email: ${dto.businessEmail}\n` +
+            `Mobile: ${dto.businessMobile}\n\n` +
+            `Review at: ${reviewUrl}\n\n` +
+            `VAB Enterprise`,
+        }).catch((err) => console.error('[super-admin notify failed]', err?.message || err));
+      }
+    }
+
+    return {
+      status: 'success',
+      message: 'Registration received. Please verify your email — our partners will contact you shortly after.',
+      data: {
+        email: dto.businessEmail,
+        mobile: dto.businessMobile,
       },
     };
   }

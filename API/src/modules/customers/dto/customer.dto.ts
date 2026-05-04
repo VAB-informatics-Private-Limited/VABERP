@@ -58,6 +58,12 @@ export class CreateCustomerDto {
 
   @ApiProperty({ required: false })
   @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  contactPerson?: string;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
   @IsNumber()
   sourceEnquiryId?: number;
 
@@ -121,6 +127,12 @@ export class UpdateCustomerDto {
   @IsString()
   @MaxLength(10)
   pincode?: string;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  contactPerson?: string;
 
   @ApiProperty({ required: false })
   @IsOptional()

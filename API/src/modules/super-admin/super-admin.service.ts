@@ -15,6 +15,7 @@ import { SupportTicket } from './entities/support-ticket.entity';
 import { SubscriptionPlan } from './entities/subscription-plan.entity';
 import { PlatformPayment } from './entities/platform-payment.entity';
 import { Coupon } from '../coupons/entities/coupon.entity';
+import { EmailService } from '../email/email.service';
 
 @Injectable()
 export class SuperAdminService implements OnApplicationBootstrap {
@@ -42,6 +43,7 @@ export class SuperAdminService implements OnApplicationBootstrap {
     @InjectRepository(Coupon)
     private couponRepository: Repository<Coupon>,
     private jwtService: JwtService,
+    private emailService: EmailService,
   ) {}
 
   async onApplicationBootstrap() {
@@ -67,6 +69,9 @@ export class SuperAdminService implements OnApplicationBootstrap {
     `);
     await this.superAdminRepository.manager.query(`
       ALTER TABLE enterprises ADD COLUMN IF NOT EXISTS task_visibility_unrestricted BOOLEAN NOT NULL DEFAULT FALSE
+    `);
+    await this.superAdminRepository.manager.query(`
+      ALTER TABLE enterprises ADD COLUMN IF NOT EXISTS industry VARCHAR
     `);
     await this.superAdminRepository.manager.query(`
       ALTER TABLE employees ADD COLUMN IF NOT EXISTS is_reporting_head BOOLEAN NOT NULL DEFAULT FALSE
@@ -247,7 +252,10 @@ export class SuperAdminService implements OnApplicationBootstrap {
 
   async getAllEnterprises() {
     const enterprises = await this.enterpriseRepository.find({
-      select: ['id', 'businessName', 'email', 'mobile', 'status', 'expiryDate', 'createdDate'],
+      select: [
+        'id', 'businessName', 'email', 'mobile', 'status', 'expiryDate', 'createdDate',
+        'emailVerified', 'mobileVerified', 'industry',
+      ],
       order: { createdDate: 'DESC' },
     });
 
@@ -1168,8 +1176,47 @@ export class SuperAdminService implements OnApplicationBootstrap {
   async approveEnterprise(enterpriseId: number) {
     const enterprise = await this.enterpriseRepository.findOne({ where: { id: enterpriseId } });
     if (!enterprise) throw new NotFoundException('Enterprise not found');
+
+    // New signup-review flow: super admin gates new lightweight signups.
+    // On approve we generate login credentials (no password was set at signup)
+    // and email them to the user along with the approval notice.
+    if (enterprise.status === 'pending_review') {
+      // Temp password: mobile last 4 + first 3 chars of business name (lowercased).
+      // User is expected to change this on first login.
+      const tempPassword =
+        (enterprise.mobile || '0000').slice(-4) +
+        (enterprise.businessName || 'vab').replace(/\s+/g, '').slice(0, 3).toLowerCase();
+      const hashedPassword = await bcrypt.hash(tempPassword, 10);
+
+      await this.enterpriseRepository.update(enterpriseId, {
+        status: 'approved_pending_completion',
+        password: hashedPassword,
+      });
+
+      if (this.emailService.isConfigured()) {
+        const loginUrl = (process.env.APP_URL || 'https://vaberp.com') + '/login';
+        await this.emailService.sendEmail({
+          to: enterprise.email,
+          subject: 'VAB Enterprise — Your account has been approved',
+          body:
+            `Hello ${enterprise.businessName},\n\n` +
+            `Good news — your VAB Enterprise account has been approved.\n\n` +
+            `You can now log in with:\n` +
+            `  Email:    ${enterprise.email}\n` +
+            `  Password: ${tempPassword}\n\n` +
+            `Sign in here: ${loginUrl}\n\n` +
+            `On first login you'll be prompted to complete your business registration.\n` +
+            `Please change your password from Settings after logging in.\n\n` +
+            `Regards,\nVAB Enterprise Team`,
+        }).catch((err) => console.error('[approve email failed]', err?.message || err));
+      }
+
+      return { message: 'Enterprise approved. Login credentials emailed to user.' };
+    }
+
+    // Legacy payment-based approval flow (kept intact)
     if (enterprise.status !== 'pending') {
-      throw new BadRequestException('Enterprise is not in pending state');
+      throw new BadRequestException('Enterprise is not in a state that can be approved');
     }
 
     const payment = await this.platformPaymentRepository.findOne({ where: { enterpriseId } });
@@ -1190,8 +1237,29 @@ export class SuperAdminService implements OnApplicationBootstrap {
   async rejectEnterprise(enterpriseId: number) {
     const enterprise = await this.enterpriseRepository.findOne({ where: { id: enterpriseId } });
     if (!enterprise) throw new NotFoundException('Enterprise not found');
+
+    // New signup-review flow
+    if (enterprise.status === 'pending_review') {
+      await this.enterpriseRepository.update(enterpriseId, { status: 'rejected' });
+
+      if (this.emailService.isConfigured()) {
+        await this.emailService.sendEmail({
+          to: enterprise.email,
+          subject: 'VAB Enterprise — Registration update',
+          body:
+            `Hello ${enterprise.businessName},\n\n` +
+            `Thank you for your interest in VAB Enterprise. After review, we are unable to approve your account at this time.\n\n` +
+            `If you believe this is in error, please contact support.\n\n` +
+            `Regards,\nVAB Enterprise Team`,
+        }).catch((err) => console.error('[reject email failed]', err?.message || err));
+      }
+
+      return { message: 'Enterprise rejected. User notified.' };
+    }
+
+    // Legacy payment-based rejection flow (kept intact)
     if (enterprise.status !== 'pending') {
-      throw new BadRequestException('Enterprise is not in pending state');
+      throw new BadRequestException('Enterprise is not in a state that can be rejected');
     }
 
     const payment = await this.platformPaymentRepository.findOne({ where: { enterpriseId } });

@@ -104,7 +104,7 @@ export class WasteInventoryService {
 
     // Attach recent logs to each row so the UI can show how the aggregate was built.
     const ids = data.map((r) => r.id);
-    let logsByInv = new Map<number, WasteInventoryLog[]>();
+    let logsByInv = new Map<number, any[]>();
     if (ids.length > 0) {
       const logs = await this.logRepo
         .createQueryBuilder('log')
@@ -112,9 +112,55 @@ export class WasteInventoryService {
         .where('log.inventory_id IN (:...ids)', { ids })
         .orderBy('log.created_date', 'DESC')
         .getMany();
+
+      // Resolve job-card / sales-order context for logs that reference a job card,
+      // so the UI can show "JC-2024-0007 · PO ORD-123 · Acme Ltd" instead of just "JC #15".
+      const jobCardIds = Array.from(
+        new Set(
+          logs
+            .filter((l) => l.referenceType === 'job_card' && l.referenceId)
+            .map((l) => l.referenceId as number),
+        ),
+      );
+      const jcInfoById = new Map<number, { jobNumber?: string; jobName?: string; orderNumber?: string; customerName?: string; purchaseOrderId?: number }>();
+      if (jobCardIds.length > 0) {
+        const jcRows = await this.dataSource
+          .createQueryBuilder()
+          .select('jc.id', 'id')
+          .addSelect('jc.job_number', 'jobNumber')
+          .addSelect('jc.job_name', 'jobName')
+          .addSelect('jc.customer_name', 'customerName')
+          .addSelect('jc.sales_order_id', 'purchaseOrderId')
+          .addSelect('so.order_number', 'orderNumber')
+          .from('job_cards', 'jc')
+          .leftJoin('sales_orders', 'so', 'so.id = jc.sales_order_id')
+          .where('jc.id IN (:...jobCardIds)', { jobCardIds })
+          .getRawMany();
+        for (const r of jcRows) {
+          jcInfoById.set(Number(r.id), {
+            jobNumber: r.jobNumber,
+            jobName: r.jobName,
+            orderNumber: r.orderNumber,
+            customerName: r.customerName,
+            purchaseOrderId: r.purchaseOrderId ? Number(r.purchaseOrderId) : undefined,
+          });
+        }
+      }
+
       for (const l of logs) {
+        const enrichedLog: any = { ...l };
+        if (l.referenceType === 'job_card' && l.referenceId) {
+          const info = jcInfoById.get(l.referenceId);
+          if (info) {
+            enrichedLog.jobCardNumber = info.jobNumber;
+            enrichedLog.jobCardName = info.jobName;
+            enrichedLog.purchaseOrderNumber = info.orderNumber;
+            enrichedLog.purchaseOrderId = info.purchaseOrderId;
+            enrichedLog.customerName = info.customerName;
+          }
+        }
         const arr = logsByInv.get(l.inventoryId) || [];
-        arr.push(l);
+        arr.push(enrichedLog);
         logsByInv.set(l.inventoryId, arr);
       }
     }

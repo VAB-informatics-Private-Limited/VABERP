@@ -149,7 +149,7 @@ export default function PurchaseOrdersPage() {
       key: 'order_number',
       render: (v, record) => (
         <div className="flex items-center gap-2">
-          <span className="font-semibold text-blue-600 flex items-center gap-1">
+          <span className="font-semibold text-brand flex items-center gap-1">
             <ShoppingCartOutlined />
             {v}
           </span>
@@ -306,7 +306,7 @@ export default function PurchaseOrdersPage() {
             title={<span className="text-gray-500 font-medium">Total PO Value</span>}
             value={paymentSummary.totalPOValue}
             precision={2}
-            prefix={<DollarOutlined className="text-blue-500" />}
+            prefix={<DollarOutlined className="text-brand" />}
             formatter={(val) => fmt(Number(val))}
           />
           <div className="text-xs text-gray-400 mt-1">{paymentSummary.totalOrders} Purchase Orders</div>

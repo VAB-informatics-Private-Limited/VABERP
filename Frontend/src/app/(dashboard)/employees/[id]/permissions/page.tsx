@@ -151,7 +151,7 @@ export default function EmployeePermissionsPage() {
       {employee && (
         <div className="mb-5 p-4 bg-white rounded-xl border border-gray-100 card-shadow">
           <div className="flex flex-wrap items-center gap-6">
-            <div className="flex items-center justify-center w-12 h-12 rounded-full bg-blue-50 text-blue-500 text-xl">
+            <div className="flex items-center justify-center w-12 h-12 rounded-full bg-brand-soft text-brand text-xl">
               <UserOutlined />
             </div>
             <div className="flex-1 min-w-0">
@@ -231,7 +231,7 @@ export default function EmployeePermissionsPage() {
       >
         {/* Modal Header */}
         <div className="flex items-center gap-3 pb-4 border-b border-gray-100 mb-5">
-          <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-blue-50 text-blue-500">
+          <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-brand-soft text-brand">
             <DatabaseOutlined style={{ fontSize: 20 }} />
           </div>
           <div>

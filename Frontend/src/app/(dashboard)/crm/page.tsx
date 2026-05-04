@@ -64,7 +64,7 @@ export default function CrmPage() {
       <div className="flex flex-wrap justify-between items-start mb-6 gap-3">
         <div>
           <Title level={4} className="!mb-1 flex items-center gap-2">
-            <TeamOutlined style={{ color: '#2563eb' }} /> CRM Leads
+            <TeamOutlined style={{ color: 'var(--color-primary)' }} /> CRM Leads
           </Title>
           <p className="text-gray-500 text-sm">Manage your sales leads and follow-ups</p>
         </div>

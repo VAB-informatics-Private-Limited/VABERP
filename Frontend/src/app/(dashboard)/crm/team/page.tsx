@@ -138,7 +138,7 @@ export default function CrmTeamPage() {
       <div className="mb-6 flex items-start justify-between">
         <div>
           <Title level={4} className="!mb-1 flex items-center gap-2">
-            <TeamOutlined style={{ color: '#2563eb' }} /> Team Management
+            <TeamOutlined style={{ color: 'var(--color-primary)' }} /> Team Management
           </Title>
           <p className="text-gray-500 text-sm">Manage teams, hierarchy, and module leaders</p>
         </div>
@@ -166,7 +166,7 @@ export default function CrmTeamPage() {
                     className="card-shadow"
                     title={
                       <div className="flex items-center gap-2">
-                        <UserOutlined className="text-blue-500" />
+                        <UserOutlined className="text-brand" />
                         <span className="font-semibold">{manager.first_name} {manager.last_name}</span>
                         <Tag color="blue">Manager</Tag>
                         <Tag color="default">{members.length} member{members.length !== 1 ? 's' : ''}</Tag>
@@ -298,7 +298,7 @@ export default function CrmTeamPage() {
                           className="flex items-center gap-2 cursor-pointer hover:bg-slate-50 rounded px-1 py-0.5 group"
                           onClick={() => handleStartEditModule(mod.key)}
                         >
-                          <Avatar size={20} style={{ backgroundColor: '#2563eb', fontSize: 10 }}>
+                          <Avatar size={20} style={{ backgroundColor: 'var(--color-primary)', fontSize: 10 }}>
                             {leader.employee_name.charAt(0).toUpperCase()}
                           </Avatar>
                           <div className="flex-1 min-w-0">
@@ -311,7 +311,7 @@ export default function CrmTeamPage() {
                       ) : (
                         <button
                           onClick={() => handleStartEditModule(mod.key)}
-                          className="text-xs text-blue-500 hover:text-blue-700 flex items-center gap-1"
+                          className="text-xs text-brand hover:text-brand-dark flex items-center gap-1"
                         >
                           <PlusOutlined /> Assign leader
                         </button>
@@ -361,7 +361,7 @@ export default function CrmTeamPage() {
             />
           </div>
           {selectedManager && selectedMember && (
-            <p className="text-sm text-blue-600 bg-blue-50 rounded-lg px-3 py-2">
+            <p className="text-sm text-brand bg-brand-soft rounded-lg px-3 py-2">
               <strong>{getMemberName(selectedMember)}</strong> will report to <strong>{getMemberName(selectedManager)}</strong>
             </p>
           )}

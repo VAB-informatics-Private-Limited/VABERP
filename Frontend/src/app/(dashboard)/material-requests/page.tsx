@@ -135,7 +135,7 @@ export default function MaterialRequestsPage() {
       width: 165,
       render: (text, record) => (
         <div>
-          <Text strong style={{ color: '#1677ff', fontSize: 13 }}>{text}</Text>
+          <Text strong style={{ color: 'var(--color-primary)', fontSize: 13 }}>{text}</Text>
           {record.job_card_name && (
             <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>{record.job_card_name}</div>
           )}
@@ -327,7 +327,7 @@ export default function MaterialRequestsPage() {
               size="small"
               icon={<SendOutlined />}
               onClick={(e) => { e.stopPropagation(); router.push(`/material-requests/${record.id}`); }}
-              style={{ borderRadius: 6, borderColor: '#1677ff', color: '#1677ff' }}
+              style={{ borderRadius: 6, borderColor: 'var(--color-primary)', color: 'var(--color-primary)' }}
             >
               Issue
             </Button>

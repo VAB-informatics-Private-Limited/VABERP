@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { Layout, Menu, Badge } from 'antd';
 import {
   DashboardOutlined,
@@ -403,12 +404,31 @@ export function Sidebar({ collapsed, inDrawer, onMenuClick }: SidebarProps) {
   };
 
   const selectedKeys = [pathname];
-  const openKeys = menuItems
-    ?.filter((item): item is { key: string; children?: { key: string }[] } =>
-      Boolean(item && 'children' in item && item.children)
-    )
-    .filter((item) => item.children?.some((child) => pathname.startsWith(child.key)))
-    .map((item) => item.key) || [];
+
+  // Auto-derive which submenu the current route belongs to.
+  const routeOpenKey =
+    menuItems
+      ?.filter((item): item is { key: string; children?: { key: string }[] } =>
+        Boolean(item && 'children' in item && item.children)
+      )
+      .find((item) => item.children?.some((child) => pathname.startsWith(child.key)))
+      ?.key || null;
+
+  // Accordion: only one submenu open at a time (controlled).
+  const [openKeys, setOpenKeys] = useState<string[]>(routeOpenKey ? [routeOpenKey] : []);
+
+  // When the user navigates via a sidebar click, sync the open submenu to the new route.
+  useEffect(() => {
+    if (routeOpenKey) {
+      setOpenKeys((prev) => (prev[0] === routeOpenKey ? prev : [routeOpenKey]));
+    }
+  }, [routeOpenKey]);
+
+  const handleOpenChange: MenuProps['onOpenChange'] = (keys) => {
+    // Latest key the user just opened (the one not previously in openKeys).
+    const latest = keys.find((k) => !openKeys.includes(k));
+    setOpenKeys(latest ? [latest] : []);
+  };
 
   const brandingData = useBrandingStore((s) => s.branding);
   const brandLogo = brandingData?.logo_url || '/logo-icon.png';
@@ -417,14 +437,22 @@ export function Sidebar({ collapsed, inDrawer, onMenuClick }: SidebarProps) {
 
   const menuContent = (
     <>
-      <div className="h-16 flex items-center border-b border-slate-200 px-4">
+      <div
+        className="h-16 flex items-center px-4"
+        style={{ borderBottom: '1px solid var(--color-primary-soft)' }}
+      >
         {collapsed ? (
           <img src={brandLogoSmall} alt={brandName} className="w-8 h-8 object-contain mx-auto" />
         ) : (
           <div className="flex items-center gap-2.5">
             <img src={brandLogo} alt={brandName} className="w-8 h-8 object-contain flex-shrink-0" />
             <div className="flex flex-col leading-tight">
-              <span className="font-bold text-gray-800 text-sm tracking-tight">{brandName}</span>
+              <span
+                className="font-bold text-sm tracking-tight"
+                style={{ color: 'var(--sidebar-text)' }}
+              >
+                {brandName}
+              </span>
             </div>
           </div>
         )}
@@ -433,16 +461,25 @@ export function Sidebar({ collapsed, inDrawer, onMenuClick }: SidebarProps) {
       <Menu
         mode="inline"
         selectedKeys={selectedKeys}
-        defaultOpenKeys={openKeys}
+        openKeys={openKeys}
+        onOpenChange={handleOpenChange}
         onClick={handleMenuClick}
         items={menuItems}
         className="border-none sidebar-menu"
+        style={{ background: 'transparent' }}
       />
     </>
   );
 
   if (inDrawer) {
-    return <div className="h-full bg-white overflow-auto">{menuContent}</div>;
+    return (
+      <div
+        className="h-full overflow-auto"
+        style={{ background: 'var(--sidebar-bg)' }}
+      >
+        {menuContent}
+      </div>
+    );
   }
 
   return (
@@ -450,7 +487,7 @@ export function Sidebar({ collapsed, inDrawer, onMenuClick }: SidebarProps) {
       trigger={null}
       collapsible
       collapsed={collapsed}
-      className="!bg-white border-r border-slate-200"
+      className="border-r border-slate-200"
       width={240}
       style={{
         overflow: 'auto',
@@ -459,6 +496,7 @@ export function Sidebar({ collapsed, inDrawer, onMenuClick }: SidebarProps) {
         left: 0,
         top: 0,
         bottom: 0,
+        background: 'var(--sidebar-bg)',
       }}
     >
       {menuContent}

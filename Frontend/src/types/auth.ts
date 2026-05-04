@@ -30,7 +30,15 @@ export interface Enterprise {
   expiry_date: string;
   email_status: 0 | 1;
   mobile_status: 0 | 1;
-  status: 'active' | 'inactive' | 'blocked';
+  status:
+    | 'active'
+    | 'inactive'
+    | 'blocked'
+    | 'pending'
+    | 'pending_email_verification'
+    | 'pending_review'
+    | 'approved_pending_completion'
+    | 'rejected';
   subscription_status?: 'active' | 'expired' | 'none';
   plan_id?: number | null;
   subscription_start_date?: string | null;

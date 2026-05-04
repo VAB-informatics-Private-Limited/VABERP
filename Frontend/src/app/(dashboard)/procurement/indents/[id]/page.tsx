@@ -1222,7 +1222,7 @@ export default function IndentDetailPage() {
                     alignItems: 'center',
                     justifyContent: 'space-between',
                     padding: '14px 20px',
-                    background: 'linear-gradient(135deg, #1677ff 0%, #0950c8 100%)',
+                    background: 'linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-darker) 100%)',
                     borderRadius: '10px 10px 0 0',
                     color: '#fff',
                   }}>
@@ -1659,7 +1659,7 @@ export default function IndentDetailPage() {
         width={1000}
         okText="Create Purchase Order"
       >
-        <div className="mb-3 p-3 bg-blue-50 rounded text-sm text-blue-700">
+        <div className="mb-3 p-3 bg-brand-soft rounded text-sm text-brand">
           Select a vendor for each material. Vendors are filtered by the material&apos;s category.
           If items have different vendors, separate Purchase Orders will be created automatically.
         </div>

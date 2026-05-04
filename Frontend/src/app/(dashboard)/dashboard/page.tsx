@@ -87,7 +87,6 @@ export default function DashboardPage() {
             value={dashboard?.totalEnquiries || 0}
             icon={<PhoneOutlined />}
             loading={isLoading}
-            color="#1677ff"
           />
         </Col>
         <Col xs={24} sm={12} lg={6}>
@@ -145,7 +144,6 @@ export default function DashboardPage() {
             value={dashboard?.activeEmployees || 0}
             icon={<UserOutlined />}
             loading={isLoading}
-            color="#2f54eb"
           />
         </Col>
         <Col xs={24} sm={12} lg={6}>
@@ -169,7 +167,6 @@ export default function DashboardPage() {
                 title="Registered Products"
                 value={revenueSummary.totalProducts}
                 icon={<CustomerServiceOutlined />}
-                color="#1677ff"
               />
             </Col>
             <Col xs={24} sm={12} lg={6}>

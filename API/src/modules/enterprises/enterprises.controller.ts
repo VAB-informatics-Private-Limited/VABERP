@@ -1,8 +1,9 @@
-import { Controller, Get, Patch, Body } from '@nestjs/common';
+import { Controller, Get, Patch, Post, Body } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { EnterprisesService } from './enterprises.service';
 import { EnterpriseId, RequirePermission } from '../../common/decorators';
 import { UpdateProfileDto } from './dto/update-profile.dto';
+import { CompleteRegistrationDto } from './dto/complete-registration.dto';
 
 @ApiTags('Enterprises')
 @Controller('enterprises')
@@ -24,5 +25,14 @@ export class EnterprisesController {
     @Body() updateDto: UpdateProfileDto,
   ) {
     return this.enterprisesService.update(enterpriseId, updateDto);
+  }
+
+  @Post('complete-registration')
+  @ApiOperation({ summary: 'Submit full business details after super-admin approval. Promotes enterprise to active.' })
+  async completeRegistration(
+    @EnterpriseId() enterpriseId: number,
+    @Body() dto: CompleteRegistrationDto,
+  ) {
+    return this.enterprisesService.completeRegistration(enterpriseId, dto);
   }
 }

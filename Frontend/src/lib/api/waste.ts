@@ -63,6 +63,12 @@ export interface WasteInventoryLog {
   performed_by_name?: string;
   notes?: string;
   created_date: string;
+  // Resolved context when reference_type === 'job_card'
+  jobCardNumber?: string;
+  jobCardName?: string;
+  purchaseOrderNumber?: string;
+  purchaseOrderId?: number;
+  customerName?: string;
 }
 
 export interface WasteParty {
@@ -171,6 +177,11 @@ const mapLog = (l: any): WasteInventoryLog => ({
     l.performed_by_name,
   notes: l.notes,
   created_date: l.createdDate ?? l.created_date,
+  jobCardNumber: l.jobCardNumber,
+  jobCardName: l.jobCardName,
+  purchaseOrderNumber: l.purchaseOrderNumber,
+  purchaseOrderId: l.purchaseOrderId,
+  customerName: l.customerName,
 });
 
 const mapInventory = (i: any): WasteInventoryItem => ({

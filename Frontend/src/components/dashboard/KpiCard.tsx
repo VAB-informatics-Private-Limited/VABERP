@@ -25,6 +25,12 @@ function hexToRgb(hex: string): string {
   return `${r}, ${g}, ${b}`;
 }
 
+function readPrimary(): string {
+  if (typeof document === 'undefined') return 'var(--color-primary)';
+  const v = getComputedStyle(document.documentElement).getPropertyValue('--color-primary').trim();
+  return v || '#1e40af';
+}
+
 export function KpiCard({
   title,
   value,
@@ -33,9 +39,10 @@ export function KpiCard({
   trend,
   suffix,
   prefix,
-  color = '#1677ff',
+  color,
 }: KpiCardProps) {
-  const rgb = hexToRgb(color);
+  const resolvedColor = color || readPrimary();
+  const rgb = hexToRgb(resolvedColor);
 
   return (
     <div
@@ -112,7 +119,7 @@ export function KpiCard({
           fontSize: '20px',
           flexShrink: 0,
           background: `rgba(${rgb}, 0.10)`,
-          color: color,
+          color: resolvedColor,
         }}>
           {icon}
         </div>

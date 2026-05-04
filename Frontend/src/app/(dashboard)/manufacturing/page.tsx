@@ -474,7 +474,7 @@ export default function ManufacturingPage() {
       {/* Header */}
       <div className="flex flex-wrap justify-between items-start mb-6 gap-3">
         <div>
-          <h1 className="page-header-title"><ToolOutlined style={{ marginRight: 8, color: '#2563eb' }} />Manufacturing Overview</h1>
+          <h1 className="page-header-title"><ToolOutlined style={{ marginRight: 8, color: 'var(--color-primary)' }} />Manufacturing Overview</h1>
           <p className="page-header-subtitle">Manage production orders and job cards</p>
         </div>
         <Input placeholder="Search PO, customer, product..." value={searchText} onChange={e => setSearchText(e.target.value)} prefix={<SearchOutlined />} allowClear style={{ width: 300 }} />
@@ -483,13 +483,13 @@ export default function ManufacturingPage() {
       {/* Summary */}
       <Row gutter={[12, 12]} className="mb-4">
         {[
-          { key: 'all' as StatusGroup, label: 'Total Orders', count: allPOs.length, color: '#1677ff', icon: <AppstoreOutlined /> },
+          { key: 'all' as StatusGroup, label: 'Total Orders', count: allPOs.length, color: 'var(--color-primary)', icon: <AppstoreOutlined /> },
           { key: 'needs_action' as StatusGroup, label: 'Needs Action', count: groupCounts.needs_action, color: '#faad14', icon: <ExclamationCircleOutlined /> },
-          { key: 'in_progress' as StatusGroup, label: 'In Progress', count: groupCounts.in_progress, color: '#1677ff', icon: <ToolOutlined /> },
+          { key: 'in_progress' as StatusGroup, label: 'In Progress', count: groupCounts.in_progress, color: 'var(--color-primary)', icon: <ToolOutlined /> },
           { key: 'done' as StatusGroup, label: 'Done / Dispatched', count: groupCounts.done, color: '#52c41a', icon: <CheckCircleOutlined /> },
         ].map((s, i) => (
           <Col xs={12} sm={6} key={i}>
-            <Card size="small" className={`card-shadow cursor-pointer ${activeTab === s.key ? 'border-blue-500 border-2' : ''}`}
+            <Card size="small" className={`card-shadow cursor-pointer ${activeTab === s.key ? 'border-brand border-2' : ''}`}
               onClick={() => setActiveTab(activeTab === s.key ? 'all' : s.key)} styles={{ body: { padding: '12px 8px' } }}>
               <Statistic title={<span className="text-xs">{s.label}</span>} value={s.count} prefix={s.icon} valueStyle={{ color: s.color, fontSize: 22 }} />
             </Card>
@@ -577,7 +577,7 @@ export default function ManufacturingPage() {
               width: 140,
               render: (_, po) => (
                 <div>
-                  <div className="font-semibold text-blue-600">{po.order_number}</div>
+                  <div className="font-semibold text-brand">{po.order_number}</div>
                   {(po.manufacturing_priority || 0) > 0 && (
                     <Tag color={PRIORITY_LABELS[po.manufacturing_priority || 0].color} className="mt-0.5 text-xs">
                       {PRIORITY_LABELS[po.manufacturing_priority || 0].label}
@@ -660,7 +660,7 @@ export default function ManufacturingPage() {
                 return (
                   <div>
                     <Progress percent={pct} size="small" showInfo={false}
-                      strokeColor={pct === 100 ? '#52c41a' : '#1677ff'} />
+                      strokeColor={pct === 100 ? '#52c41a' : 'var(--color-primary)'} />
                     <div className="text-xs text-gray-400 text-center">{completedJobs}/{jcs.length} jobs</div>
                   </div>
                 );
@@ -681,7 +681,7 @@ export default function ManufacturingPage() {
       {/* ═══════ MODALS ═══════ */}
 
       {/* Send for Approval */}
-      <Modal title={<span><SendOutlined className="text-blue-500 mr-2" />Send for Inventory Approval — {selectedPO?.order_number}</span>}
+      <Modal title={<span><SendOutlined className="text-brand mr-2" />Send for Inventory Approval — {selectedPO?.order_number}</span>}
         open={approvalModalOpen} onCancel={() => { setApprovalModalOpen(false); setSelectedPO(null); approvalForm.resetFields(); }}
         onOk={() => approvalForm.submit()} okText="Send for Approval" confirmLoading={sendForApprovalMutation.isPending} width={700}>
         <Alert type="info" showIcon className="mb-4" message="Review and edit items below. The Inventory team will check material availability and approve or reject each item." />
@@ -803,7 +803,7 @@ export default function ManufacturingPage() {
       </Modal>
 
       {/* Create Job Card */}
-      <Modal title={<span><ToolOutlined className="text-blue-500 mr-2" />Create Job Card</span>}
+      <Modal title={<span><ToolOutlined className="text-brand mr-2" />Create Job Card</span>}
         open={jobCardModalOpen} onCancel={() => { setJobCardModalOpen(false); jobCardForm.resetFields(); setJobCardMaterials([]); setSelectedMaterialId(null); }}
         onOk={() => jobCardForm.submit()} okText="Create Job Card" confirmLoading={createJobCardsMutation.isPending} width={600}
         okButtonProps={{ disabled: jobCardMaterialsLoading || !selectedMaterialId }}>
@@ -892,7 +892,7 @@ export default function ManufacturingPage() {
             </Form>
 
             {/* Production stages info */}
-            <div className="mb-3 p-2 bg-blue-50 rounded-lg border border-blue-200">
+            <div className="mb-3 p-2 bg-brand-soft rounded-lg border border-brand-soft">
               <Text strong className="text-xs block mb-1"><ToolOutlined className="mr-1" />Production Stages (auto from Stage Master):</Text>
               <div className="flex flex-wrap gap-1">
                 {stageMasters.map((s: StageMaster, idx: number) => (

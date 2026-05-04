@@ -133,7 +133,7 @@ export function TodayFollowups() {
         <div className="flex items-center gap-2">
           <ClockCircleOutlined />
           <span>Pending Follow-ups</span>
-          {total > 0 && <Badge count={total} style={{ background: '#1677ff' }} />}
+          {total > 0 && <Badge count={total} style={{ background: 'var(--color-primary)' }} />}
         </div>
       }
       extra={<Button type="link" onClick={() => router.push('/follow-ups')}>View All</Button>}

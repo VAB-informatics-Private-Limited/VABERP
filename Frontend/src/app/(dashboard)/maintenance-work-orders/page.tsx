@@ -84,7 +84,7 @@ export default function MaintenanceWorkOrdersPage() {
   };
 
   const columns = [
-    { title: 'WO#', dataIndex: 'work_order_no', width: 120, render: (v: string, r: MaintenanceWorkOrder) => <a onClick={() => router.push(`/maintenance-work-orders/${r.id}`)} className="font-mono text-blue-600">{v}</a> },
+    { title: 'WO#', dataIndex: 'work_order_no', width: 120, render: (v: string, r: MaintenanceWorkOrder) => <a onClick={() => router.push(`/maintenance-work-orders/${r.id}`)} className="font-mono text-brand">{v}</a> },
     { title: 'Title', dataIndex: 'title', render: (v: string, r: MaintenanceWorkOrder) => <div><div className="font-medium">{v}</div><div className="text-xs text-gray-400">{r.machine?.name}</div></div> },
     { title: 'Type', dataIndex: 'service_type', render: (v: string) => <Tag>{v?.replace('_', ' ').toUpperCase()}</Tag> },
     { title: 'Priority', dataIndex: 'priority', render: (v: string) => <Tag color={PRIORITY_COLORS[v]}>{v?.toUpperCase()}</Tag> },

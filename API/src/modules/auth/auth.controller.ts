@@ -6,6 +6,7 @@ import { AuthService } from './auth.service';
 import {
   EmployeeLoginDto,
   EnterpriseLoginDto,
+  QuickSignupDto,
   RegisterEnterpriseDto,
   ResetPasswordDto,
   VerifyEnterpriseEmailDto,
@@ -90,9 +91,17 @@ export class AuthController {
 
   @Public()
   @Post('register')
-  @ApiOperation({ summary: 'Register new enterprise' })
+  @ApiOperation({ summary: 'Register new enterprise (legacy full-form flow)' })
   async register(@Body() dto: RegisterEnterpriseDto) {
     return this.authService.registerEnterprise(dto);
+  }
+
+  @Public()
+  @Throttle({ auth: { limit: 5, ttl: 60000 } })
+  @Post('quick-signup')
+  @ApiOperation({ summary: 'Lightweight signup — name + contact + password only. Routes to email verify → super-admin review → complete registration.' })
+  async quickSignup(@Body() dto: QuickSignupDto) {
+    return this.authService.quickSignup(dto);
   }
 
   @Public()

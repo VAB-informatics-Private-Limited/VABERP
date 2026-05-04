@@ -63,9 +63,9 @@ function MemberCard({ member, router }: { member: TeamMember; router: ReturnType
   const hasWork = member.activeTaskCount > 0 || member.activeJobCardCount > 0;
 
   return (
-    <Card className="card-shadow h-full" style={{ borderTop: '3px solid #2563eb' }}>
+    <Card className="card-shadow h-full" style={{ borderTop: '3px solid var(--color-primary)' }}>
       <div className="flex items-start gap-3 mb-4">
-        <Avatar size={48} style={{ backgroundColor: '#2563eb', flexShrink: 0 }}>
+        <Avatar size={48} style={{ backgroundColor: 'var(--color-primary)', flexShrink: 0 }}>
           {initials || <UserOutlined />}
         </Avatar>
         <div className="min-w-0 flex-1">
@@ -78,8 +78,8 @@ function MemberCard({ member, router }: { member: TeamMember; router: ReturnType
             </Tag>
             {member.activeTaskCount > 0 && (
               <Tooltip title={`${member.activeTaskCount} active task${member.activeTaskCount > 1 ? 's' : ''}`}>
-                <Badge count={member.activeTaskCount} color="#2563eb" size="small">
-                  <CheckSquareOutlined style={{ color: '#2563eb', fontSize: 14 }} />
+                <Badge count={member.activeTaskCount} color="var(--color-primary)" size="small">
+                  <CheckSquareOutlined style={{ color: 'var(--color-primary)', fontSize: 14 }} />
                 </Badge>
               </Tooltip>
             )}
@@ -97,7 +97,7 @@ function MemberCard({ member, router }: { member: TeamMember; router: ReturnType
       {member.activeTasks.length > 0 && (
         <div className="mb-3">
           <div className="flex items-center gap-2 mb-2">
-            <CheckSquareOutlined style={{ color: '#2563eb', fontSize: 12 }} />
+            <CheckSquareOutlined style={{ color: 'var(--color-primary)', fontSize: 12 }} />
             <Text className="text-xs font-semibold text-gray-600 uppercase tracking-wide">
               Active Tasks ({member.activeTaskCount})
             </Text>
@@ -106,7 +106,7 @@ function MemberCard({ member, router }: { member: TeamMember; router: ReturnType
             {member.activeTasks.map((task) => (
               <div
                 key={task.id}
-                className="flex items-center justify-between gap-2 px-2 py-1 rounded bg-blue-50 hover:bg-blue-100 cursor-pointer"
+                className="flex items-center justify-between gap-2 px-2 py-1 rounded bg-brand-soft hover:bg-brand-light cursor-pointer"
                 onClick={() => router.push(`/tasks/${task.id}`)}
               >
                 <div className="flex items-center gap-1 min-w-0">
@@ -242,7 +242,7 @@ export default function MyTeamPage() {
       <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
         <div>
           <Title level={4} className="!mb-1 flex items-center gap-2">
-            <TeamOutlined style={{ color: '#2563eb' }} /> My Team
+            <TeamOutlined style={{ color: 'var(--color-primary)' }} /> My Team
           </Title>
           <Text className="text-gray-500 text-sm">
             Manage your direct reports — their work status, module access, and team updates
@@ -277,7 +277,7 @@ export default function MyTeamPage() {
           className="card-shadow mb-6"
           title={
             <span className="flex items-center gap-2">
-              <BellOutlined style={{ color: '#2563eb' }} />
+              <BellOutlined style={{ color: 'var(--color-primary)' }} />
               Team Updates You Posted
             </span>
           }
@@ -345,7 +345,7 @@ export default function MyTeamPage() {
       <Modal
         title={
           <span className="flex items-center gap-2">
-            <BellOutlined style={{ color: '#2563eb' }} /> Post Update to Team
+            <BellOutlined style={{ color: 'var(--color-primary)' }} /> Post Update to Team
           </span>
         }
         open={postModalOpen}

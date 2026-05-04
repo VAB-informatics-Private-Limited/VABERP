@@ -210,7 +210,7 @@ export default function ManufactureStatusPage() {
       {/* Header */}
       <div className="flex flex-wrap justify-between items-center mb-4 gap-3">
         <Title level={4} className="!mb-0">
-          <CarOutlined className="mr-2 text-purple-500" />
+          <CarOutlined className="mr-2 text-brand" />
           Manufacturing Status
         </Title>
         <Space>
@@ -251,7 +251,7 @@ export default function ManufactureStatusPage() {
           { label: 'Dispatched', value: stats.dispatched, color: '#52c41a', icon: <CheckCircleOutlined />, tab: 'dispatched' as ViewTab },
         ].map((s, i) => (
           <Col xs={12} sm={6} lg={4} key={i}>
-            <Card size="small" className={`card-shadow cursor-pointer ${activeTab === s.tab ? 'border-blue-500 border-2' : ''}`}
+            <Card size="small" className={`card-shadow cursor-pointer ${activeTab === s.tab ? 'border-brand border-2' : ''}`}
               onClick={() => setActiveTab(activeTab === s.tab ? 'all' : s.tab)} bodyStyle={{ padding: '12px 8px' }}>
               <Statistic title={<span className="text-xs">{s.label}</span>} value={s.value}
                 prefix={s.icon} valueStyle={{ color: s.color, fontSize: 22 }} />
@@ -380,7 +380,7 @@ export default function ManufactureStatusPage() {
                                       percent={pct}
                                       size="small"
                                       showInfo={false}
-                                      strokeColor={isDispatched ? '#52c41a' : pct === 100 ? '#52c41a' : '#1677ff'}
+                                      strokeColor={isDispatched ? '#52c41a' : pct === 100 ? '#52c41a' : 'var(--color-primary)'}
                                     />
                                   </div>
 
@@ -491,7 +491,7 @@ export default function ManufactureStatusPage() {
                 width: 160,
                 render: (_, record: any) => (
                   <div>
-                    <Text strong className="text-blue-600">{record.order_number}</Text>
+                    <Text strong className="text-brand">{record.order_number}</Text>
                     <div className="text-xs text-gray-500">{record.customer_name}</div>
                   </div>
                 ),
@@ -567,7 +567,7 @@ export default function ManufactureStatusPage() {
                   return (
                     <div>
                       <Progress percent={pct} size="small" showInfo={false}
-                        strokeColor={pct === 100 ? '#52c41a' : '#1677ff'} />
+                        strokeColor={pct === 100 ? '#52c41a' : 'var(--color-primary)'} />
                       <Text className="text-xs text-gray-400">{dispatched}/{jcs.length} done</Text>
                     </div>
                   );

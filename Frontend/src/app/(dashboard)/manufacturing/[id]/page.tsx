@@ -227,7 +227,7 @@ export default function ViewJobCardPage() {
         <Row gutter={[16, 16]}>
           <Col xs={24} lg={14}>
             <Card
-              title={<span className="flex items-center gap-2"><FileTextOutlined className="text-blue-500" />Stage Details</span>}
+              title={<span className="flex items-center gap-2"><FileTextOutlined className="text-brand" />Stage Details</span>}
               className="card-shadow mb-4"
             >
               <Row gutter={[24, 16]}>
@@ -290,12 +290,12 @@ export default function ViewJobCardPage() {
 
           <Col xs={24} lg={10}>
             <Card
-              title={<span className="flex items-center gap-2"><AppstoreOutlined className="text-purple-500" />Parent Job Card</span>}
+              title={<span className="flex items-center gap-2"><AppstoreOutlined className="text-brand" />Parent Job Card</span>}
               className="card-shadow mb-4"
             >
               <div className="text-center py-4">
                 <div className="w-14 h-14 bg-purple-50 rounded-full flex items-center justify-center mx-auto mb-3">
-                  <FileTextOutlined className="text-2xl text-purple-500" />
+                  <FileTextOutlined className="text-2xl text-brand" />
                 </div>
                 <Text strong className="text-base block mb-1">Stage Completion Record</Text>
                 <Text type="secondary" className="text-sm block mb-4">
@@ -382,7 +382,7 @@ export default function ViewJobCardPage() {
           <Descriptions.Item label={<span><NumberOutlined className="mr-1 text-green-500" />Quantity</span>}>
             <span className="font-semibold">{Number(jobCard.quantity || 0)} {jobCard.unit || 'units'}</span>
           </Descriptions.Item>
-          <Descriptions.Item label={<span><UserOutlined className="mr-1 text-purple-500" />Customer</span>}>
+          <Descriptions.Item label={<span><UserOutlined className="mr-1 text-brand" />Customer</span>}>
             <span className="font-semibold">{jobCard.customer_name || '-'}</span>
           </Descriptions.Item>
           <Descriptions.Item label={<span><TeamOutlined className="mr-1 text-blue-400" />Assigned To</span>}>
@@ -406,7 +406,7 @@ export default function ViewJobCardPage() {
                   type="circle"
                   percent={stagePercent}
                   size={36}
-                  strokeColor={stagePercent === 100 ? '#52c41a' : '#1677ff'}
+                  strokeColor={stagePercent === 100 ? '#52c41a' : 'var(--color-primary)'}
                   format={() => <span className="text-xs font-bold">{completedStages}/{totalStages}</span>}
                 />
                 <span className="text-xs text-gray-500">{completedStages} of {totalStages} done</span>
@@ -443,7 +443,7 @@ export default function ViewJobCardPage() {
       <div className="mb-4 print:hidden">
         {jobCard.status === 'pending' && (
           <Card
-            title={<span className="flex items-center gap-2"><RocketOutlined className="text-blue-500" />Start Manufacturing</span>}
+            title={<span className="flex items-center gap-2"><RocketOutlined className="text-brand" />Start Manufacturing</span>}
             className="card-shadow"
           >
             {jobCard.material_status === 'FULLY_ISSUED' ? (
@@ -486,7 +486,7 @@ export default function ViewJobCardPage() {
                   {jobCard.material_request_id && (
                     <Button icon={<FileTextOutlined />} size="large"
                       onClick={() => router.push(`/material-requests/${jobCard.material_request_id}`)}
-                      className="border-blue-400 text-blue-600">
+                      className="border-brand text-brand">
                       View Material Request {jobCard.material_request_number ? `(${jobCard.material_request_number})` : ''}
                     </Button>
                   )}
@@ -502,7 +502,7 @@ export default function ViewJobCardPage() {
                   {jobCard.material_request_id && (
                     <Button icon={<FileTextOutlined />} size="large"
                       onClick={() => router.push(`/material-requests/${jobCard.material_request_id}`)}
-                      className="border-blue-400 text-blue-600">
+                      className="border-brand text-brand">
                       View Material Request {jobCard.material_request_number ? `(${jobCard.material_request_number})` : ''}
                     </Button>
                   )}
@@ -518,7 +518,7 @@ export default function ViewJobCardPage() {
                   {jobCard.material_request_id && (
                     <Button icon={<FileTextOutlined />} size="large"
                       onClick={() => router.push(`/material-requests/${jobCard.material_request_id}`)}
-                      className="border-blue-400 text-blue-600">
+                      className="border-brand text-brand">
                       View Material Request {jobCard.material_request_number ? `(${jobCard.material_request_number})` : ''}
                     </Button>
                   )}
@@ -618,7 +618,7 @@ export default function ViewJobCardPage() {
 
         {jobCard.status === 'approved_for_dispatch' && (
           <Card
-            title={<span className="flex items-center gap-2"><CarOutlined className="text-purple-500" />Dispatch</span>}
+            title={<span className="flex items-center gap-2"><CarOutlined className="text-brand" />Dispatch</span>}
             className="card-shadow"
           >
             {jobCard.dispatch_on_hold ? (
@@ -677,7 +677,7 @@ export default function ViewJobCardPage() {
         {/* Job Card Details */}
         <Col xs={24} lg={14}>
           <Card
-            title={<span className="flex items-center gap-2"><FileTextOutlined className="text-blue-500" />Job Card Details</span>}
+            title={<span className="flex items-center gap-2"><FileTextOutlined className="text-brand" />Job Card Details</span>}
             className="card-shadow h-full"
           >
             <Descriptions size="small" column={{ xs: 1, sm: 2 }} colon>
@@ -739,7 +739,7 @@ export default function ViewJobCardPage() {
         {/* Stage Progress */}
         <Col xs={24} lg={10}>
           <Card
-            title={<span className="flex items-center gap-2"><SyncOutlined className="text-blue-500" />Stage Progress</span>}
+            title={<span className="flex items-center gap-2"><SyncOutlined className="text-brand" />Stage Progress</span>}
             className="card-shadow h-full"
           >
             {totalStages === 0 ? (
@@ -754,7 +754,7 @@ export default function ViewJobCardPage() {
                     type="circle"
                     percent={stagePercent}
                     size={88}
-                    strokeColor={stagePercent === 100 ? '#52c41a' : '#1677ff'}
+                    strokeColor={stagePercent === 100 ? '#52c41a' : 'var(--color-primary)'}
                     format={() => (
                       <div className="text-center">
                         <div className="text-lg font-bold">{completedStages}/{totalStages}</div>
@@ -801,7 +801,7 @@ export default function ViewJobCardPage() {
 
       {/* Production Stages Pipeline */}
       <Card
-        title={<span className="flex items-center gap-2"><PlayCircleOutlined className="text-blue-500" />Production Stages</span>}
+        title={<span className="flex items-center gap-2"><PlayCircleOutlined className="text-brand" />Production Stages</span>}
         className="card-shadow mb-4"
       >
         {stages.length === 0 ? (
@@ -897,7 +897,7 @@ export default function ViewJobCardPage() {
                     {isDone && (
                       <div>
                         <button
-                          className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-blue-500 transition-colors cursor-pointer bg-transparent border-0 p-0"
+                          className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-brand transition-colors cursor-pointer bg-transparent border-0 p-0"
                           onClick={() => setExpandedStages(prev => {
                             const next = new Set(prev);
                             if (next.has(stage.id)) next.delete(stage.id);
@@ -999,7 +999,7 @@ export default function ViewJobCardPage() {
               >
                 <div className="flex items-start justify-between mb-2">
                   <div>
-                    <div className="font-semibold text-sm text-blue-600">{child.job_card_number}</div>
+                    <div className="font-semibold text-sm text-brand">{child.job_card_number}</div>
                     <div className="text-xs text-gray-600 mt-0.5">{child.job_name}</div>
                   </div>
                   <Tag color="success" className="!text-xs">Done</Tag>
@@ -1019,7 +1019,7 @@ export default function ViewJobCardPage() {
       {/* Stage History */}
       {stageHistory.length > 0 && (
         <Card
-          title={<span className="flex items-center gap-2"><HistoryOutlined className="text-purple-500" />Stage Completion History</span>}
+          title={<span className="flex items-center gap-2"><HistoryOutlined className="text-brand" />Stage Completion History</span>}
           className="card-shadow mb-4"
           size="small"
         >

@@ -213,18 +213,18 @@ export default function IndentsListPage() {
       },
     },
     {
-      title: '',
+      title: 'Action',
       key: 'action',
-      width: 70,
+      width: 110,
+      align: 'center' as const,
       render: (_: unknown, record: Indent) => (
         <Button
           type="primary"
-          ghost
           size="small"
           icon={<EyeOutlined />}
           onClick={() => router.push(`/procurement/indents/${record.id}`)}
         >
-          View
+          View Indent
         </Button>
       ),
     },
@@ -371,8 +371,8 @@ export default function IndentsListPage() {
                   cursor: 'pointer',
                   fontSize: 13,
                   fontWeight: activeTab === tab.key ? 600 : 400,
-                  color: activeTab === tab.key ? '#1677ff' : '#555',
-                  borderBottom: activeTab === tab.key ? '2px solid #1677ff' : '2px solid transparent',
+                  color: activeTab === tab.key ? 'var(--color-primary)' : '#555',
+                  borderBottom: activeTab === tab.key ? '2px solid var(--color-primary)' : '2px solid transparent',
                   marginBottom: -1,
                   transition: 'all 0.2s',
                   display: 'flex',

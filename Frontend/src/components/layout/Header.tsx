@@ -147,7 +147,7 @@ export function Header({ collapsed, onToggle }: HeaderProps) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <Text strong style={{ fontSize: 14 }}>Notifications</Text>
           {totalUnread > 0 && (
-            <Badge count={totalUnread} style={{ background: '#1677ff' }} />
+            <Badge count={totalUnread} style={{ background: 'var(--color-accent)' }} />
           )}
         </div>
         {totalUnread > 0 && (
@@ -157,7 +157,7 @@ export function Header({ collapsed, onToggle }: HeaderProps) {
             icon={<CheckOutlined />}
             loading={markAllReadMutation.isPending}
             onClick={() => markAllReadMutation.mutate()}
-            style={{ fontSize: 12, padding: 0, color: '#1677ff' }}
+            style={{ fontSize: 12, padding: 0, color: 'var(--color-primary)' }}
           >
             Mark all read
           </Button>
@@ -184,22 +184,22 @@ export function Header({ collapsed, onToggle }: HeaderProps) {
               style={{
                 padding: '12px 16px 12px 13px',
                 cursor: n.link ? 'pointer' : 'default',
-                background: n.is_read ? '#fff' : '#f0f7ff',
+                background: n.is_read ? '#fff' : 'var(--color-primary-faint)',
                 borderBottom: '1px solid #f0f0f0',
-                borderLeft: n.is_read ? '3px solid transparent' : '3px solid #1677ff',
+                borderLeft: n.is_read ? '3px solid transparent' : '3px solid var(--color-primary)',
                 transition: 'background 0.15s',
                 display: 'flex',
                 gap: 10,
                 alignItems: 'flex-start',
               }}
-              onMouseEnter={(e) => { if (n.link) (e.currentTarget as HTMLDivElement).style.background = n.is_read ? '#fafafa' : '#e6f0ff'; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.background = n.is_read ? '#fff' : '#f0f7ff'; }}
+              onMouseEnter={(e) => { if (n.link) (e.currentTarget as HTMLDivElement).style.background = n.is_read ? '#fafafa' : 'var(--color-primary-soft)'; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.background = n.is_read ? '#fff' : 'var(--color-primary-faint)'; }}
             >
               {/* Unread dot */}
               <div style={{
                 width: 8, height: 8, borderRadius: '50%', flexShrink: 0, marginTop: 5,
-                background: n.is_read ? 'transparent' : '#1677ff',
-                boxShadow: n.is_read ? 'none' : '0 0 0 3px #bfdbfe',
+                background: n.is_read ? 'transparent' : 'var(--color-primary)',
+                boxShadow: n.is_read ? 'none' : '0 0 0 3px var(--color-primary-light)',
               }} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
@@ -208,8 +208,8 @@ export function Header({ collapsed, onToggle }: HeaderProps) {
                   </span>
                   {!n.is_read && (
                     <span style={{
-                      fontSize: 10, fontWeight: 700, color: '#1677ff',
-                      background: '#dbeafe', borderRadius: 4,
+                      fontSize: 10, fontWeight: 700, color: 'var(--color-primary)',
+                      background: 'var(--color-primary-light)', borderRadius: 4,
                       padding: '1px 5px', lineHeight: '16px', flexShrink: 0,
                     }}>
                       NEW
@@ -232,7 +232,7 @@ export function Header({ collapsed, onToggle }: HeaderProps) {
         <Button
           type="link"
           size="small"
-          style={{ fontSize: 12, color: '#3b82f6', fontWeight: 500 }}
+          style={{ fontSize: 12, color: 'var(--color-primary)', fontWeight: 500 }}
           onClick={() => { setNotifOpen(false); setAllNotifDrawerOpen(true); }}
         >
           View all notifications →
@@ -339,7 +339,7 @@ export function Header({ collapsed, onToggle }: HeaderProps) {
           >
             <div style={{
               width: 34, height: 34, borderRadius: 10,
-              background: 'linear-gradient(135deg, #1e40af 0%, #7c3aed 50%, #c026d3 100%)',
+              background: 'linear-gradient(135deg, var(--color-primary-darker) 0%, var(--color-primary) 50%, var(--color-primary-hover) 100%)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               color: '#fff', fontWeight: 700, fontSize: 13,
               letterSpacing: '0.02em', flexShrink: 0,
@@ -376,10 +376,10 @@ export function Header({ collapsed, onToggle }: HeaderProps) {
         title={
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <BellOutlined style={{ fontSize: 18, color: '#3b82f6' }} />
+              <BellOutlined style={{ fontSize: 18, color: 'var(--color-primary)' }} />
               <span style={{ fontSize: 16, fontWeight: 700, color: '#0f172a' }}>Notifications</span>
               {totalUnread > 0 && (
-                <Badge count={totalUnread} style={{ background: '#3b82f6' }} />
+                <Badge count={totalUnread} style={{ background: 'var(--color-accent)' }} />
               )}
             </div>
             {totalUnread > 0 && (
@@ -388,7 +388,7 @@ export function Header({ collapsed, onToggle }: HeaderProps) {
                 icon={<CheckOutlined />}
                 loading={markAllReadMutation.isPending}
                 onClick={() => markAllReadMutation.mutate()}
-                style={{ fontSize: 12, borderColor: '#3b82f6', color: '#3b82f6' }}
+                style={{ fontSize: 12, borderColor: 'var(--color-primary)', color: 'var(--color-primary)' }}
               >
                 Mark all read
               </Button>
@@ -457,24 +457,24 @@ export function Header({ collapsed, onToggle }: HeaderProps) {
                 style={{
                   padding: '16px 20px 14px 17px',
                   cursor: n.link ? 'pointer' : 'default',
-                  background: n.is_read ? '#fff' : '#f0f7ff',
+                  background: n.is_read ? '#fff' : 'var(--color-primary-faint)',
                   borderBottom: '1px solid #f1f5f9',
-                  borderLeft: n.is_read ? '3px solid transparent' : '3px solid #3b82f6',
+                  borderLeft: n.is_read ? '3px solid transparent' : '3px solid var(--color-primary)',
                   display: 'flex',
                   gap: 12,
                   alignItems: 'flex-start',
                   transition: 'background 0.15s',
                 }}
-                onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.background = n.is_read ? '#f8fafc' : '#e6f0ff'; }}
-                onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.background = n.is_read ? '#fff' : '#f0f7ff'; }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.background = n.is_read ? '#f8fafc' : 'var(--color-primary-soft)'; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.background = n.is_read ? '#fff' : 'var(--color-primary-faint)'; }}
               >
                 {/* Icon circle */}
                 <div style={{
                   width: 36, height: 36, borderRadius: '50%', flexShrink: 0,
-                  background: n.is_read ? '#f1f5f9' : '#dbeafe',
+                  background: n.is_read ? '#f1f5f9' : 'var(--color-primary-light)',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                 }}>
-                  <BellOutlined style={{ fontSize: 15, color: n.is_read ? '#94a3b8' : '#3b82f6' }} />
+                  <BellOutlined style={{ fontSize: 15, color: n.is_read ? '#94a3b8' : 'var(--color-primary)' }} />
                 </div>
 
                 <div style={{ flex: 1, minWidth: 0 }}>
@@ -488,8 +488,8 @@ export function Header({ collapsed, onToggle }: HeaderProps) {
                     </span>
                     {!n.is_read && (
                       <span style={{
-                        fontSize: 10, fontWeight: 700, color: '#3b82f6',
-                        background: '#dbeafe', borderRadius: 4,
+                        fontSize: 10, fontWeight: 700, color: 'var(--color-primary)',
+                        background: 'var(--color-primary-light)', borderRadius: 4,
                         padding: '1px 6px', flexShrink: 0,
                       }}>
                         NEW
@@ -509,7 +509,7 @@ export function Header({ collapsed, onToggle }: HeaderProps) {
                       </Tag>
                     )}
                     {n.link && (
-                      <span style={{ fontSize: 11, color: '#3b82f6', marginLeft: 'auto' }}>
+                      <span style={{ fontSize: 11, color: 'var(--color-primary)', marginLeft: 'auto' }}>
                         View →
                       </span>
                     )}

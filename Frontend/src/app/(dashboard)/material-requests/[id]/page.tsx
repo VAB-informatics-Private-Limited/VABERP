@@ -360,7 +360,7 @@ export default function MaterialRequestDetailPage() {
         return (
           <div>
             <Progress percent={pct} size="small" showInfo={false}
-              strokeColor={pct === 100 ? '#52c41a' : pct > 0 ? '#1677ff' : '#d9d9d9'} />
+              strokeColor={pct === 100 ? '#52c41a' : pct > 0 ? 'var(--color-primary)' : '#d9d9d9'} />
             <div className="text-xs text-center">{record.quantity_issued}/{record.quantity_requested}</div>
           </div>
         );
@@ -920,7 +920,7 @@ export default function MaterialRequestDetailPage() {
       <Modal
         title={
           <span>
-            <CheckCircleOutlined className="text-blue-500 mr-2" />
+            <CheckCircleOutlined className="text-brand mr-2" />
             {hasProcurementFulfillment ? 'Approve Procured Materials' : 'Review & Approve Materials'}
           </span>
         }

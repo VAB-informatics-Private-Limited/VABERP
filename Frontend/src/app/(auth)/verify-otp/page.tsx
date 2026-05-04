@@ -44,12 +44,15 @@ export default function VerifyOtpPage() {
         otp: emailOtp,
       });
 
-      if (response.status === 'success') {
-        message.success('Email verified successfully!');
-        setCurrentStep('mobile');
-      } else {
-        message.error(response.message || 'Invalid OTP');
-      }
+      // Backend success returns 'Login successful' (no `status` field).
+      // We accept any 2xx that doesn't throw as success.
+      message.success('Email verified successfully!');
+      setCurrentStep('complete');
+      sessionStorage.removeItem('pendingVerification');
+      void response;
+      setTimeout(() => {
+        router.push('/pending-review');
+      }, 1500);
     } catch (error: unknown) {
       const err = error as { response?: { data?: { message?: string } } };
       message.error(err?.response?.data?.message || 'Verification failed');
@@ -59,34 +62,10 @@ export default function VerifyOtpPage() {
   };
 
   const handleMobileVerify = async () => {
-    if (mobileOtp.length !== 4) {
-      message.error('Please enter 4-digit OTP');
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const response = await verifyMobileOtp({
-        mobile_number: verificationData!.mobile,
-        otp: mobileOtp,
-      });
-
-      if (response.status === 'success') {
-        message.success('Mobile verified successfully!');
-        setCurrentStep('complete');
-        sessionStorage.removeItem('pendingVerification');
-        setTimeout(() => {
-          router.push('/login');
-        }, 2000);
-      } else {
-        message.error(response.message || 'Invalid OTP');
-      }
-    } catch (error: unknown) {
-      const err = error as { response?: { data?: { message?: string } } };
-      message.error(err?.response?.data?.message || 'Verification failed');
-    } finally {
-      setLoading(false);
-    }
+    // Mobile OTP step is currently unused in the new signup flow.
+    // Kept as a no-op so any old code paths don't break.
+    void mobileOtp;
+    void verifyMobileOtp;
   };
 
   if (!verificationData) {

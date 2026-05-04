@@ -61,7 +61,7 @@ export default function TasksPage() {
       <div className="mb-5 flex items-start justify-between">
         <div>
           <Title level={4} className="!mb-1 flex items-center gap-2">
-            <CheckSquareOutlined style={{ color: '#2563eb' }} /> Tasks
+            <CheckSquareOutlined style={{ color: 'var(--color-primary)' }} /> Tasks
           </Title>
           <p className="text-gray-500 text-sm">Manage and track tasks across your team</p>
         </div>

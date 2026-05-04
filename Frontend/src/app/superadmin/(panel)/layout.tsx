@@ -15,6 +15,7 @@ import {
   TagOutlined,
   UsergroupAddOutlined,
   WalletOutlined,
+  SolutionOutlined,
 } from '@ant-design/icons';
 import { useSuperAdminStore } from '@/stores/superAdminStore';
 
@@ -44,6 +45,11 @@ export default function SuperAdminPanelLayout({ children }: { children: React.Re
       key: '/superadmin/dashboard',
       icon: <DashboardOutlined />,
       label: 'Dashboard',
+    },
+    {
+      key: '/superadmin/registered-businesses',
+      icon: <SolutionOutlined />,
+      label: 'Register Business',
     },
     {
       key: '/superadmin/enterprises',

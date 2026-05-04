@@ -123,7 +123,7 @@ export default function AnalyticsDashboardPage() {
       title: 'Amount',
       dataIndex: 'amount',
       key: 'amount',
-      render: (v: number) => <span className="text-blue-600 font-medium">{formatCurrency(v)}</span>,
+      render: (v: number) => <span className="text-brand font-medium">{formatCurrency(v)}</span>,
     },
     {
       title: 'Status',

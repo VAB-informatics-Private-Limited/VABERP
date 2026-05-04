@@ -16,8 +16,34 @@ export async function getMyBranding(): Promise<ApiResponse<EnterpriseBranding | 
   return response.data;
 }
 
+// Map frontend snake_case keys (the EnterpriseBranding shape) to the camelCase
+// keys the NestJS DTO expects. Anything not listed here is dropped on save.
+const SNAKE_TO_CAMEL: Record<string, string> = {
+  app_name: 'appName',
+  tagline: 'tagline',
+  logo_url: 'logoUrl',
+  logo_small_url: 'logoSmallUrl',
+  favicon_url: 'faviconUrl',
+  primary_color: 'primaryColor',
+  secondary_color: 'secondaryColor',
+  accent_color: 'accentColor',
+  color_bg_layout: 'colorBgLayout',
+  login_bg_image_url: 'loginBgImageUrl',
+  font_family: 'fontFamily',
+  border_radius: 'borderRadius',
+  sidebar_bg_color: 'sidebarBgColor',
+  sidebar_text_color: 'sidebarTextColor',
+};
+
 export async function saveBranding(data: Partial<EnterpriseBranding>): Promise<ApiResponse<EnterpriseBranding>> {
-  const response = await apiClient.put('/branding', data);
+  const payload: Record<string, unknown> = {};
+  for (const [snake, value] of Object.entries(data)) {
+    const camel = SNAKE_TO_CAMEL[snake];
+    if (!camel) continue;
+    // Send empty strings as null so the backend can clear optional fields
+    payload[camel] = value === '' ? null : value;
+  }
+  const response = await apiClient.put('/branding', payload);
   return response.data;
 }
 

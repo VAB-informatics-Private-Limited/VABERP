@@ -36,7 +36,7 @@ export default function CrmReportsPage() {
     <div>
       <div className="mb-6">
         <Title level={4} className="!mb-1 flex items-center gap-2">
-          <BarChartOutlined style={{ color: '#2563eb' }} /> CRM Performance
+          <BarChartOutlined style={{ color: 'var(--color-primary)' }} /> CRM Performance
         </Title>
         <p className="text-gray-500 text-sm">Team performance and lead conversion stats</p>
       </div>
@@ -45,7 +45,7 @@ export default function CrmReportsPage() {
       <Row gutter={[12, 12]} className="mb-6">
         <Col xs={12} sm={8} md={4}>
           <Card size="small" className="card-shadow" loading={summaryLoading}>
-            <Statistic title="Total" value={summary?.total || 0} valueStyle={{ color: '#1677ff' }} />
+            <Statistic title="Total" value={summary?.total || 0} valueStyle={{ color: 'var(--color-primary)' }} />
           </Card>
         </Col>
         {CRM_STATUS_OPTIONS.map(opt => (

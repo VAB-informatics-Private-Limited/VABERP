@@ -7,6 +7,30 @@ import {
   IsOptional,
 } from 'class-validator';
 
+// Lightweight signup. No password collected — credentials are generated and
+// emailed by super-admin on approval.
+export class QuickSignupDto {
+  @ApiProperty({ example: 'VAB Informatics Pvt Ltd' })
+  @IsString()
+  @IsNotEmpty()
+  businessName: string;
+
+  @ApiProperty({ example: 'contact@vabinformatics.com' })
+  @IsEmail()
+  @IsNotEmpty()
+  businessEmail: string;
+
+  @ApiProperty({ example: '9876543210' })
+  @IsString()
+  @IsNotEmpty()
+  businessMobile: string;
+
+  @ApiProperty({ example: 'Pharmaceuticals' })
+  @IsString()
+  @IsNotEmpty()
+  industry: string;
+}
+
 export class RegisterEnterpriseDto {
   @ApiProperty({ example: 'VAB Informatics Pvt Ltd' })
   @IsString()

@@ -42,6 +42,33 @@ export const registrationSchema = z.object({
   cinNumber: z.string().optional(),
 });
 
+// Lightweight initial signup — no password (credentials are issued by
+// super-admin on approval). Full business details collected later at
+// /complete-registration.
+export const quickSignupSchema = z.object({
+  businessName: z.string().min(2, 'Business name is required'),
+  businessEmail: z.string().email('Please enter a valid email address'),
+  businessMobile: z
+    .string()
+    .regex(MOBILE_REGEX, 'Enter a valid 10-digit mobile number starting with 6, 7, 8, or 9'),
+  industry: z.string().min(2, 'Please choose your industry'),
+});
+
+// Step 2 — full business details, collected after super-admin approval.
+export const completeRegistrationSchema = z.object({
+  businessAddress: z.string().min(5, 'Address is required'),
+  businessState: z.string().min(2, 'State is required'),
+  businessCity: z.string().min(2, 'City is required'),
+  pincode: z.string().regex(PINCODE_REGEX, 'PIN code must be exactly 6 digits'),
+  gstNumber: z
+    .string()
+    .optional()
+    .refine((v) => !v || GSTIN_REGEX.test(v), 'Enter a valid GSTIN (e.g. 27AAPFU0939F1ZV)'),
+  cinNumber: z.string().optional(),
+  contactPerson: z.string().optional(),
+  website: z.string().url('Enter a valid URL').optional().or(z.literal('')),
+});
+
 export const passwordResetSchema = z.object({
   email_id: z.string().email('Please enter a valid email address'),
   oldpassword: z.string().min(1, 'Current password is required'),
@@ -57,4 +84,6 @@ export type EnterprisePasswordFormData = z.infer<typeof enterprisePasswordSchema
 export type EmailOtpFormData = z.infer<typeof emailOtpSchema>;
 export type MobileOtpFormData = z.infer<typeof mobileOtpSchema>;
 export type RegistrationFormData = z.infer<typeof registrationSchema>;
+export type QuickSignupFormData = z.infer<typeof quickSignupSchema>;
+export type CompleteRegistrationFormData = z.infer<typeof completeRegistrationSchema>;
 export type PasswordResetFormData = z.infer<typeof passwordResetSchema>;

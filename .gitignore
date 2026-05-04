@@ -31,7 +31,13 @@ Thumbs.db
 *.docx
 *.xlsx
 ~$*
-check_qa_contents.py
-check_server_dirs.py
-compare_dev_qa.py
+
+# Local deploy/scratch Python scripts at repo root (contain prod credentials)
+/*.py
+
+# Python bytecode
+__pycache__/
+*.pyc
+
+# Claude Code local settings
 .claude/settings.local.json

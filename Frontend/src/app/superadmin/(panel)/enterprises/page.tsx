@@ -17,7 +17,7 @@ import {
   InputNumber,
   Divider,
 } from 'antd';
-import { SearchOutlined, EyeOutlined, StopOutlined, CheckOutlined, PlusOutlined, EditOutlined } from '@ant-design/icons';
+import { SearchOutlined, EyeOutlined, StopOutlined, CheckOutlined, PlusOutlined, EditOutlined, CheckCircleOutlined, CloseCircleOutlined } from '@ant-design/icons';
 import { useRouter } from 'next/navigation';
 import {
   getAllEnterprises,
@@ -26,6 +26,8 @@ import {
   getSubscriptionPlans,
   getEnterprise,
   updateEnterpriseProfile,
+  approveEnterprise,
+  rejectEnterprise,
 } from '@/lib/api/super-admin';
 import { MOBILE_RULE } from '@/lib/validations/shared';
 
@@ -53,11 +55,38 @@ const statusColors: Record<string, string> = {
   blocked: 'red',
   pending: 'orange',
   inactive: 'default',
+  pending_email_verification: 'gold',
+  pending_review: 'blue',
+  approved_pending_completion: 'cyan',
+  rejected: 'red',
+};
+
+const statusLabels: Record<string, string> = {
+  active: 'Active',
+  blocked: 'Blocked',
+  pending: 'Pending Payment',
+  inactive: 'Inactive',
+  pending_email_verification: 'Awaiting Email Verify',
+  pending_review: 'Pending Review',
+  approved_pending_completion: 'Approved (Awaiting Completion)',
+  rejected: 'Rejected',
 };
 
 function getSubscriptionBadge(enterprise: Enterprise) {
   if (enterprise.status === 'pending') {
-    return <Tag color="orange">Pending Approval</Tag>;
+    return <Tag color="orange">Pending Payment</Tag>;
+  }
+  if (enterprise.status === 'pending_review') {
+    return <Tag color="blue">Awaiting Review</Tag>;
+  }
+  if (enterprise.status === 'approved_pending_completion') {
+    return <Tag color="cyan">Awaiting Completion</Tag>;
+  }
+  if (enterprise.status === 'pending_email_verification') {
+    return <Tag color="gold">Email Unverified</Tag>;
+  }
+  if (enterprise.status === 'rejected') {
+    return <Tag color="red">Rejected</Tag>;
   }
   if (!enterprise.expiryDate) {
     return <Tag color="default">No Plan</Tag>;
@@ -113,8 +142,18 @@ export default function EnterprisesPage() {
     setLoading(true);
     try {
       const res = await getAllEnterprises();
-      setEnterprises(res.data);
-      setFiltered(res.data);
+      // Hide signup-flow rows — those live on /superadmin/registered-businesses.
+      // This page is for actual customers with login credentials.
+      const signupOnlyStatuses = new Set([
+        'pending_email_verification',
+        'pending_review',
+        'rejected',
+      ]);
+      const customers = (res.data as Enterprise[]).filter(
+        (e) => !signupOnlyStatuses.has(e.status),
+      );
+      setEnterprises(customers);
+      setFiltered(customers);
     } finally {
       setLoading(false);
     }
@@ -130,6 +169,30 @@ export default function EnterprisesPage() {
       );
     } catch {
       message.error('Failed to update status');
+    }
+  }
+
+  async function handleApprove(record: Enterprise) {
+    try {
+      await approveEnterprise(record.id);
+      message.success(`${record.businessName} approved. User notified.`);
+      setEnterprises((prev) =>
+        prev.map((e) => (e.id === record.id ? { ...e, status: 'approved_pending_completion' } : e))
+      );
+    } catch (err: any) {
+      message.error(err?.response?.data?.message || 'Failed to approve');
+    }
+  }
+
+  async function handleReject(record: Enterprise) {
+    try {
+      await rejectEnterprise(record.id);
+      message.success(`${record.businessName} rejected. User notified.`);
+      setEnterprises((prev) =>
+        prev.map((e) => (e.id === record.id ? { ...e, status: 'rejected' } : e))
+      );
+    } catch (err: any) {
+      message.error(err?.response?.data?.message || 'Failed to reject');
     }
   }
 
@@ -227,12 +290,16 @@ export default function EnterprisesPage() {
       dataIndex: 'status',
       key: 'status',
       render: (status: string) => (
-        <Tag color={statusColors[status] ?? 'default'}>{status}</Tag>
+        <Tag color={statusColors[status] ?? 'default'}>{statusLabels[status] ?? status}</Tag>
       ),
       filters: [
+        { text: 'Pending Review', value: 'pending_review' },
+        { text: 'Approved (Awaiting Completion)', value: 'approved_pending_completion' },
+        { text: 'Awaiting Email Verify', value: 'pending_email_verification' },
         { text: 'Active', value: 'active' },
         { text: 'Blocked', value: 'blocked' },
-        { text: 'Pending', value: 'pending' },
+        { text: 'Rejected', value: 'rejected' },
+        { text: 'Pending Payment', value: 'pending' },
       ],
       onFilter: (value: any, record: Enterprise) => record.status === value,
     },
@@ -256,40 +323,72 @@ export default function EnterprisesPage() {
     {
       title: 'Actions',
       key: 'actions',
-      render: (_: any, record: Enterprise) => (
-        <Space>
-          <Button
-            size="small"
-            icon={<EyeOutlined />}
-            onClick={() => router.push(`/superadmin/enterprises/${record.id}`)}
-          >
-            View
-          </Button>
-          <Button
-            size="small"
-            icon={<EditOutlined />}
-            onClick={() => openEdit(record.id)}
-          >
-            Edit
-          </Button>
-          <Popconfirm
-            title={`${record.status === 'blocked' ? 'Unblock' : 'Block'} this enterprise?`}
-            onConfirm={() => handleToggleStatus(record)}
-            okText="Yes"
-            cancelText="No"
-            okButtonProps={{ danger: record.status !== 'blocked' }}
-          >
+      render: (_: any, record: Enterprise) => {
+        const isPendingReview = record.status === 'pending_review';
+
+        return (
+          <Space wrap>
+            {isPendingReview && (
+              <>
+                <Popconfirm
+                  title={`Approve ${record.businessName}?`}
+                  description="They will be emailed and can complete their registration."
+                  onConfirm={() => handleApprove(record)}
+                  okText="Approve"
+                  cancelText="Cancel"
+                >
+                  <Button size="small" type="primary" icon={<CheckCircleOutlined />}>
+                    Approve
+                  </Button>
+                </Popconfirm>
+                <Popconfirm
+                  title={`Reject ${record.businessName}?`}
+                  description="They will be emailed that their registration was not approved."
+                  onConfirm={() => handleReject(record)}
+                  okText="Reject"
+                  cancelText="Cancel"
+                  okButtonProps={{ danger: true }}
+                >
+                  <Button size="small" danger icon={<CloseCircleOutlined />}>
+                    Reject
+                  </Button>
+                </Popconfirm>
+              </>
+            )}
             <Button
               size="small"
-              icon={record.status === 'blocked' ? <CheckOutlined /> : <StopOutlined />}
-              danger={record.status !== 'blocked'}
-              type={record.status === 'blocked' ? 'default' : 'default'}
+              icon={<EyeOutlined />}
+              onClick={() => router.push(`/superadmin/enterprises/${record.id}`)}
             >
-              {record.status === 'blocked' ? 'Unblock' : 'Block'}
+              View
             </Button>
-          </Popconfirm>
-        </Space>
-      ),
+            <Button
+              size="small"
+              icon={<EditOutlined />}
+              onClick={() => openEdit(record.id)}
+            >
+              Edit
+            </Button>
+            {!isPendingReview && (
+              <Popconfirm
+                title={`${record.status === 'blocked' ? 'Unblock' : 'Block'} this enterprise?`}
+                onConfirm={() => handleToggleStatus(record)}
+                okText="Yes"
+                cancelText="No"
+                okButtonProps={{ danger: record.status !== 'blocked' }}
+              >
+                <Button
+                  size="small"
+                  icon={record.status === 'blocked' ? <CheckOutlined /> : <StopOutlined />}
+                  danger={record.status !== 'blocked'}
+                >
+                  {record.status === 'blocked' ? 'Unblock' : 'Block'}
+                </Button>
+              </Popconfirm>
+            )}
+          </Space>
+        );
+      },
     },
   ];
 

@@ -89,7 +89,6 @@ export default function DashboardPage() {
             value={dashboard?.totalEnquiries || 0}
             icon={<PhoneOutlined />}
             loading={isLoading}
-            color="#1677ff"
           />
         </Col>
         <Col xs={24} sm={12} lg={6}>

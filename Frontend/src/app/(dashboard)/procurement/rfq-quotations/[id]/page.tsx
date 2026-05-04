@@ -209,7 +209,7 @@ export default function RfqDetailPage({ params }: { params: { id: string } }) {
   // ── Timeline ──────────────────────────────────────────────────────────────
   const timelineItems = [
     {
-      dot: <FileTextOutlined style={{ color: '#1677ff' }} />,
+      dot: <FileTextOutlined style={{ color: 'var(--color-primary)' }} />,
       children: (
         <div>
           <Text strong>RFQ Created</Text>
@@ -296,7 +296,7 @@ export default function RfqDetailPage({ params }: { params: { id: string } }) {
                 Indent:{' '}
                 <span
                   onClick={() => router.push(`/procurement/indents/${rfq.indent_id}`)}
-                  style={{ color: '#1677ff', cursor: 'pointer' }}
+                  style={{ color: 'var(--color-primary)', cursor: 'pointer' }}
                 >
                   {rfq.indent_number}
                 </span>

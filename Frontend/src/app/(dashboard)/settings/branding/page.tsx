@@ -40,12 +40,8 @@ export default function BrandingSettingsPage() {
         tagline: branding.tagline || '',
         primary_color: branding.primary_color || DEFAULT_BRANDING.primary_color,
         secondary_color: branding.secondary_color || DEFAULT_BRANDING.secondary_color,
-        accent_color: branding.accent_color || '',
-        color_bg_layout: branding.color_bg_layout || DEFAULT_BRANDING.color_bg_layout,
         font_family: branding.font_family || DEFAULT_BRANDING.font_family,
         border_radius: branding.border_radius ?? DEFAULT_BRANDING.border_radius,
-        sidebar_bg_color: branding.sidebar_bg_color || '',
-        sidebar_text_color: branding.sidebar_text_color || '',
       });
     }
   }, [branding, form]);
@@ -68,12 +64,8 @@ export default function BrandingSettingsPage() {
       tagline: values.tagline || null,
       primary_color: typeof values.primary_color === 'string' ? values.primary_color : colorToHex(values.primary_color),
       secondary_color: typeof values.secondary_color === 'string' ? values.secondary_color : colorToHex(values.secondary_color),
-      accent_color: values.accent_color ? (typeof values.accent_color === 'string' ? values.accent_color : colorToHex(values.accent_color)) : null,
-      color_bg_layout: typeof values.color_bg_layout === 'string' ? values.color_bg_layout : colorToHex(values.color_bg_layout),
       font_family: values.font_family || 'Inter',
       border_radius: values.border_radius ?? 8,
-      sidebar_bg_color: values.sidebar_bg_color ? (typeof values.sidebar_bg_color === 'string' ? values.sidebar_bg_color : colorToHex(values.sidebar_bg_color)) : null,
-      sidebar_text_color: values.sidebar_text_color ? (typeof values.sidebar_text_color === 'string' ? values.sidebar_text_color : colorToHex(values.sidebar_text_color)) : null,
     };
     saveMutation.mutate(payload);
   };
@@ -198,36 +190,26 @@ export default function BrandingSettingsPage() {
         <div>
           <Row gutter={[16, 16]}>
             <Col xs={12} sm={8}>
-              <Form.Item name="primary_color" label="Primary Color">
+              <Form.Item
+                name="primary_color"
+                label="Primary Color"
+                extra="Drives buttons, links, sidebar selection, table accents."
+              >
                 <ColorPicker format="hex" showText />
               </Form.Item>
             </Col>
             <Col xs={12} sm={8}>
-              <Form.Item name="secondary_color" label="Secondary Color">
+              <Form.Item
+                name="secondary_color"
+                label="Secondary Color"
+                extra="Drives sidebar text, page titles, banner deep gradient."
+              >
                 <ColorPicker format="hex" showText />
-              </Form.Item>
-            </Col>
-            <Col xs={12} sm={8}>
-              <Form.Item name="accent_color" label="Accent Color">
-                <ColorPicker format="hex" showText allowClear />
-              </Form.Item>
-            </Col>
-            <Col xs={12} sm={8}>
-              <Form.Item name="color_bg_layout" label="Background Color">
-                <ColorPicker format="hex" showText />
-              </Form.Item>
-            </Col>
-            <Col xs={12} sm={8}>
-              <Form.Item name="sidebar_bg_color" label="Sidebar Background">
-                <ColorPicker format="hex" showText allowClear />
-              </Form.Item>
-            </Col>
-            <Col xs={12} sm={8}>
-              <Form.Item name="sidebar_text_color" label="Sidebar Text">
-                <ColorPicker format="hex" showText allowClear />
               </Form.Item>
             </Col>
           </Row>
+          {/* Accent / background layout / sidebar bg / sidebar text are
+              derived from Primary + Secondary in BrandingProvider. */}
 
           <Divider orientation="left" plain>Typography</Divider>
 

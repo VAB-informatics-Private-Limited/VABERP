@@ -48,7 +48,7 @@ export default function ManagerUpdatesPage() {
     return (
       <div>
         <Title level={4} className="!mb-6 flex items-center gap-2">
-          <BellOutlined style={{ color: '#2563eb' }} /> Manager Updates
+          <BellOutlined style={{ color: 'var(--color-primary)' }} /> Manager Updates
         </Title>
         <Card className="card-shadow">
           <Empty
@@ -65,14 +65,14 @@ export default function ManagerUpdatesPage() {
       <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
         <div>
           <Title level={4} className="!mb-1 flex items-center gap-2">
-            <BellOutlined style={{ color: '#2563eb' }} /> Manager Updates
+            <BellOutlined style={{ color: 'var(--color-primary)' }} /> Manager Updates
           </Title>
           <Text className="text-gray-500 text-sm">
             Updates and announcements from your reporting manager
           </Text>
         </div>
         {updates.length > 0 && (
-          <Badge count={updates.length} color="#2563eb">
+          <Badge count={updates.length} color="var(--color-primary)">
             <div className="text-xs text-gray-500 pr-2">{updates.length} update{updates.length !== 1 ? 's' : ''}</div>
           </Badge>
         )}
@@ -80,9 +80,9 @@ export default function ManagerUpdatesPage() {
 
       {/* Manager Info Card */}
       {manager && (
-        <Card className="card-shadow mb-6" style={{ borderLeft: '4px solid #2563eb' }}>
+        <Card className="card-shadow mb-6" style={{ borderLeft: '4px solid var(--color-primary)' }}>
           <div className="flex items-center gap-4">
-            <Avatar size={52} style={{ backgroundColor: '#2563eb', flexShrink: 0 }}>
+            <Avatar size={52} style={{ backgroundColor: 'var(--color-primary)', flexShrink: 0 }}>
               {managerInitials}
             </Avatar>
             <div>
@@ -118,7 +118,7 @@ export default function ManagerUpdatesPage() {
               <List.Item>
                 <List.Item.Meta
                   avatar={
-                    <Avatar style={{ backgroundColor: '#2563eb' }}>
+                    <Avatar style={{ backgroundColor: 'var(--color-primary)' }}>
                       {managerInitials}
                     </Avatar>
                   }
@@ -138,7 +138,7 @@ export default function ManagerUpdatesPage() {
                           {dayjs(upd.createdDate).fromNow()} · {dayjs(upd.createdDate).format('DD MMM YYYY, h:mm A')}
                         </Text>
                         {managerName && (
-                          <Text className="text-xs text-blue-500">— {managerName}</Text>
+                          <Text className="text-xs text-brand">— {managerName}</Text>
                         )}
                       </div>
                     </div>

@@ -69,6 +69,31 @@ export function EnterpriseLoginForm() {
     };
     login(mappedUser, 'enterprise', loginData.token);
     message.success('Login successful!');
+
+    // Status-based routing for the new signup-review flow:
+    // pending_email_verification → user shouldn't be able to log in yet, but if they do, send back to verify
+    // pending_review              → /pending-review (waiting on super-admin)
+    // approved_pending_completion → /complete-registration (super-admin approved, finish the form)
+    // rejected                    → /registration-rejected
+    // active                      → /dashboard (or /activate if no live subscription)
+    const status = mappedUser.status;
+    if (status === 'pending_email_verification') {
+      router.push('/verify-otp');
+      return;
+    }
+    if (status === 'pending_review') {
+      router.push('/pending-review');
+      return;
+    }
+    if (status === 'approved_pending_completion') {
+      router.push('/complete-registration');
+      return;
+    }
+    if (status === 'rejected') {
+      router.push('/registration-rejected');
+      return;
+    }
+
     const isActive = mappedUser.plan_id && mappedUser.expiry_date &&
       new Date(mappedUser.expiry_date) >= new Date() &&
       mappedUser.subscription_status === 'active';

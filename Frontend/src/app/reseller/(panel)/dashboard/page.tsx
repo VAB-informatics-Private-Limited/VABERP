@@ -357,7 +357,7 @@ export default function ResellerDashboardPage() {
       <Card
         title={
           <div className="flex items-center gap-2">
-            <TeamOutlined className="text-blue-500" />
+            <TeamOutlined className="text-brand" />
             <span>Tenant Activity Overview</span>
             <Text type="secondary" className="!text-xs font-normal ml-1">
               ({tenants.length} tenant{tenants.length !== 1 ? 's' : ''})
@@ -397,7 +397,7 @@ export default function ResellerDashboardPage() {
               <Text type="secondary" className="text-xs">
                 Total {commSummary.transactionCount} transactions
               </Text>
-              <a href="/reseller/commissions" className="text-xs text-blue-500 hover:underline">
+              <a href="/reseller/commissions" className="text-xs text-brand hover:underline">
                 View all →
               </a>
             </div>

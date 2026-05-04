@@ -254,7 +254,7 @@ export function OverdueFollowupsModal({ overdueItems }: OverdueFollowupsModalPro
                     </span>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 14, fontSize: 12, color: '#64748b' }}>
-                    <a href={`tel:${item.customer_mobile}`} style={{ color: '#2563eb', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <a href={`tel:${item.customer_mobile}`} style={{ color: 'var(--color-primary)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4 }}>
                       <PhoneOutlined style={{ fontSize: 11 }} />
                       {item.customer_mobile}
                     </a>
@@ -347,7 +347,7 @@ export function OverdueFollowupsModal({ overdueItems }: OverdueFollowupsModalPro
                     {actionItem.customer_name}
                   </span>
                   <div style={{ display: 'flex', gap: 10, marginTop: 4, fontSize: 12 }}>
-                    <a href={`tel:${actionItem.customer_mobile}`} style={{ color: '#1677ff', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 3 }}>
+                    <a href={`tel:${actionItem.customer_mobile}`} style={{ color: 'var(--color-primary)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 3 }}>
                       <PhoneOutlined style={{ fontSize: 11 }} />
                       {actionItem.customer_mobile}
                     </a>

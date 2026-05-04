@@ -355,7 +355,7 @@ export default function DispatchedOrdersPage() {
                 width: 160,
                 render: (_, record: any) => (
                   <div>
-                    <Text strong className="text-blue-600">{record.order_number}</Text>
+                    <Text strong className="text-brand">{record.order_number}</Text>
                     <div className="text-xs text-gray-500">{record.customer_name}</div>
                   </div>
                 ),

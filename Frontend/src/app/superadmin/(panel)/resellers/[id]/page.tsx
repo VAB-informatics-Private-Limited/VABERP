@@ -353,7 +353,7 @@ export default function ResellerDetailPage({ params }: { params: { id: string } 
                 title="Total Revenue"
                 value={report.totalRevenue}
                 formatter={(v) => formatCurrency(Number(v))}
-                valueStyle={{ color: '#2563eb' }}
+                valueStyle={{ color: 'var(--color-primary)' }}
               />
             </Card>
           </Col>
@@ -431,7 +431,7 @@ export default function ResellerDetailPage({ params }: { params: { id: string } 
                         title="Total Billed"
                         value={earningsSummary.totalBilled}
                         formatter={(v) => formatCurrency(Number(v))}
-                        valueStyle={{ color: '#2563eb' }}
+                        valueStyle={{ color: 'var(--color-primary)' }}
                       />
                     </Card>
                   </Col>

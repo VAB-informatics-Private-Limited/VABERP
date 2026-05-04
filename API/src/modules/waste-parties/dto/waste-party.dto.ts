@@ -1,7 +1,13 @@
-import { IsString, IsOptional, IsNotEmpty, MaxLength, IsNumber, IsDateString, IsBoolean } from 'class-validator';
+import { IsString, IsOptional, IsNotEmpty, MaxLength, IsNumber, IsDateString, IsBoolean, Min, Max } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class CreateWastePartyDto {
+  @ApiProperty()
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(50)
+  partyCode: string;
+
   @ApiProperty()
   @IsString()
   @IsNotEmpty()
@@ -48,17 +54,35 @@ export class CreateWastePartyDto {
   @IsOptional()
   @IsString()
   @MaxLength(100)
-  certificationNumber?: string;
+  pollutionBoardCert?: string;
 
   @ApiProperty({ required: false })
   @IsOptional()
   @IsDateString()
-  certificationExpiry?: string;
+  certExpiryDate?: string;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsBoolean()
+  handlesHazardous?: boolean;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  paymentTerms?: string;
 
   @ApiProperty({ required: false })
   @IsOptional()
   @IsString()
   status?: string;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(5)
+  rating?: number;
 
   @ApiProperty({ required: false })
   @IsOptional()
@@ -68,6 +92,12 @@ export class CreateWastePartyDto {
 }
 
 export class UpdateWastePartyDto {
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  partyCode?: string;
+
   @ApiProperty({ required: false })
   @IsOptional()
   @IsString()
@@ -114,17 +144,35 @@ export class UpdateWastePartyDto {
   @IsOptional()
   @IsString()
   @MaxLength(100)
-  certificationNumber?: string;
+  pollutionBoardCert?: string;
 
   @ApiProperty({ required: false })
   @IsOptional()
   @IsDateString()
-  certificationExpiry?: string;
+  certExpiryDate?: string;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsBoolean()
+  handlesHazardous?: boolean;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  paymentTerms?: string;
 
   @ApiProperty({ required: false })
   @IsOptional()
   @IsString()
   status?: string;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(5)
+  rating?: number;
 
   @ApiProperty({ required: false })
   @IsOptional()

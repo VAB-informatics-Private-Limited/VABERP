@@ -1512,7 +1512,7 @@ export default function ManufacturingPODetailPage() {
                                   percent={stagePct}
                                   size="small"
                                   showInfo={false}
-                                  strokeColor={itemJobCard.status === 'completed_production' ? '#52c41a' : '#1677ff'}
+                                  strokeColor={itemJobCard.status === 'completed_production' ? '#52c41a' : 'var(--color-primary)'}
                                 />
                               </div>
                             );
@@ -1528,7 +1528,7 @@ export default function ManufacturingPODetailPage() {
                                 percent={qtyPct}
                                 size="small"
                                 showInfo={false}
-                                strokeColor={itemJobCard.status === 'completed_production' ? '#52c41a' : '#1677ff'}
+                                strokeColor={itemJobCard.status === 'completed_production' ? '#52c41a' : 'var(--color-primary)'}
                               />
                             </div>
                           );
@@ -1735,7 +1735,7 @@ export default function ManufacturingPODetailPage() {
                               <span>{done}/{total} ({pct}%)</span>
                             </div>
                             <Progress percent={pct} size="small" showInfo={false}
-                              strokeColor={isDispatched ? '#52c41a' : pct === 100 ? '#52c41a' : '#1677ff'} />
+                              strokeColor={isDispatched ? '#52c41a' : pct === 100 ? '#52c41a' : 'var(--color-primary)'} />
                           </div>
                         );
                         const completedStages = stages.filter((s: any) => s.status === 'completed').length;
@@ -1901,7 +1901,7 @@ export default function ManufacturingPODetailPage() {
       {/* ═══════ MODALS ═══════ */}
 
       {/* Send for Approval */}
-      <Modal title={<span><SendOutlined className="text-blue-500 mr-2" />Send for Inventory Approval — {selectedPO?.order_number}</span>}
+      <Modal title={<span><SendOutlined className="text-brand mr-2" />Send for Inventory Approval — {selectedPO?.order_number}</span>}
         open={approvalModalOpen} onCancel={() => { setApprovalModalOpen(false); setSelectedPO(null); approvalForm.resetFields(); }}
         onOk={() => approvalForm.submit()} okText="Send for Approval" confirmLoading={sendForApprovalMutation.isPending} width={700}>
         <Form form={approvalForm} layout="vertical" onFinish={handleSendForApproval}>
@@ -1954,8 +1954,8 @@ export default function ManufacturingPODetailPage() {
       <Modal
         title={
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center">
-              <AppstoreOutlined className="text-purple-600 text-lg" />
+            <div className="w-10 h-10 rounded-lg bg-brand-soft flex items-center justify-center">
+              <AppstoreOutlined className="text-brand text-lg" />
             </div>
             <div>
               <div className="text-base font-semibold">Select a Product</div>
@@ -1984,13 +1984,13 @@ export default function ManufacturingPODetailPage() {
                   <button
                     key={p.product_id}
                     onClick={() => pickProductForBom(p.product_id)}
-                    className="w-full text-left p-3 bg-white hover:bg-blue-50 border border-gray-200 hover:border-blue-300 rounded-lg transition-colors flex items-center justify-between group"
+                    className="w-full text-left p-3 bg-white hover:bg-brand-soft border border-gray-200 hover:border-brand rounded-lg transition-colors flex items-center justify-between group"
                   >
                     <div>
                       <div className="font-medium text-gray-900">{p.product_name}</div>
                       <div className="text-xs text-gray-400">Qty: {p.quantity} {p.unit}</div>
                     </div>
-                    <PlusOutlined className="text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity" />
+                    <PlusOutlined className="text-brand opacity-0 group-hover:opacity-100 transition-opacity" />
                   </button>
                 ))}
               </div>
@@ -2003,8 +2003,8 @@ export default function ManufacturingPODetailPage() {
       <Modal
         title={
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
-              <FileTextOutlined className="text-blue-600 text-lg" />
+            <div className="w-10 h-10 rounded-lg bg-brand-soft flex items-center justify-center">
+              <FileTextOutlined className="text-brand text-lg" />
             </div>
             <div>
               <div className="text-base font-semibold">
@@ -2061,8 +2061,8 @@ export default function ManufacturingPODetailPage() {
             if (!item) return null;
             return (
               <div className="bg-gray-50 rounded-lg p-3 mb-4 flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
-                  <AppstoreOutlined className="text-blue-500 text-lg" />
+                <div className="w-10 h-10 rounded-lg bg-brand-soft flex items-center justify-center">
+                  <AppstoreOutlined className="text-brand text-lg" />
                 </div>
                 <div className="flex-1">
                   <Text className="text-xs text-gray-500 block uppercase tracking-wide">Building BOM for</Text>
@@ -2235,8 +2235,8 @@ export default function ManufacturingPODetailPage() {
       <Modal
         title={
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center">
-              <ToolOutlined className="text-purple-600 text-lg" />
+            <div className="w-10 h-10 rounded-lg bg-brand-soft flex items-center justify-center">
+              <ToolOutlined className="text-brand text-lg" />
             </div>
             <div>
               <div className="text-base font-semibold">Create Job Card</div>
@@ -2257,12 +2257,12 @@ export default function ManufacturingPODetailPage() {
         styles={{ body: { padding: '16px 24px' } }}
       >
         {/* Product being manufactured */}
-        <div className="mb-4 p-3 rounded-lg border border-purple-200 bg-purple-50 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-lg bg-purple-200 flex items-center justify-center flex-shrink-0">
-            <RocketOutlined className="text-purple-700 text-lg" />
+        <div className="mb-4 p-3 rounded-lg border border-brand-soft bg-brand-soft flex items-center gap-3">
+          <div className="w-10 h-10 rounded-lg bg-brand-light flex items-center justify-center flex-shrink-0">
+            <RocketOutlined className="text-brand text-lg" />
           </div>
           <div className="flex-1 min-w-0">
-            <div className="text-xs text-purple-500 font-medium uppercase tracking-wide mb-0.5">Product to Manufacture</div>
+            <div className="text-xs text-brand font-medium uppercase tracking-wide mb-0.5">Product to Manufacture</div>
             <div className="font-semibold text-gray-800 truncate">
               {currentBom?.product_name || detailPO?.items?.[0]?.item_name || detailPO?.order_number || 'Product'}
             </div>
@@ -2386,7 +2386,7 @@ export default function ManufacturingPODetailPage() {
                     <div className="flex justify-between items-center gap-2 mb-2">
                       <div className="flex flex-wrap items-center gap-1">
                         {childJC ? (
-                          <Button type="link" className="!p-0 !h-auto font-bold text-blue-600 text-xs" onClick={() => router.push(`/manufacturing/${childJC.id}`)}>
+                          <Button type="link" className="!p-0 !h-auto font-bold text-brand text-xs" onClick={() => router.push(`/manufacturing/${childJC.id}`)}>
                             {childJC.job_card_number}
                           </Button>
                         ) : (

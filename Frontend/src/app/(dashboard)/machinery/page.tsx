@@ -224,7 +224,7 @@ export default function MachineryPage() {
       dataIndex: 'name',
       render: (name: string, r: Machine) => (
         <div>
-          <div className="font-medium cursor-pointer text-blue-600 hover:underline" onClick={() => router.push(`/machinery/${r.id}`)}>{name}</div>
+          <div className="font-medium cursor-pointer text-brand hover:underline" onClick={() => router.push(`/machinery/${r.id}`)}>{name}</div>
           {r.category && <div className="text-xs text-gray-400">{r.category.name}</div>}
         </div>
       ),
@@ -440,8 +440,8 @@ export default function MachineryPage() {
             {/* Prominent header — no ambiguity about what this step does */}
             <div
               style={{
-                background: 'linear-gradient(135deg, #eff6ff 0%, #faf5ff 100%)',
-                border: '1px solid #c7d2fe',
+                background: 'var(--color-primary-soft)',
+                border: '1px solid var(--color-primary-border)',
                 borderRadius: 12,
                 padding: '16px 20px',
                 marginBottom: 16,
@@ -455,7 +455,7 @@ export default function MachineryPage() {
                   width: 48,
                   height: 48,
                   borderRadius: 10,
-                  background: '#1e40af',
+                  background: 'var(--color-primary)',
                   color: '#fff',
                   display: 'flex',
                   alignItems: 'center',
@@ -473,14 +473,14 @@ export default function MachineryPage() {
                     fontWeight: 700,
                     letterSpacing: '0.12em',
                     textTransform: 'uppercase',
-                    color: '#7c3aed',
+                    color: 'var(--color-primary)',
                     marginBottom: 2,
                   }}
                 >
                   Step 2 of 2 · Spare Parts Kit
                 </div>
                 <div style={{ fontSize: 18, fontWeight: 700, color: '#0f172a', lineHeight: 1.2 }}>
-                  Attach Spare Parts to <span style={{ color: '#1e40af' }}>
+                  Attach Spare Parts to <span style={{ color: 'var(--color-primary)' }}>
                     {draftDetails.name || 'new machine'}
                   </span>
                   {draftDetails.machine_code && (

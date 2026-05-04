@@ -12,35 +12,89 @@ function hexToRgb(hex: string): { r: number; g: number; b: number } | null {
     : null;
 }
 
+function rgbToHex(r: number, g: number, b: number): string {
+  return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+}
+
 function lighten(hex: string, amount = 0.9): string {
   const rgb = hexToRgb(hex);
   if (!rgb) return '#e6f0ff';
   const r = Math.round(rgb.r + (255 - rgb.r) * amount);
   const g = Math.round(rgb.g + (255 - rgb.g) * amount);
   const b = Math.round(rgb.b + (255 - rgb.b) * amount);
-  return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+  return rgbToHex(r, g, b);
+}
+
+function darken(hex: string, amount = 0.15): string {
+  const rgb = hexToRgb(hex);
+  if (!rgb) return hex;
+  const r = Math.max(0, Math.round(rgb.r * (1 - amount)));
+  const g = Math.max(0, Math.round(rgb.g * (1 - amount)));
+  const b = Math.max(0, Math.round(rgb.b * (1 - amount)));
+  return rgbToHex(r, g, b);
+}
+
+function rgba(hex: string, alpha: number): string {
+  const rgb = hexToRgb(hex);
+  if (!rgb) return `rgba(0,0,0,${alpha})`;
+  return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${alpha})`;
 }
 
 export function BrandingProvider({ children }: { children: React.ReactNode }) {
   const stored = useBrandingStore((s) => s.branding);
 
-  const colors = useMemo(() => ({
-    primaryColor: stored?.primary_color || DEFAULT_BRANDING.primary_color,
-    secondaryColor: stored?.secondary_color || DEFAULT_BRANDING.secondary_color,
-    colorBgLayout: stored?.color_bg_layout || DEFAULT_BRANDING.color_bg_layout,
-    fontFamily: stored?.font_family || DEFAULT_BRANDING.font_family,
-    borderRadius: stored?.border_radius ?? DEFAULT_BRANDING.border_radius,
-    appName: stored?.app_name || DEFAULT_BRANDING.app_name,
-    faviconUrl: stored?.favicon_url || DEFAULT_BRANDING.favicon_url,
-  }), [stored]);
+  // Branding is driven by exactly two user inputs: primary + secondary.
+  // Everything else (accent, sidebar bg/text, layout bg) is derived deterministically.
+  const colors = useMemo(() => {
+    const primary = stored?.primary_color || DEFAULT_BRANDING.primary_color;
+    const secondary = stored?.secondary_color || DEFAULT_BRANDING.secondary_color;
+    return {
+      primaryColor: primary,
+      secondaryColor: secondary,
+      accentColor: primary,                // derived
+      colorBgLayout: '#f1f5f9',            // fixed neutral
+      sidebarBgColor: '#ffffff',           // fixed white
+      sidebarTextColor: secondary,         // derived
+      fontFamily: stored?.font_family || DEFAULT_BRANDING.font_family,
+      borderRadius: stored?.border_radius ?? DEFAULT_BRANDING.border_radius,
+      appName: stored?.app_name || DEFAULT_BRANDING.app_name,
+      faviconUrl: stored?.favicon_url || DEFAULT_BRANDING.favicon_url,
+    };
+  }, [stored]);
 
   // Set CSS custom properties
   useEffect(() => {
     const root = document.documentElement;
-    root.style.setProperty('--color-primary', colors.primaryColor);
-    root.style.setProperty('--color-primary-light', lighten(colors.primaryColor, 0.9));
+    const primary = colors.primaryColor;
+    const primaryDark = darken(primary, 0.15);
+    const primaryDarker = darken(primary, 0.3);
+    const primaryHover = darken(primary, 0.08);
+    const primaryBorder = lighten(primary, 0.55);
+    const primarySoft = lighten(primary, 0.85);
+    const primarySofter = lighten(primary, 0.93);
+    const primaryFaint = lighten(primary, 0.97);
+
+    root.style.setProperty('--color-primary', primary);
+    root.style.setProperty('--color-primary-hover', primaryHover);
+    root.style.setProperty('--color-primary-dark', primaryDark);
+    root.style.setProperty('--color-primary-darker', primaryDarker);
+    root.style.setProperty('--color-primary-border', primaryBorder);
+    root.style.setProperty('--color-primary-light', primarySoft);
+    root.style.setProperty('--color-primary-soft', primarySofter);
+    root.style.setProperty('--color-primary-faint', primaryFaint);
+    root.style.setProperty('--color-primary-rgba-10', rgba(primary, 0.1));
+    root.style.setProperty('--color-primary-rgba-20', rgba(primary, 0.2));
+    root.style.setProperty('--color-primary-rgba-25', rgba(primary, 0.25));
     root.style.setProperty('--color-bg-layout', colors.colorBgLayout);
     root.style.setProperty('--color-secondary', colors.secondaryColor);
+    root.style.setProperty('--color-secondary-soft', lighten(colors.secondaryColor, 0.92));
+    root.style.setProperty('--color-accent', colors.accentColor);
+    root.style.setProperty('--color-accent-hover', darken(colors.accentColor, 0.1));
+    root.style.setProperty('--color-accent-light', lighten(colors.accentColor, 0.85));
+    root.style.setProperty('--color-accent-soft', lighten(colors.accentColor, 0.93));
+    root.style.setProperty('--color-accent-rgba-20', rgba(colors.accentColor, 0.2));
+    root.style.setProperty('--sidebar-bg', colors.sidebarBgColor);
+    root.style.setProperty('--sidebar-text', colors.sidebarTextColor);
   }, [colors]);
 
   // Dynamic document title
@@ -63,11 +117,19 @@ export function BrandingProvider({ children }: { children: React.ReactNode }) {
     }
   }, [colors.faviconUrl]);
 
+  const primary = colors.primaryColor;
+  const primaryHover = darken(primary, 0.08);
+  const primaryDark = darken(primary, 0.15);
+  const primaryDarker = darken(primary, 0.3);
+  const primaryBorder = lighten(primary, 0.55);
+  const primarySoft = lighten(primary, 0.85);
+  const primarySofter = lighten(primary, 0.93);
+
   return (
     <ConfigProvider
       theme={{
         token: {
-          colorPrimary: colors.primaryColor,
+          colorPrimary: primary,
           borderRadius: colors.borderRadius,
           colorBgContainer: '#ffffff',
           colorBgLayout: colors.colorBgLayout,
@@ -78,41 +140,82 @@ export function BrandingProvider({ children }: { children: React.ReactNode }) {
           colorText: '#1e293b',
           colorTextSecondary: '#64748b',
           colorTextTertiary: '#94a3b8',
-          colorLink: '#7c3aed',
-          colorLinkHover: '#6d28d9',
+          colorLink: primary,
+          colorLinkHover: primaryHover,
           colorSuccess: '#059669',
           colorWarning: '#d97706',
           colorError: '#dc2626',
-          colorInfo: '#1e40af',
+          colorInfo: primary,
           fontSize: 14,
         },
         components: {
           Table: {
             headerBg: '#f8fafc',
-            headerColor: '#1e3a8a',
-            rowHoverBg: '#faf5ff',
+            headerColor: primaryDarker,
+            rowHoverBg: primarySofter,
             borderColor: '#f1f5f9',
           },
           Card: {
             paddingLG: 24,
           },
           Input: {
-            activeBorderColor: '#7c3aed',
-            hoverBorderColor: '#a78bfa',
+            activeBorderColor: primary,
+            hoverBorderColor: primaryBorder,
           },
           Select: {
-            optionSelectedBg: '#f5f3ff',
+            optionSelectedBg: primarySofter,
           },
           Badge: {
             colorBgContainer: '#ffffff',
           },
           Switch: {
-            colorPrimary: '#7c3aed',
-            colorPrimaryHover: '#6d28d9',
+            colorPrimary: primary,
+            colorPrimaryHover: primaryHover,
           },
           Segmented: {
-            itemSelectedBg: '#1e40af',
+            itemSelectedBg: primary,
             itemSelectedColor: '#ffffff',
+          },
+          Button: {
+            primaryShadow: `0 2px 4px ${rgba(primary, 0.2)}`,
+          },
+          Tabs: {
+            itemActiveColor: primary,
+            itemSelectedColor: primary,
+            itemHoverColor: primaryHover,
+            inkBarColor: primary,
+          },
+          Menu: {
+            itemSelectedBg: primarySofter,
+            itemSelectedColor: primaryDark,
+            itemHoverBg: primarySofter,
+            itemHoverColor: primaryDark,
+          },
+          Radio: {
+            buttonSolidCheckedActiveBg: primary,
+            buttonSolidCheckedBg: primary,
+          },
+          Checkbox: {
+            colorPrimary: primary,
+            colorPrimaryHover: primaryHover,
+          },
+          Pagination: {
+            itemActiveBg: primarySofter,
+          },
+          Steps: {
+            colorPrimary: primary,
+          },
+          Slider: {
+            handleColor: primary,
+            trackBg: primary,
+            trackHoverBg: primaryHover,
+          },
+          Progress: {
+            defaultColor: primary,
+          },
+          DatePicker: {
+            activeBorderColor: primary,
+            hoverBorderColor: primaryBorder,
           },
         },
       }}

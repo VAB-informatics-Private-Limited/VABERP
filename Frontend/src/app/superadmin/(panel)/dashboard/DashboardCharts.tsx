@@ -43,7 +43,7 @@ export function MonthlyRevenueChart({ data }: { data: { month: string; revenue: 
           <XAxis dataKey="month" tick={{ fontSize: 10 }} interval={0} angle={-30} textAnchor="end" height={40} />
           <YAxis tick={{ fontSize: 10 }} tickFormatter={formatY} />
           <Tooltip formatter={(v: number) => formatCurrency(v)} />
-          <Bar dataKey="revenue" fill="#3b82f6" name="Revenue" radius={[3, 3, 0, 0]} />
+          <Bar dataKey="revenue" fill="var(--color-primary)" name="Revenue" radius={[3, 3, 0, 0]} />
         </BarChart>
       </ResponsiveContainer>
     </div>
@@ -60,7 +60,7 @@ export function MonthlySignupsChart({ data }: { data: { month: string; count: nu
           <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
           <Tooltip />
           <Legend />
-          <Line type="monotone" dataKey="count" stroke="#8b5cf6" strokeWidth={2} dot={{ r: 4 }} name="New Enterprises" />
+          <Line type="monotone" dataKey="count" stroke="var(--color-primary)" strokeWidth={2} dot={{ r: 4 }} name="New Enterprises" />
         </LineChart>
       </ResponsiveContainer>
     </div>

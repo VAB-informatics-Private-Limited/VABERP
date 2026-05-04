@@ -2,7 +2,7 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { Tabs, Typography, Spin } from 'antd';
-import { UserOutlined, ShopOutlined } from '@ant-design/icons';
+import { UserOutlined, ShopOutlined, CloseOutlined } from '@ant-design/icons';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { LoginForm } from '@/components/auth/LoginForm';
@@ -91,48 +91,55 @@ function LoginPageContent() {
   ];
 
   return (
-    <div className="login-card">
-      <div className="text-center mb-8">
-        <div className="flex flex-col items-center mb-4">
-          <img src={logoSrc!} alt={displayName!} className="w-14 h-14 object-contain mb-2" />
-          <div className="text-center leading-tight">
-            <div className="font-bold text-gray-900 text-xl tracking-tight">{displayName}</div>
-          </div>
+    <div className="login-card relative">
+      {/* Close button — back to landing */}
+      <Link
+        href="/"
+        aria-label="Back to home"
+        className="absolute top-3 right-3 w-7 h-7 flex items-center justify-center rounded-full text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+      >
+        <CloseOutlined style={{ fontSize: 12 }} />
+      </Link>
+
+      <div className="login-card-brand">
+        <img src={logoSrc!} alt={displayName!} />
+        <div>
+          <div className="login-card-brand-name">{displayName}</div>
+          <div className="login-card-brand-tagline">{tagline}</div>
         </div>
-        <Text type="secondary">{tagline}</Text>
       </div>
+
+      <h1 className="login-card-headline">Welcome Back</h1>
+      <p className="login-card-sub">
+        Enter your credentials to access the command center.
+      </p>
 
       <Tabs
         activeKey={activeTab}
         onChange={setActiveTab}
         items={tabItems}
-        centered
         className="login-tabs"
       />
 
-      <div className="mt-6 text-center space-y-2">
-        <Link href="/forgot-password" className="text-primary hover:underline text-sm">
+      <div className="text-center mt-3">
+        <Link href="/forgot-password" className="text-xs" style={{ textTransform: 'uppercase', letterSpacing: '0.12em' }}>
           Forgot your password?
         </Link>
+      </div>
 
-        {activeTab === 'enterprise' && (
-          <div className="pt-4 border-t mt-4">
-            <Text type="secondary" className="text-sm">
-              Don&apos;t have an account?{' '}
-              <Link href="/register" className="text-primary hover:underline">
-                Register your business
-              </Link>
-            </Text>
-          </div>
-        )}
+      {activeTab === 'enterprise' && (
+        <div className="text-center mt-4">
+          <Text type="secondary" className="text-sm" style={{ fontWeight: 300 }}>
+            Don&apos;t have an account?{' '}
+            <Link href="/register">Register your business</Link>
+          </Text>
+        </div>
+      )}
 
-        <div className="mt-3 pt-3 border-t border-gray-100 flex justify-center gap-6">
-          <Link href="/reseller/login" className="text-xs text-gray-400 hover:text-gray-600">
-            Reseller Login
-          </Link>
-          <Link href="/superadmin/login" className="text-xs text-gray-400 hover:text-gray-600">
-            Super Admin Login
-          </Link>
+      <div className="login-card-footer">
+        <div className="login-card-footer-row">
+          <Link href="/reseller/login">Reseller Login</Link>
+          <Link href="/superadmin/login">Super Admin Login</Link>
         </div>
       </div>
     </div>

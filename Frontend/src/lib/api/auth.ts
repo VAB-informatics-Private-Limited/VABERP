@@ -64,9 +64,40 @@ export async function verifyMobileOtp(data: OtpVerification): Promise<ApiRespons
   return response.data;
 }
 
-// Register Enterprise
+// Register Enterprise (legacy full-form flow)
 export async function registerEnterprise(data: EnterpriseRegistration): Promise<ApiResponse> {
   const response = await apiClient.post<ApiResponse>('/auth/register', data);
+  return response.data;
+}
+
+// Lightweight signup — name + contact only. Credentials are emailed by
+// super-admin on approval.
+// Status flow: pending_email_verification → (OTP verify) → pending_review → (super-admin approve)
+//              → approved_pending_completion → (complete-registration) → active
+export interface QuickSignupPayload {
+  businessName: string;
+  businessEmail: string;
+  businessMobile: string;
+  industry: string;
+}
+export async function quickSignup(data: QuickSignupPayload): Promise<ApiResponse> {
+  const response = await apiClient.post<ApiResponse>('/auth/quick-signup', data);
+  return response.data;
+}
+
+// Submit full business details after super-admin approval.
+export interface CompleteRegistrationPayload {
+  businessAddress: string;
+  businessState: string;
+  businessCity: string;
+  pincode: string;
+  gstNumber?: string;
+  cinNumber?: string;
+  contactPerson?: string;
+  website?: string;
+}
+export async function completeRegistration(data: CompleteRegistrationPayload): Promise<ApiResponse> {
+  const response = await apiClient.post<ApiResponse>('/enterprises/complete-registration', data);
   return response.data;
 }
 

@@ -5,7 +5,9 @@ import { useRouter, usePathname } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import { Spin } from 'antd';
 import { useAuthStore } from '@/stores/authStore';
+import { useBrandingStore } from '@/stores/brandingStore';
 import { getPermissions } from '@/lib/api/auth';
+import { getMyBranding } from '@/lib/api/branding';
 import { normalizePermissions } from '@/lib/api/employees';
 
 interface ProtectedRouteProps {
@@ -20,6 +22,9 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   const pathname = usePathname();
   const queryClient = useQueryClient();
   const { isAuthenticated, user, userType, setPermissions, _hasHydrated } = useAuthStore();
+  const setBranding = useBrandingStore((s) => s.setBranding);
+  const brandingHydrated = useBrandingStore((s) => s._hasHydrated);
+  const branding = useBrandingStore((s) => s.branding);
   const lastPermissionsRef = useRef<string>('');
 
   useEffect(() => {
@@ -85,6 +90,23 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [_hasHydrated, isAuthenticated, user, userType]);
+
+  // After auth, fetch latest branding from server and populate the store.
+  // Branding store is cleared on logout, so without this the user lands on
+  // default colors until they happen to open Settings → Branding.
+  useEffect(() => {
+    if (!_hasHydrated || !brandingHydrated || !isAuthenticated || !user) return;
+    if (branding) return; // already loaded
+    (async () => {
+      try {
+        const res = await getMyBranding();
+        if (res.data) setBranding(res.data);
+      } catch {
+        // ignore — fallback styling stays in effect
+      }
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [_hasHydrated, brandingHydrated, isAuthenticated, user]);
 
   // Fire a sync whenever the employee navigates to a new route, so freshly-
   // granted pages become accessible the moment they click a link.

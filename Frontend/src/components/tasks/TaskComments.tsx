@@ -33,7 +33,7 @@ export function TaskComments({ taskId, comments }: Props) {
         )}
         {comments.map(c => (
           <div key={c.id} className="flex gap-3">
-            <Avatar size={28} icon={<UserOutlined />} style={{ backgroundColor: '#2563eb', flexShrink: 0 }}>
+            <Avatar size={28} icon={<UserOutlined />} style={{ backgroundColor: 'var(--color-primary)', flexShrink: 0 }}>
               {c.created_by_name?.charAt(0).toUpperCase()}
             </Avatar>
             <div className="flex-1 bg-slate-50 rounded-lg px-3 py-2">

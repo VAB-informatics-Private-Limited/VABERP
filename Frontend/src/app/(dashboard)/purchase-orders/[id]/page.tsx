@@ -487,7 +487,7 @@ export default function PurchaseOrderDetailPage() {
       title: 'Invoice #',
       dataIndex: 'invoice_number',
       key: 'invoice_number',
-      render: (v) => <span className="font-semibold text-blue-600">{v}</span>,
+      render: (v) => <span className="font-semibold text-brand">{v}</span>,
     },
     { title: 'Date', dataIndex: 'invoice_date', key: 'invoice_date' },
     {
@@ -765,7 +765,7 @@ export default function PurchaseOrderDetailPage() {
             Back
           </Button>
           <Title level={4} className="!mb-0">
-            <ShoppingCartOutlined className="mr-2 text-blue-500" />
+            <ShoppingCartOutlined className="mr-2 text-brand" />
             {po.order_number}
           </Title>
           <Tag color={getSOStatusColor(po.status)}>{getSOStatusLabel(po.status)}</Tag>
@@ -809,7 +809,7 @@ export default function PurchaseOrderDetailPage() {
                 type="primary"
                 icon={<ToolOutlined />}
                 onClick={() => router.push(`/manufacturing/po/${poId}`)}
-                style={{ background: '#1677ff', borderColor: '#1677ff' }}
+                style={{ background: 'var(--color-primary)', borderColor: 'var(--color-primary)' }}
               >
                 In Manufacturing
               </Button>
@@ -825,7 +825,7 @@ export default function PurchaseOrderDetailPage() {
                     onOk: () => manufacturingMutation.mutateAsync(),
                   })
                 }
-                className="border-blue-400 text-blue-600"
+                className="border-brand text-brand"
               >
                 Transfer to Manufacturing
               </Button>
@@ -1070,7 +1070,7 @@ export default function PurchaseOrderDetailPage() {
           <Card title="Purchase Order Details" className="card-shadow mb-4">
             <Descriptions column={{ xs: 1, sm: 2 }} bordered size="small">
               <Descriptions.Item label="PR Number">
-                <span className="font-semibold text-blue-600">{po.order_number}</span>
+                <span className="font-semibold text-brand">{po.order_number}</span>
               </Descriptions.Item>
               <Descriptions.Item label="Order Date">{po.order_date}</Descriptions.Item>
               <Descriptions.Item label="Customer">{po.customer_name}</Descriptions.Item>
@@ -1226,7 +1226,7 @@ export default function PurchaseOrderDetailPage() {
                     <Divider className="my-1" />
                     <div className="flex justify-between font-bold text-base">
                       <span>Grand Total</span>
-                      <span className="text-blue-700">{fmt(editGrandTotal)}</span>
+                      <span className="text-brand">{fmt(editGrandTotal)}</span>
                     </div>
                   </div>
                 </div>
@@ -1272,7 +1272,7 @@ export default function PurchaseOrderDetailPage() {
               <Divider className="my-2" />
               <div className="flex justify-between text-lg font-bold">
                 <span>PO Total</span>
-                <span className="text-blue-700">{fmt(po.grand_total)}</span>
+                <span className="text-brand">{fmt(po.grand_total)}</span>
               </div>
             </div>
           </Card>
@@ -1281,7 +1281,7 @@ export default function PurchaseOrderDetailPage() {
             <div className="space-y-3">
               <div className="flex justify-between text-sm">
                 <Text type="secondary">PO Total</Text>
-                <span className="font-semibold text-blue-700">{fmt(poTotal)}</span>
+                <span className="font-semibold text-brand">{fmt(poTotal)}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <Text type="secondary">Total Invoiced</Text>
@@ -1306,7 +1306,7 @@ export default function PurchaseOrderDetailPage() {
               )}
               <Progress
                 percent={paidPercent}
-                strokeColor={totalBalanceDue <= 0.005 ? '#52c41a' : '#1677ff'}
+                strokeColor={totalBalanceDue <= 0.005 ? '#52c41a' : 'var(--color-primary)'}
                 format={() => `${paidPercent}% paid`}
               />
             </div>
@@ -1418,7 +1418,7 @@ export default function PurchaseOrderDetailPage() {
         title={
           invoice ? (
             <div className="flex items-center gap-3">
-              <span className="font-bold text-blue-600">{invoice.invoice_number}</span>
+              <span className="font-bold text-brand">{invoice.invoice_number}</span>
               <Tag color={getInvStatusColor(invoice.status)}>{getInvStatusLabel(invoice.status)}</Tag>
             </div>
           ) : 'Invoice Details'
@@ -1443,7 +1443,7 @@ export default function PurchaseOrderDetailPage() {
           <div className="space-y-4">
             {/* Enterprise GST banner */}
             {gstNumber && (
-              <div className="flex items-center gap-3 px-4 py-2.5 bg-blue-50 border border-blue-100 rounded-lg">
+              <div className="flex items-center gap-3 px-4 py-2.5 bg-brand-soft border border-brand-soft rounded-lg">
                 <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">GST No.</span>
                 <span className="font-bold text-blue-800 tracking-widest font-mono text-sm">{gstNumber}</span>
               </div>
@@ -1452,7 +1452,7 @@ export default function PurchaseOrderDetailPage() {
             {/* Invoice info */}
             <Descriptions column={2} bordered size="small">
               <Descriptions.Item label="Invoice #">
-                <span className="font-semibold text-blue-600">{invoice.invoice_number}</span>
+                <span className="font-semibold text-brand">{invoice.invoice_number}</span>
               </Descriptions.Item>
               <Descriptions.Item label="Date">{invoice.invoice_date}</Descriptions.Item>
               <Descriptions.Item label="Customer">{invoice.customer_name}</Descriptions.Item>
@@ -1568,7 +1568,7 @@ export default function PurchaseOrderDetailPage() {
                         <Table.Summary.Cell index={0} colSpan={8} className="text-right font-bold">
                           Grand Total
                         </Table.Summary.Cell>
-                        <Table.Summary.Cell index={8} className="font-bold text-blue-600">
+                        <Table.Summary.Cell index={8} className="font-bold text-brand">
                           {fmt(invoice.grand_total)}
                         </Table.Summary.Cell>
                       </Table.Summary.Row>
@@ -1638,7 +1638,7 @@ export default function PurchaseOrderDetailPage() {
         maskClosable={false}
       >
         {invoice && (
-          <div className="mb-4 p-3 bg-blue-50 rounded">
+          <div className="mb-4 p-3 bg-brand-soft rounded">
             <div className="text-sm text-gray-600">{invoice.invoice_number} — Balance Due</div>
             <div className="text-2xl font-bold text-red-600">{fmt(invoice.balance_due)}</div>
           </div>
@@ -1700,7 +1700,7 @@ export default function PurchaseOrderDetailPage() {
       <Modal
         title={
           <div className="flex items-center gap-2">
-            <FileDoneOutlined className="text-blue-500" />
+            <FileDoneOutlined className="text-brand" />
             <span>Generate Invoice</span>
           </div>
         }
@@ -1716,9 +1716,9 @@ export default function PurchaseOrderDetailPage() {
             Balance Reference ({po?.order_number} · {po?.customer_name})
           </div>
           <div className="rounded-lg border overflow-hidden text-sm">
-            <div className="flex justify-between items-center px-3 py-2 bg-blue-50 border-b">
+            <div className="flex justify-between items-center px-3 py-2 bg-brand-soft border-b">
               <span className="text-gray-600">PO Total</span>
-              <span className="font-bold text-blue-700">{fmt(poTotal)}</span>
+              <span className="font-bold text-brand">{fmt(poTotal)}</span>
             </div>
             {totalInvoiced > 0 && (
               <div className="flex justify-between items-center px-3 py-2 bg-orange-50 border-b">
@@ -1797,7 +1797,7 @@ export default function PurchaseOrderDetailPage() {
             width={480}
           >
             {targetInvoice && (
-              <div className="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-100">
+              <div className="mb-4 p-3 bg-brand-soft rounded-lg border border-brand-soft">
                 <div className="flex justify-between text-sm mb-1">
                   <span className="text-gray-500">Invoice Amount</span>
                   <span className="font-semibold">{fmt(targetInvoice.grand_total)}</span>
@@ -1924,7 +1924,7 @@ export default function PurchaseOrderDetailPage() {
       <Modal
         title={
           <div className="flex items-center gap-2">
-            <HistoryOutlined className="text-blue-500" />
+            <HistoryOutlined className="text-brand" />
             <span>Update Purchase Order</span>
           </div>
         }
@@ -1935,10 +1935,10 @@ export default function PurchaseOrderDetailPage() {
         width={480}
       >
         <div className="mb-4">
-          <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg border border-blue-100">
+          <div className="flex items-center justify-between p-3 bg-brand-soft rounded-lg border border-brand-soft">
             <div>
               <div className="text-xs text-gray-500 uppercase font-semibold">Current Version</div>
-              <div className="text-xl font-bold text-blue-700">v{po?.current_version}</div>
+              <div className="text-xl font-bold text-brand">v{po?.current_version}</div>
             </div>
             <div className="text-2xl text-gray-300">→</div>
             <div>
@@ -1948,7 +1948,7 @@ export default function PurchaseOrderDetailPage() {
           </div>
           <div className="mt-3 p-3 bg-gray-50 rounded border text-sm">
             <div className="font-semibold mb-1">Updated Total</div>
-            <div className="text-lg font-bold text-blue-700">{fmt(editGrandTotal)}</div>
+            <div className="text-lg font-bold text-brand">{fmt(editGrandTotal)}</div>
             {editGrandTotal !== Number(po?.grand_total || 0) && (
               <div className="text-xs text-gray-400 mt-1">
                 Previous: {fmt(po?.grand_total || 0)}
@@ -1984,7 +1984,7 @@ export default function PurchaseOrderDetailPage() {
 
       {/* ETA Modal */}
       <Modal
-        title={<span><CalendarOutlined className="mr-2 text-blue-500" />Set Expected Delivery Date</span>}
+        title={<span><CalendarOutlined className="mr-2 text-brand" />Set Expected Delivery Date</span>}
         open={etaModalOpen}
         onCancel={() => setEtaModalOpen(false)}
         onOk={() => etaMutation.mutate(etaValue ? etaValue.format('YYYY-MM-DD') : '')}

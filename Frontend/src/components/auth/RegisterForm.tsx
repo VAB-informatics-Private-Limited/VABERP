@@ -1,71 +1,76 @@
 'use client';
 
 import { useState } from 'react';
-import { Form, Input, Button, message, Row, Col, Select } from 'antd';
+import { Form, Input, Button, Select, message } from 'antd';
 import {
   ShopOutlined,
   MailOutlined,
   PhoneOutlined,
-  EnvironmentOutlined,
-  IdcardOutlined,
+  AppstoreOutlined,
 } from '@ant-design/icons';
 import { useRouter } from 'next/navigation';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { registrationSchema, RegistrationFormData } from '@/lib/validations/auth';
-import { registerEnterprise } from '@/lib/api';
+import { quickSignupSchema, QuickSignupFormData } from '@/lib/validations/auth';
+import { quickSignup } from '@/lib/api';
 
-// Indian states for dropdown
-const INDIAN_STATES = [
-  'Andhra Pradesh', 'Arunachal Pradesh', 'Assam', 'Bihar', 'Chhattisgarh',
-  'Goa', 'Gujarat', 'Haryana', 'Himachal Pradesh', 'Jharkhand', 'Karnataka',
-  'Kerala', 'Madhya Pradesh', 'Maharashtra', 'Manipur', 'Meghalaya', 'Mizoram',
-  'Nagaland', 'Odisha', 'Punjab', 'Rajasthan', 'Sikkim', 'Tamil Nadu',
-  'Telangana', 'Tripura', 'Uttar Pradesh', 'Uttarakhand', 'West Bengal',
-  'Delhi', 'Jammu and Kashmir', 'Ladakh', 'Puducherry', 'Chandigarh',
+// Sentinel value used only inside the dropdown to mean "let me type my own"
+const OTHER_SENTINEL = '__other__';
+
+const INDUSTRIES = [
+  'Automotive',
+  'Pharmaceuticals',
+  'Textiles & Apparel',
+  'Food & Beverage',
+  'Chemicals',
+  'Electronics',
+  'Engineering & Industrial Machinery',
+  'Steel & Metals',
+  'Plastics & Rubber',
+  'Cement & Construction Materials',
+  'Paper & Packaging',
+  'Renewable Energy',
+  'Aerospace',
+  'Defense',
+  'FMCG',
+  'Heavy Machinery',
+  'Electrical Equipment',
+  'Furniture',
+  'Leather Goods',
+  'Agriculture & Agri-tech',
 ];
 
 export function RegisterForm() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
+  const [isOther, setIsOther] = useState(false);
 
   const {
     control,
     handleSubmit,
     formState: { errors },
-  } = useForm<RegistrationFormData>({
-    resolver: zodResolver(registrationSchema),
+  } = useForm<QuickSignupFormData>({
+    resolver: zodResolver(quickSignupSchema),
     defaultValues: {
       businessName: '',
       businessEmail: '',
       businessMobile: '',
-      businessAddress: '',
-      businessState: '',
-      businessCity: '',
-      pincode: '',
-      gstNumber: '',
-      cinNumber: '',
+      industry: '',
     },
   });
 
-  const onSubmit = async (data: RegistrationFormData) => {
+  const onSubmit = async (data: QuickSignupFormData) => {
     setLoading(true);
     try {
-      const response = await registerEnterprise(data);
+      await quickSignup(data);
 
-      // Store email for OTP verification
+      // Stash for the OTP verify screen
       sessionStorage.setItem('pendingVerification', JSON.stringify({
         email: data.businessEmail,
         mobile: data.businessMobile,
       }));
 
-      const tempPassword = (response.data as Record<string, string>)?.tempPassword;
-      if (tempPassword) {
-        message.success(`Registration successful! Your temporary password is: ${tempPassword}`, 10);
-      } else {
-        message.success('Registration successful! Please verify your email and mobile.');
-      }
-
+      message.success('Registered! Check your email for the OTP.');
       router.push('/verify-otp');
     } catch (error: unknown) {
       const err = error as { response?: { data?: { message?: string | string[] } } };
@@ -99,193 +104,123 @@ export function RegisterForm() {
         />
       </Form.Item>
 
-      <Row gutter={12}>
-        <Col span={12}>
-          <Form.Item
-            label="Business Email"
-            validateStatus={errors.businessEmail ? 'error' : ''}
-            help={errors.businessEmail?.message}
-            required
-            className="!mb-3"
-          >
-            <Controller
-              name="businessEmail"
-              control={control}
-              render={({ field }) => (
-                <Input
-                  {...field}
-                  prefix={<MailOutlined className="text-gray-400" />}
-                  placeholder="email@company.com"
-                />
-              )}
-            />
-          </Form.Item>
-        </Col>
-        <Col span={12}>
-          <Form.Item
-            label="Mobile Number"
-            validateStatus={errors.businessMobile ? 'error' : ''}
-            help={errors.businessMobile?.message}
-            required
-            className="!mb-3"
-          >
-            <Controller
-              name="businessMobile"
-              control={control}
-              render={({ field }) => (
-                <Input
-                  {...field}
-                  prefix={<PhoneOutlined className="text-gray-400" />}
-                  placeholder="10-digit mobile"
-                  maxLength={10}
-                />
-              )}
-            />
-          </Form.Item>
-        </Col>
-      </Row>
-
       <Form.Item
-        label="Business Address"
-        validateStatus={errors.businessAddress ? 'error' : ''}
-        help={errors.businessAddress?.message}
+        label="Business Email"
+        validateStatus={errors.businessEmail ? 'error' : ''}
+        help={errors.businessEmail?.message}
         required
         className="!mb-3"
       >
         <Controller
-          name="businessAddress"
+          name="businessEmail"
           control={control}
           render={({ field }) => (
-            <Input.TextArea
+            <Input
               {...field}
-              placeholder="Enter full address"
-              rows={2}
+              prefix={<MailOutlined className="text-gray-400" />}
+              placeholder="email@company.com"
             />
           )}
         />
       </Form.Item>
 
-      <Row gutter={12}>
-        <Col span={8}>
-          <Form.Item
-            label="State"
-            validateStatus={errors.businessState ? 'error' : ''}
-            help={errors.businessState?.message}
-            required
-            className="!mb-3"
-          >
-            <Controller
-              name="businessState"
-              control={control}
-              render={({ field }) => (
+      <Form.Item
+        label="Mobile Number"
+        validateStatus={errors.businessMobile ? 'error' : ''}
+        help={errors.businessMobile?.message}
+        required
+        className="!mb-3"
+      >
+        <Controller
+          name="businessMobile"
+          control={control}
+          render={({ field }) => (
+            <Input
+              {...field}
+              prefix={<PhoneOutlined className="text-gray-400" />}
+              placeholder="10-digit mobile"
+              maxLength={10}
+              inputMode="numeric"
+              onChange={(e) => field.onChange(e.target.value.replace(/\D/g, ''))}
+              onKeyDown={(e) => {
+                // Allow control keys, but block any non-digit character
+                const allow = ['Backspace', 'Delete', 'Tab', 'ArrowLeft', 'ArrowRight', 'Home', 'End'];
+                if (allow.includes(e.key) || e.ctrlKey || e.metaKey) return;
+                if (!/^[0-9]$/.test(e.key)) e.preventDefault();
+              }}
+            />
+          )}
+        />
+      </Form.Item>
+
+      <Form.Item
+        label="Industry"
+        validateStatus={errors.industry ? 'error' : ''}
+        help={errors.industry?.message}
+        required
+        className="!mb-3"
+      >
+        <Controller
+          name="industry"
+          control={control}
+          render={({ field }) => {
+            // Compute what the Select shows: when Other is active the dropdown
+            // shows the "Other" entry; otherwise it shows whatever string the
+            // form holds (which matches a known industry).
+            const selectValue = isOther
+              ? OTHER_SENTINEL
+              : (field.value || undefined);
+
+            return (
+              <>
                 <Select
-                  {...field}
-                  placeholder="Select state"
+                  value={selectValue}
+                  onChange={(v) => {
+                    if (v === OTHER_SENTINEL) {
+                      setIsOther(true);
+                      // clear the form value so Zod's min(2) enforces the user
+                      // actually types something in the Other input below
+                      field.onChange('');
+                    } else {
+                      setIsOther(false);
+                      field.onChange(v);
+                    }
+                  }}
+                  onBlur={field.onBlur}
+                  placeholder="Select your manufacturing domain"
                   showSearch
                   optionFilterProp="children"
-                >
-                  {INDIAN_STATES.map((state) => (
-                    <Select.Option key={state} value={state}>
-                      {state}
-                    </Select.Option>
-                  ))}
-                </Select>
-              )}
-            />
-          </Form.Item>
-        </Col>
-        <Col span={8}>
-          <Form.Item
-            label="City"
-            validateStatus={errors.businessCity ? 'error' : ''}
-            help={errors.businessCity?.message}
-            required
-            className="!mb-3"
-          >
-            <Controller
-              name="businessCity"
-              control={control}
-              render={({ field }) => (
-                <Input
-                  {...field}
-                  prefix={<EnvironmentOutlined className="text-gray-400" />}
-                  placeholder="City"
+                  suffixIcon={<AppstoreOutlined className="text-gray-400" />}
+                  options={[
+                    ...INDUSTRIES.map((i) => ({ label: i, value: i })),
+                    { label: 'Other (specify below)', value: OTHER_SENTINEL },
+                  ]}
                 />
-              )}
-            />
-          </Form.Item>
-        </Col>
-        <Col span={8}>
-          <Form.Item
-            label="Pincode"
-            validateStatus={errors.pincode ? 'error' : ''}
-            help={errors.pincode?.message}
-            required
-            className="!mb-3"
-          >
-            <Controller
-              name="pincode"
-              control={control}
-              render={({ field }) => (
-                <Input
-                  {...field}
-                  placeholder="6-digit"
-                  maxLength={6}
-                />
-              )}
-            />
-          </Form.Item>
-        </Col>
-      </Row>
+                {isOther && (
+                  <Input
+                    className="!mt-2"
+                    placeholder="Specify your industry"
+                    value={field.value}
+                    onChange={(e) => field.onChange(e.target.value)}
+                    onBlur={field.onBlur}
+                    maxLength={80}
+                  />
+                )}
+              </>
+            );
+          }}
+        />
+      </Form.Item>
 
-      <Row gutter={12}>
-        <Col span={12}>
-          <Form.Item
-            label="GST Number"
-            validateStatus={errors.gstNumber ? 'error' : ''}
-            help={errors.gstNumber?.message}
-            className="!mb-3"
-          >
-            <Controller
-              name="gstNumber"
-              control={control}
-              render={({ field }) => (
-                <Input
-                  {...field}
-                  prefix={<IdcardOutlined className="text-gray-400" />}
-                  placeholder="Optional"
-                />
-              )}
-            />
-          </Form.Item>
-        </Col>
-        <Col span={12}>
-          <Form.Item
-            label="CIN Number"
-            validateStatus={errors.cinNumber ? 'error' : ''}
-            help={errors.cinNumber?.message}
-            className="!mb-3"
-          >
-            <Controller
-              name="cinNumber"
-              control={control}
-              render={({ field }) => (
-                <Input
-                  {...field}
-                  prefix={<IdcardOutlined className="text-gray-400" />}
-                  placeholder="Optional"
-                />
-              )}
-            />
-          </Form.Item>
-        </Col>
-      </Row>
-
-      <Form.Item className="mb-0 mt-4">
+      <Form.Item className="mb-0 mt-3">
         <Button type="primary" htmlType="submit" loading={loading} block size="large">
           Register Business
         </Button>
       </Form.Item>
+
+      <p className="mt-3 text-[11px] text-gray-400 text-center leading-relaxed">
+        After you verify your email, our partners will reach out to you. Login credentials will be sent on approval.
+      </p>
     </Form>
   );
 }

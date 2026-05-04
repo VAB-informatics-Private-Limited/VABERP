@@ -376,7 +376,7 @@ function FinancialsTab({ enterpriseId }: { enterpriseId: number }) {
                 <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Profit Margin</span>
                 <span
                   className="text-lg font-bold"
-                  style={{ color: summary!.profitMargin >= 0 ? '#7c3aed' : '#ef4444' }}
+                  style={{ color: summary!.profitMargin >= 0 ? 'var(--color-primary)' : '#ef4444' }}
                 >
                   {summary!.profitMargin.toFixed(1)}%
                 </span>
@@ -384,7 +384,7 @@ function FinancialsTab({ enterpriseId }: { enterpriseId: number }) {
               <Progress
                 percent={Math.min(Math.abs(summary!.profitMargin), 100)}
                 showInfo={false}
-                strokeColor={summary!.profitMargin >= 0 ? '#7c3aed' : '#ef4444'}
+                strokeColor={summary!.profitMargin >= 0 ? 'var(--color-primary)' : '#ef4444'}
                 trailColor="#e5e7eb"
                 size="small"
               />

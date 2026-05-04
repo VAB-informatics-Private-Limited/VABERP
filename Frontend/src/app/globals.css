@@ -11,16 +11,31 @@
   --muted: #f3f4f6;
   --muted-foreground: #6b7280;
 
-  /* Logo-derived color palette */
-  --color-primary: #1e40af;          /* Royal Blue - main logo petal */
-  --color-primary-light: #dbeafe;
-  --color-primary-dark: #1e3a8a;
-  --color-accent: #c026d3;           /* Magenta/Fuchsia - right logo petal */
-  --color-accent-light: #f5d0fe;
-  --color-gold: #d97706;             /* Gold - logo base arc */
+  /* Brand palette — runtime-overridden by BrandingProvider.
+     These are fallbacks if the provider hasn't initialized yet. */
+  --color-primary: #1e40af;
+  --color-primary-hover: #1a3a9b;
+  --color-primary-dark: #1a3795;
+  --color-primary-darker: #15306f;
+  --color-primary-border: #93b3e8;
+  --color-primary-light: #d2dcf3;
+  --color-primary-soft: #e6ecf8;
+  --color-primary-faint: #f5f7fc;
+  --color-primary-rgba-10: rgba(30, 64, 175, 0.1);
+  --color-primary-rgba-20: rgba(30, 64, 175, 0.2);
+  --color-primary-rgba-25: rgba(30, 64, 175, 0.25);
+  --color-gold: #d97706;
   --color-gold-light: #fef3c7;
   --color-bg-layout: #f1f5f9;
   --color-secondary: #111827;
+  --color-secondary-soft: #e8e9ec;
+  --color-accent: #1e40af;
+  --color-accent-hover: #1a3a9b;
+  --color-accent-light: #d2dcf3;
+  --color-accent-soft: #e6ecf8;
+  --color-accent-rgba-20: rgba(30, 64, 175, 0.2);
+  --sidebar-bg: #ffffff;
+  --sidebar-text: #475569;
 }
 
 html, body {
@@ -57,7 +72,7 @@ html, body {
 /* Thin scrollbar - branded */
 * {
   scrollbar-width: thin;
-  scrollbar-color: #c4b5fd transparent;
+  scrollbar-color: var(--color-primary-border) transparent;
 }
 ::-webkit-scrollbar {
   width: 6px;
@@ -67,11 +82,11 @@ html, body {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #c4b5fd;
+  background: var(--color-primary-border);
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #a78bfa;
+  background: var(--color-primary);
 }
 
 /* Ant Design overrides */
@@ -92,50 +107,50 @@ html, body {
 }
 
 .ant-card:hover {
-  border-color: #c4b5fd !important;
-  box-shadow: 0 4px 16px 0 rgba(30, 64, 175, 0.06), 0 8px 24px -8px rgba(192, 38, 211, 0.06) !important;
+  border-color: var(--color-primary-border) !important;
+  box-shadow: 0 4px 16px 0 var(--color-primary-rgba-10), 0 8px 24px -8px var(--color-primary-rgba-10) !important;
   transform: translateY(-1px);
 }
 
 /* Table refinements - branded header */
 .ant-table-thead > tr > th {
-  background: linear-gradient(135deg, #eff6ff 0%, #faf5ff 100%) !important;
+  background: linear-gradient(135deg, var(--color-primary-faint) 0%, var(--color-primary-soft) 100%) !important;
   font-weight: 600 !important;
-  color: #1e3a8a !important;
+  color: var(--color-primary-darker) !important;
   font-size: 12px !important;
   text-transform: uppercase !important;
   letter-spacing: 0.04em !important;
-  border-bottom: 2px solid #c7d2fe !important;
+  border-bottom: 2px solid var(--color-primary-border) !important;
 }
 
 .ant-table-tbody > tr:hover > td {
-  background: #faf5ff !important;
+  background: var(--color-primary-soft) !important;
 }
 
 .ant-table-tbody > tr > td {
   border-bottom: 1px solid #f1f5f9 !important;
 }
 
-/* Button refinements - logo colors */
+/* Button refinements - branded primary */
 .ant-btn-primary {
-  background: linear-gradient(135deg, #1e40af 0%, #7c3aed 100%) !important;
+  background: var(--color-primary) !important;
   border: none !important;
-  box-shadow: 0 2px 4px rgba(30, 64, 175, 0.2), 0 1px 2px rgba(124, 58, 237, 0.15) !important;
+  box-shadow: 0 2px 4px var(--color-primary-rgba-20), 0 1px 2px var(--color-primary-rgba-10) !important;
 }
 
 .ant-btn-primary:hover {
-  background: linear-gradient(135deg, #1d4ed8 0%, #8b5cf6 100%) !important;
-  box-shadow: 0 4px 8px rgba(30, 64, 175, 0.25), 0 2px 4px rgba(124, 58, 237, 0.2) !important;
+  background: var(--color-primary-hover) !important;
+  box-shadow: 0 4px 8px var(--color-primary-rgba-25), 0 2px 4px var(--color-primary-rgba-20) !important;
 }
 
 .ant-btn-primary:active {
-  background: linear-gradient(135deg, #1e3a8a 0%, #6d28d9 100%) !important;
+  background: var(--color-primary-dark) !important;
 }
 
 /* Default button with branded hover */
 .ant-btn-default:hover {
-  color: #7c3aed !important;
-  border-color: #a78bfa !important;
+  color: var(--color-primary) !important;
+  border-color: var(--color-primary-border) !important;
 }
 
 /* Tag refinements */
@@ -151,11 +166,11 @@ html, body {
 
 .ant-tabs-tab-active .ant-tabs-tab-btn {
   font-weight: 600 !important;
-  color: #1e40af !important;
+  color: var(--color-primary) !important;
 }
 
 .ant-tabs-ink-bar {
-  background: linear-gradient(90deg, #1e40af, #c026d3) !important;
+  background: var(--color-primary) !important;
   height: 3px !important;
   border-radius: 3px !important;
 }
@@ -172,7 +187,7 @@ html, body {
 .page-header-title {
   font-size: 20px;
   font-weight: 600;
-  color: #0f172a;
+  color: var(--color-secondary);
   line-height: 1.3;
   margin: 0 0 4px 0;
   font-family: 'Inter', -apple-system, sans-serif;
@@ -184,9 +199,9 @@ html, body {
   margin: 0;
 }
 
-/* ============ Page Header Gradient Banner - Logo Colors ============ */
+/* ============ Page Header Gradient Banner - Branded ============ */
 .page-header-banner {
-  background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 30%, #7c3aed 70%, #c026d3 100%);
+  background: linear-gradient(135deg, var(--color-secondary) 0%, var(--color-primary-dark) 55%, var(--color-primary) 100%);
   margin: -12px -12px 20px -12px;
   padding: 24px 24px;
   border-radius: 0 0 16px 16px;
@@ -194,7 +209,7 @@ html, body {
   overflow: hidden;
 }
 
-/* Subtle gold accent line at bottom of banner */
+/* Accent line at bottom of banner */
 .page-header-banner::after {
   content: '';
   position: absolute;
@@ -202,7 +217,7 @@ html, body {
   left: 0;
   right: 0;
   height: 3px;
-  background: linear-gradient(90deg, transparent 0%, #f59e0b 30%, #d97706 50%, #f59e0b 70%, transparent 100%);
+  background: linear-gradient(90deg, transparent 0%, var(--color-accent) 50%, transparent 100%);
 }
 
 @media (min-width: 768px) {
@@ -312,27 +327,380 @@ html, body {
   border-radius: 12px;
 }
 
-/* Login page styles - logo gradient */
+/* Branded text helpers — use these instead of text-blue-600 etc. */
+.text-brand { color: var(--color-primary) !important; }
+.text-brand-dark { color: var(--color-primary-dark) !important; }
+.bg-brand-soft { background: var(--color-primary-soft) !important; }
+.bg-brand-light { background: var(--color-primary-light) !important; }
+.border-brand { border-color: var(--color-primary) !important; }
+.border-brand-soft { border-color: var(--color-primary-border) !important; }
+
+/* ============ Auth (login/register/forgot) — unified bg + glass card ============ */
+.auth-shell {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100vh;
+  height: 100dvh;
+  background: var(--color-secondary);
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.auth-bg {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  z-index: 0;
+}
+
+.auth-bg-veil {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background:
+    linear-gradient(95deg,
+      rgba(15, 23, 42, 0.55) 0%,
+      rgba(15, 23, 42, 0.40) 35%,
+      rgba(15, 23, 42, 0.20) 60%,
+      rgba(255, 255, 255, 0.10) 100%),
+    radial-gradient(ellipse at right center, var(--color-primary-rgba-25), transparent 60%);
+  pointer-events: none;
+}
+
+/* Floating icon chip — bottom-left */
+.auth-chip {
+  position: absolute;
+  left: clamp(20px, 3vw, 36px);
+  bottom: clamp(20px, 3vw, 36px);
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 14px;
+  background: rgba(15, 23, 42, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  backdrop-filter: blur(14px) saturate(1.4);
+  -webkit-backdrop-filter: blur(14px) saturate(1.4);
+  box-shadow: 0 12px 32px -8px rgba(0,0,0,0.35);
+  animation: chipIn 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: 0.15s;
+}
+
+@keyframes chipIn {
+  0%   { opacity: 0; transform: translateY(10px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+.auth-chip-icon {
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 16px;
+  transition: background 0.2s ease, transform 0.2s ease;
+}
+
+.auth-chip-icon:hover {
+  background: var(--color-accent);
+  transform: translateY(-2px);
+}
+
+/* Content area — anchored to the right on desktop, centered on mobile.
+   Fixed height = viewport, no vertical scrolling at this level. */
+.auth-content {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: clamp(16px, 4vw, 56px);
+  animation: cardIn 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+  pointer-events: none;
+}
+
+.auth-content > * { pointer-events: auto; }
+
+@keyframes cardIn {
+  0%   { opacity: 0; transform: translateY(10px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+/* Login card — clean centered card */
+.login-card {
+  width: 100%;
+  max-width: 410px;
+  background: rgba(255, 255, 255, 0.94);
+  padding: 28px 30px 22px;
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  border-radius: 18px;
+  backdrop-filter: blur(20px) saturate(1.4);
+  -webkit-backdrop-filter: blur(20px) saturate(1.4);
+  box-shadow:
+    0 24px 60px -20px rgba(0, 0, 0, 0.45),
+    0 12px 28px -16px rgba(0, 0, 0, 0.25),
+    inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  position: relative;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+.login-card::-webkit-scrollbar { width: 0; height: 0; }
+.login-card { scrollbar-width: none; }
+
+.login-card-brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 24px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid #f1f5f9;
+  text-align: center;
+}
+
+.login-card-brand img {
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+}
+
+.login-card-brand-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--color-secondary);
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+}
+
+.login-card-brand-tagline {
+  font-size: 11.5px;
+  color: #94a3b8;
+  margin-top: 2px;
+}
+
+.login-card-headline {
+  font-size: 28px;
+  font-weight: 800;
+  color: var(--color-primary);
+  letter-spacing: -0.025em;
+  margin: 0 0 6px 0;
+  line-height: 1.1;
+  text-align: center;
+}
+
+.login-card-sub {
+  font-size: 13px;
+  color: #64748b;
+  font-weight: 300;
+  margin: 0 0 24px 0;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.login-card-footer {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid #f1f5f9;
+  text-align: center;
+}
+
+.login-card-footer-row {
+  display: flex;
+  justify-content: center;
+  gap: 22px;
+}
+
+.login-card-footer-row a {
+  font-size: 10px;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-weight: 700;
+  transition: color 0.15s ease;
+}
+
+.login-card-footer-row a:hover {
+  color: var(--color-primary);
+}
+
+/* Pill tabs inside the white card */
+.login-card .login-tabs .ant-tabs-nav { margin-bottom: 20px !important; }
+.login-card .login-tabs .ant-tabs-nav::before { border-bottom: none !important; }
+.login-card .login-tabs .ant-tabs-nav-wrap { justify-content: center; }
+.login-card .login-tabs .ant-tabs-nav-list { gap: 6px; }
+.login-card .login-tabs .ant-tabs-tab {
+  padding: 8px 16px !important;
+  margin: 0 !important;
+  border-radius: 10px;
+  background: #f8fafc;
+  border: 1px solid transparent;
+  transition: all 0.18s ease;
+  justify-content: center;
+}
+.login-card .login-tabs .ant-tabs-tab .ant-tabs-tab-btn > span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+}
+.login-card .login-tabs .ant-tabs-tab .ant-tabs-tab-btn {
+  color: #64748b !important;
+  font-weight: 500;
+  font-size: 12px;
+}
+.login-card .login-tabs .ant-tabs-tab:hover {
+  background: var(--color-primary-soft);
+}
+.login-card .login-tabs .ant-tabs-tab-active {
+  background: var(--color-primary) !important;
+  border-color: transparent !important;
+}
+.login-card .login-tabs .ant-tabs-tab-active .ant-tabs-tab-btn {
+  color: #ffffff !important;
+  font-weight: 600;
+}
+.login-card .login-tabs .ant-tabs-ink-bar { display: none !important; }
+
+/* Form labels — small uppercase tracked, in primary */
+.login-card .ant-form-item { margin-bottom: 12px; }
+.login-card .ant-form-item:last-child { margin-bottom: 0; }
+.login-card .ant-form-item-label { padding-bottom: 4px !important; padding-left: 2px; }
+/* Move required-mark asterisk from left to right of label */
+.login-card .ant-form-item-label > label.ant-form-item-required::before {
+  display: none !important;
+}
+.login-card .ant-form-item-label > label.ant-form-item-required::after {
+  display: inline-block !important;
+  margin-left: 4px;
+  color: #ff4d4f;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  content: '*';
+  visibility: visible;
+  vertical-align: top;
+}
+.login-card .ant-form-item-label > label {
+  font-size: 10px !important;
+  color: var(--color-primary) !important;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-weight: 700;
+}
+
+/* Input field styling — slate-50 bg, soft border, primary focus ring */
+.login-card .ant-input-affix-wrapper,
+.login-card .ant-input {
+  background: #f8fafc !important;
+  border: 1px solid rgba(15, 23, 42, 0.08) !important;
+  color: var(--color-secondary) !important;
+  border-radius: 10px !important;
+  padding: 9px 12px !important;
+  font-size: 12.5px !important;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+}
+
+.login-card .ant-input-affix-wrapper:hover,
+.login-card .ant-input:hover {
+  border-color: var(--color-primary-border) !important;
+}
+
+.login-card .ant-input-affix-wrapper-focused,
+.login-card .ant-input:focus,
+.login-card .ant-input-focused {
+  border-color: var(--color-primary) !important;
+  background: #ffffff !important;
+  box-shadow: 0 0 0 4px var(--color-primary-rgba-10) !important;
+}
+
+.login-card .ant-input-affix-wrapper > .ant-input {
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+  box-shadow: none !important;
+}
+
+.login-card .ant-input-prefix {
+  margin-right: 10px;
+  color: #94a3b8;
+}
+
+.login-card .ant-input-affix-wrapper-focused .ant-input-prefix .anticon {
+  color: var(--color-primary) !important;
+}
+
+.login-card .ant-input::placeholder,
+.login-card .ant-input-affix-wrapper input::placeholder {
+  color: #cbd5e1 !important;
+}
+
+/* Sign in button — big, bold, primary */
+.login-card .ant-btn-primary {
+  background: var(--color-primary) !important;
+  border-radius: 12px !important;
+  height: 50px !important;
+  font-weight: 700 !important;
+  font-size: 14px !important;
+  letter-spacing: 0.02em !important;
+  box-shadow: 0 12px 28px -10px var(--color-primary-rgba-25) !important;
+  transition: all 0.18s ease;
+}
+
+.login-card .ant-btn-primary:hover {
+  background: var(--color-primary-hover) !important;
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+  box-shadow: 0 16px 36px -12px var(--color-primary-rgba-25) !important;
+}
+
+.login-card .ant-btn-primary:active {
+  transform: translateY(0);
+}
+
+/* Inline links — primary */
+.login-card a {
+  color: var(--color-primary) !important;
+  font-weight: 600;
+  transition: color 0.15s ease;
+}
+.login-card a:hover { color: var(--color-primary-hover) !important; text-decoration: underline; }
+
+.login-card .ant-form-item-explain-error {
+  font-size: 11.5px !important;
+  color: #ef4444 !important;
+  margin-top: 4px;
+}
+
+/* ── Mobile: card centers, slightly narrower ─────── */
+@media (max-width: 900px) {
+  .auth-content { justify-content: center; }
+  .auth-chip { display: none; }
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .auth-bg,
+  .auth-chip,
+  .auth-content {
+    animation: none !important;
+  }
+}
+
+/* Legacy gradient class kept as a safety fallback for any other auth route. */
 .login-container {
   min-height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--login-bg, linear-gradient(135deg, #1e3a8a 0%, #7c3aed 40%, #c026d3 70%, #d97706 100%));
-  background-size: cover;
-  background-position: center;
-}
-
-.login-card {
-  width: 100%;
-  max-width: 440px;
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border-radius: 20px;
-  padding: 44px 48px;
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(255,255,255,0.2);
-  border: 1px solid rgba(255,255,255,0.5);
+  background: linear-gradient(135deg, var(--color-secondary) 0%, var(--color-primary-dark) 50%, var(--color-primary) 100%);
 }
 
 /* Modern pill-style tabs for login - branded */
@@ -347,18 +715,18 @@ html, body {
 }
 
 .login-tabs .ant-tabs-tab:hover {
-  background: #f5f3ff;
+  background: var(--color-primary-soft);
 }
 
 .login-tabs .ant-tabs-tab-active {
-  background: linear-gradient(135deg, #dbeafe 0%, #f5d0fe 100%);
+  background: var(--color-primary-light);
 }
 
 .login-tabs .ant-tabs-ink-bar {
   display: none;
 }
 
-/* Sidebar menu with logo-colored hover & active states */
+/* Sidebar menu with branded hover & active states */
 .sidebar-menu {
   background: transparent !important;
 }
@@ -369,36 +737,35 @@ html, body {
   margin: 3px 8px !important;
   width: calc(100% - 16px) !important;
   transition: all 0.2s ease;
-  color: #475569 !important;
+  color: var(--sidebar-text) !important;
   font-weight: 500;
 }
 
-/* Hover - light magenta tint */
+/* Hover - branded soft tint */
 .sidebar-menu .ant-menu-item:hover,
 .sidebar-menu .ant-menu-submenu-title:hover {
-  background: linear-gradient(135deg, #eff6ff 0%, #fdf4ff 100%) !important;
+  background: var(--color-primary-soft) !important;
   color: #1e293b !important;
 }
 
 .sidebar-menu .ant-menu-item:hover .ant-menu-item-icon,
 .sidebar-menu .ant-menu-item:hover .anticon,
 .sidebar-menu .ant-menu-submenu-title:hover .anticon {
-  color: #7c3aed !important;
+  color: var(--color-primary) !important;
 }
 
-/* Active / Selected - blue to magenta gradient */
+/* Active / Selected - branded background with accent indicator */
 .sidebar-menu .ant-menu-item-selected {
-  background: linear-gradient(135deg, #dbeafe 0%, #f3e8ff 50%, #fce7f3 100%) !important;
-  color: #1e40af !important;
+  background: var(--color-primary-light) !important;
+  color: var(--color-primary-dark) !important;
   font-weight: 600;
-  border-left: none !important;
   border-radius: 10px !important;
-  box-shadow: 0 1px 3px rgba(124, 58, 237, 0.12);
+  box-shadow: inset 3px 0 0 var(--color-accent), 0 1px 3px var(--color-primary-rgba-10);
 }
 
 .sidebar-menu .ant-menu-item-selected .ant-menu-item-icon,
 .sidebar-menu .ant-menu-item-selected .anticon {
-  color: #7c3aed !important;
+  color: var(--color-primary) !important;
 }
 
 /* Inactive icons */
@@ -409,17 +776,17 @@ html, body {
 }
 
 .sidebar-menu .ant-menu-item:not(.ant-menu-item-selected) {
-  color: #475569 !important;
+  color: var(--sidebar-text) !important;
 }
 
 /* Submenu open title gets accent tint */
 .sidebar-menu .ant-menu-submenu-open > .ant-menu-submenu-title {
   color: #1e293b !important;
-  background: linear-gradient(135deg, #f8fafc 0%, #faf5ff 100%) !important;
+  background: var(--color-primary-faint) !important;
 }
 
 .sidebar-menu .ant-menu-submenu-open > .ant-menu-submenu-title .anticon {
-  color: #7c3aed !important;
+  color: var(--color-primary) !important;
 }
 
 .sidebar-menu .ant-menu-submenu-title .ant-menu-submenu-arrow {
@@ -522,7 +889,7 @@ html, body {
     display: block !important;
     margin-bottom: 20px;
     padding-bottom: 16px;
-    border-bottom: 2px solid #1e40af;
+    border-bottom: 2px solid var(--color-primary);
   }
 
   .print-header h3,
@@ -640,11 +1007,7 @@ html, body {
     max-width: 100% !important;
   }
 
-  .login-card {
-    padding: 24px 16px !important;
-    margin: 16px !important;
-    max-width: calc(100vw - 32px) !important;
-  }
+  /* (legacy .login-card mobile overrides removed — split-screen handles mobile via .auth-panel) */
 
   .ant-modal {
     max-width: calc(100vw - 16px) !important;
@@ -731,9 +1094,7 @@ html, body {
     margin: 0 0 12px 0 !important;
     padding: 14px 16px !important;
     border-radius: 12px !important;
-    /* Use a single-direction gradient and slightly desaturated colors
-       so the banner stops fighting for attention on small screens. */
-    background: linear-gradient(135deg, #1e3a8a 0%, #4338ca 60%, #7c3aed 100%) !important;
+    background: linear-gradient(135deg, var(--color-secondary) 0%, var(--color-primary-dark) 60%, var(--color-primary) 100%) !important;
   }
   .page-header-banner::after { display: none !important; }
   .page-header-banner-title {

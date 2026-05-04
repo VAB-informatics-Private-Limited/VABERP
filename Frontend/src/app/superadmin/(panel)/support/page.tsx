@@ -276,9 +276,10 @@ export default function SupportPage() {
               onClick={() => setActiveTab(tab.key)}
               className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
                 activeTab === tab.key
-                  ? 'bg-blue-500 text-white'
+                  ? 'text-white'
                   : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
               }`}
+              style={activeTab === tab.key ? { background: 'var(--color-primary)' } : undefined}
             >
               {tab.label}
             </button>
@@ -329,8 +330,8 @@ export default function SupportPage() {
             </div>
 
             {selectedTicket.adminReply && (
-              <div className="bg-blue-50 rounded-lg p-4 mb-4 border border-blue-100">
-                <Text strong className="text-sm text-blue-700 block mb-1">Previous Reply</Text>
+              <div className="bg-brand-soft rounded-lg p-4 mb-4 border border-brand-soft">
+                <Text strong className="text-sm text-brand block mb-1">Previous Reply</Text>
                 <p className="text-slate-700 whitespace-pre-wrap text-sm">{selectedTicket.adminReply}</p>
                 {selectedTicket.repliedAt && (
                   <Text type="secondary" className="text-xs mt-2 block">
